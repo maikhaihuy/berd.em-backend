@@ -1,10 +1,38 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { ConfigModule } from '@nestjs/config';
+import { AuthModule } from '@modules/auth/auth.module';
+import { UsersModule } from '@modules/users/users.module';
+import { EmployeesModule } from '@modules/employees/employees.module';
+// import { ShiftsModule } from '@modules/shifts/shifts.module';
+// import { TimeTrackingModule } from '@modules/time-tracking/time-tracking.module';
+// import { BranchesModule } from '@modules/branches/branches.module';
+import { PrismaModule } from '@modules/prisma/prisma.module';
+// import { CaslModule } from '@modules/casl/casl.module';
 
 @Module({
-  imports: [],
-  controllers: [AppController],
-  providers: [AppService],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
+    PrismaModule,
+    // CaslModule,
+    AuthModule,
+    UsersModule,
+    EmployeesModule,
+    // ShiftsModule,
+    // TimeTrackingModule,
+    // BranchesModule,
+  ],
+  // providers: [
+  //   {
+  //     provide: APP_FILTER,
+  //     useClass: HttpExceptionFilter,
+  //   },
+  //   {
+  //     provide: APP_INTERCEPTOR,
+  //     useClass: TransformInterceptor,
+  //   },
+  // ],
 })
 export class AppModule {}

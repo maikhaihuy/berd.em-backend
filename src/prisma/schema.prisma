@@ -1,0 +1,260 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Employee {
+  id        Int      @id @default(autoincrement())
+  name      String
+  phone     String
+  avatar    String?
+  email     String?
+  address   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  createdBy Int
+  updatedAt DateTime @updatedAt
+  updatedBy Int
+
+  // Relations
+  user             User?             @relation("EmployeeUser")
+  shiftRequests    ShiftRequest[]
+  shiftSchedules   ShiftSchedule[]
+  timeLogs         TimeLog[]
+  hourlyRates      EmployeeHourlyRate[]
+  payrollEntries   PayrollEntry[]
+  branches         Branch[]          @relation("EmployeeBranches")
+
+  @@map("employees")
+}
+
+model Branch {
+  id           Int      @id @default(autoincrement())
+  name         String
+  abbreviation String
+  address      String
+  email        String?
+  phone        String?
+  createdAt    DateTime @default(now())
+  createdBy    Int
+  updatedAt    DateTime @updatedAt
+  updatedBy    Int
+
+  // Relations
+  shifts    Shift[]
+  employees Employee[] @relation("EmployeeBranches")
+  shiftSchedules ShiftSchedule[]
+
+  @@map("branches")
+}
+
+model User {
+  id       Int     @id @default(autoincrement())
+  username String  @unique
+  password String
+  employeeId Int?  @unique
+  createdAt  DateTime @default(now())
+  createdBy  Int
+  updatedAt  DateTime @updatedAt
+  updatedBy  Int
+
+  // Relations
+  employee       Employee?  @relation("EmployeeUser", fields: [employeeId], references: [id])
+  roles          Role[]     @relation("UserRoles")
+  verifiedTimeLogs TimeLog[] @relation("TimeLogVerifier")
+  calculatedPayrolls PayrollEntry[] @relation("PayrollCalculator")
+
+  @@map("users")
+}
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  createdBy   Int
+  updatedAt   DateTime @updatedAt
+  updatedBy   Int
+
+  // Relations
+  users       User[] @relation("UserRoles")
+  permissions Permission[] @relation("RolePermissions")
+
+  @@map("roles")
+}
+
+model Permission {
+  id          Int      @id @default(autoincrement())
+  action      String
+  subject     String
+  description String?
+  createdAt   DateTime @default(now())
+  createdBy   Int
+  updatedAt   DateTime @updatedAt
+  updatedBy   Int
+
+  // Relations
+  roles Role[] @relation("RolePermissions")
+
+  @@unique([action, subject])
+  @@map("permissions")
+}
+
+model Shift {
+  id           Int      @id @default(autoincrement())
+  name         String
+  abbreviation String
+  maxSlots     Int
+  branchId     Int
+  createdAt    DateTime @default(now())
+  createdBy    Int
+  updatedAt    DateTime @updatedAt
+  updatedBy    Int
+
+  // Relations
+  branch    Branch          @relation(fields: [branchId], references: [id])
+
+  @@map("shifts")
+}
+
+model ShiftRequest {
+  id           Int      @id @default(autoincrement())
+  employeeId   Int
+  dateRegister DateTime @db.Date
+  startTime    DateTime @db.Timestamptz
+  endTime      DateTime @db.Timestamptz
+  createdAt    DateTime @default(now())
+  createdBy    Int
+  updatedAt    DateTime @updatedAt
+  updatedBy    Int
+
+  // Relations
+  employee Employee        @relation(fields: [employeeId], references: [id])
+
+  @@map("shift_requests")
+}
+
+model ShiftSchedule {
+  id             Int      @id @default(autoincrement())
+  dateRegister   DateTime @db.Date
+  startTime      DateTime @db.Timestamptz
+  endTime        DateTime @db.Timestamptz
+  employeeId     Int
+  branchId       Int
+  note           String?
+  createdAt      DateTime @default(now())
+  createdBy      Int
+  updatedAt      DateTime @updatedAt
+  updatedBy      Int
+
+  // Relations
+  employee     Employee      @relation(fields: [employeeId], references: [id])
+  branch       Branch        @relation(fields: [branchId], references: [id])
+  timeLog      TimeLog?
+
+  @@map("shift_schedules")
+}
+
+model TimeLog {
+  id               Int       @id @default(autoincrement())
+  shiftScheduleId  Int?      @unique
+  employeeId       Int
+  actualStartTime  DateTime  @db.Timestamptz
+  actualEndTime    DateTime  @db.Timestamptz
+  overtimeMinutes  Int?
+  absenceReason    String?
+  status           String    // e.g., "Pending", "Verified", "Absent"
+  verifiedBy       Int?
+  verifiedAt       DateTime? @db.Timestamptz
+  note             String?
+  createdAt        DateTime  @default(now())
+  createdBy        Int
+  updatedAt        DateTime  @updatedAt
+  updatedBy        Int
+
+  // Relations
+  shiftSchedule ShiftSchedule? @relation(fields: [shiftScheduleId], references: [id])
+  employee      Employee       @relation(fields: [employeeId], references: [id])
+  verifier      User?          @relation("TimeLogVerifier", fields: [verifiedBy], references: [id])
+  payrollEntry  PayrollEntry?
+
+  @@map("time_logs")
+}
+
+model EmployeeHourlyRate {
+  id            Int      @id @default(autoincrement())
+  employeeId    Int
+  rate          Decimal  @db.Decimal(10, 2)
+  effectiveDate DateTime @db.Date
+  endDate       DateTime? @db.Date
+  note          String?
+  createdAt     DateTime @default(now())
+  createdBy     Int
+  updatedAt     DateTime @updatedAt
+  updatedBy     Int
+
+  // Relations
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@map("employee_hourly_rates")
+}
+
+model PayPeriod {
+  id        Int      @id @default(autoincrement())
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  status    String   // e.g., "Open", "Closed", "Finalized"
+  notes     String?
+  createdAt DateTime @default(now())
+  createdBy Int
+  updatedAt DateTime @updatedAt
+  updatedBy Int
+
+  // Relations
+  payrollEntries PayrollEntry[]
+
+  @@map("pay_periods")
+}
+
+model PayrollEntry {
+  id                       Int      @id @default(autoincrement())
+  timeLogId                Int      @unique
+  employeeId               Int
+  payPeriodId              Int
+  workDate                 DateTime @db.Date
+  payDate                  DateTime @db.Date
+  calculatedHourlyRate     Decimal  @db.Decimal(10, 2)
+  calculatedDurationMinutes Int
+  status                   String   // e.g., "Pending", "Finalized"
+  basePay                  Decimal  @db.Decimal(10, 2)
+  overtimePay              Decimal  @db.Decimal(10, 2)
+  totalPay                 Decimal  @db.Decimal(10, 2)
+  isFinalized              Boolean  @default(false)
+  auditTrailLink           String?
+  calculatedAt             DateTime
+  calculatedBy             Int
+  createdAt                DateTime @default(now())
+  createdBy                Int
+  updatedAt                DateTime @updatedAt
+  updatedBy                Int
+
+  // Relations
+  timeLog    TimeLog   @relation(fields: [timeLogId], references: [id])
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+  payPeriod  PayPeriod @relation(fields: [payPeriodId], references: [id])
+  calculator User      @relation("PayrollCalculator", fields: [calculatedBy], references: [id])
+
+  @@map("payroll_entries")
+}
