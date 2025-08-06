@@ -1,18 +1,9 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { EmployeeDto } from '@modules/employees/dto/employee-dto';
 
 export class UserDto {
-  @ApiProperty()
   id: number;
-
-  @ApiProperty()
   username: string;
-
-  @ApiProperty()
   employeeId: number;
-
-  @ApiProperty({ required: false })
   email?: string;
-
-  @ApiProperty({ required: false })
-  roles?: string[];
+  employee?: EmployeeDto;
 }

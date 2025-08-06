@@ -12,46 +12,23 @@ export class UsersService {
     });
   }
 
-  async findAll() {
-    return this.prisma.user.findMany({
-      select: {
-        id: true,
-        username: true,
-        employeeId: true,
-        createdAt: true,
-        updatedAt: true,
-        employee: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-        roles: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-          },
-        },
-      },
-    });
+  async findAll(): Promise<User[]> {
+    return this.prisma.user.findMany();
   }
 
-  async findOne(id: number): Promise<User | null> {
+  async findOne(id: number): Promise<User> {
     return this.prisma.user.findUnique({
       where: { id },
     });
   }
 
-  async findByUsername(username: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
+  async findByUsername(username: string): Promise<User> {
+    return await this.prisma.user.findUnique({
       where: { username },
     });
   }
 
-  async findOneWithRelations(id: number) {
+  async findOneWithRelations(id: number): Promise<User> {
     return this.prisma.user.findUnique({
       where: { id },
       include: {

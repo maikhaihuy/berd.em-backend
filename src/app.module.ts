@@ -8,6 +8,8 @@ import { EmployeesModule } from '@modules/employees/employees.module';
 // import { BranchesModule } from '@modules/branches/branches.module';
 import { PrismaModule } from '@modules/prisma/prisma.module';
 // import { CaslModule } from '@modules/casl/casl.module';
+import { RolesModule } from './roles/roles.module';
+import { RolesModule } from './modules/roles/roles.module';
 
 @Module({
   imports: [
@@ -20,6 +22,7 @@ import { PrismaModule } from '@modules/prisma/prisma.module';
     AuthModule,
     UsersModule,
     EmployeesModule,
+    RolesModule,
     // ShiftsModule,
     // TimeTrackingModule,
     // BranchesModule,

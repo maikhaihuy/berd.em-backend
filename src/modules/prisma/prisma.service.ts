@@ -11,37 +11,39 @@ export class PrismaService
     super({
       datasources: {
         db: {
-          url: configService.get('DATABASE_URL'),
+          url: configService.get<string>('DATABASE_URL'),
         },
       },
       log:
-        configService.get('NODE_ENV') === 'development'
+        configService.get<string>('NODE_ENV') === 'development'
           ? ['query', 'error', 'warn']
           : ['error'],
     });
   }
 
-  async onModuleInit() {
+  async onModuleInit(): Promise<void> {
     await this.$connect();
   }
 
-  async onModuleDestroy() {
+  async onModuleDestroy(): Promise<void> {
     await this.$disconnect();
   }
 
-  async cleanDatabase() {
-    if (this.configService.get('NODE_ENV') === 'production') {
-      throw new Error('cleanDatabase is not allowed in production');
-    }
+  // async cleanDatabase() {
+  //   if (this.configService.get('NODE_ENV') === 'production') {
+  //     throw new Error('cleanDatabase is not allowed in production');
+  //   }
 
-    const models = Reflect.ownKeys(this).filter(
-      (key) => key[0] !== '_' && key[0] !== '$',
-    );
+  //   const modelKeys = Reflect.ownKeys(this).filter(
+  //     (key) =>
+  //       typeof key === 'string' && !key.startsWith('_') && !key.startsWith('$'),
+  //   ) as (keyof this)[];
 
-    return Promise.all(
-      models.map((modelKey) => {
-        return this[modelKey].deleteMany();
-      }),
-    );
-  }
+  //   for (const modelKey of modelKeys) {
+  //     const model = this[modelKey];
+  //     if (typeof model?.deleteMany === 'function') {
+  //       await model.deleteMany();
+  //     }
+  //   }
+  // }
 }

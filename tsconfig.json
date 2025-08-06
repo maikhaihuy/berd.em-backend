@@ -24,7 +24,7 @@
     "paths": {
       "@modules/*": ["modules/*"],
       "@common/*": ["common/*"],
-      "@prisma/*": ["prisma/*"],
+      "@prisma/*": ["prisma/*"]
     }
   }
 }
