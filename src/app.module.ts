@@ -10,6 +10,8 @@ import { PrismaModule } from '@modules/prisma/prisma.module';
 // import { CaslModule } from '@modules/casl/casl.module';
 import { RolesModule } from './roles/roles.module';
 import { RolesModule } from './modules/roles/roles.module';
+import { PermissionsModule } from './src/modules/permissions/permissions.module';
+import { PermissionsModule } from './modules/permissions/permissions.module';
 
 @Module({
   imports: [
@@ -23,6 +25,7 @@ import { RolesModule } from './modules/roles/roles.module';
     UsersModule,
     EmployeesModule,
     RolesModule,
+    PermissionsModule,
     // ShiftsModule,
     // TimeTrackingModule,
     // BranchesModule,
