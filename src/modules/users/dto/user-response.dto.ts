@@ -1,6 +1,7 @@
+import { Role } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
 
-export class UserDto {
+export class UserResponseDto {
   @ApiProperty()
   id: number;
 
@@ -8,24 +9,15 @@ export class UserDto {
   username: string;
 
   @ApiProperty()
-  employeeId?: number | null;
-
-  @ApiProperty()
-  password: string;
-
-  @ApiProperty()
   createdAt: Date;
-
-  @ApiProperty()
-  createdBy: number;
 
   @ApiProperty()
   updatedAt: Date;
 
-  @ApiProperty()
-  updatedBy: number;
+  @ApiProperty({ type: [Object] }) // You might want to create a separate RoleResponseDto
+  roles: Role[];
 
-  constructor(partial: Partial<UserDto>) {
+  constructor(partial: Partial<UserResponseDto>) {
     Object.assign(this, partial);
   }
 }

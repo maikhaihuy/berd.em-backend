@@ -1,12 +1,22 @@
-import { Injectable, ExecutionContext } from '@nestjs/common';
+import {
+  Injectable,
+  ExecutionContext,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { Observable } from 'rxjs';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
-  canActivate(
-    context: ExecutionContext,
-  ): boolean | Promise<boolean> | Observable<boolean> {
+  canActivate(context: ExecutionContext) {
     return super.canActivate(context);
+  }
+
+  handleRequest(err, user, info) {
+    console.log('info: ', info);
+    if (err || !user) {
+      throw err || new UnauthorizedException('Invalid authentication token');
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+    return user;
   }
 }

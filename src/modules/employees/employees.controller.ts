@@ -3,86 +3,108 @@ import {
   Get,
   Post,
   Body,
+  Patch,
   Param,
-  Put,
   Delete,
   UseGuards,
-  ParseIntPipe,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
 import { EmployeesService } from './employees.service';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-// import { AbilitiesGuard } from '../../common/guards/abilities.guard';
-// import { CheckAbilities } from '../../common/decorators/abilities.decorator';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
-import { User } from '@prisma/client';
+import { EmployeeResponseDto } from './dto/employee-response.dto';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { EmployeeHourlyRateResponseDto } from '@modules/employee-hourly-rates/dto/employee-hourly-rate-response.dto';
+import { UpsertEmployeeHourlyRateDto } from '@modules/employee-hourly-rates/dto/upsert-employee-hourly-rate.dto';
 
 @ApiTags('employees')
-@Controller('employees')
 @UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
+@Controller('employees')
 export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) {}
 
   @Post()
-  // @CheckAbilities({ action: 'create', subject: 'Employee' })
-  @ApiOperation({ summary: 'Create a new employee' })
-  @ApiResponse({ status: 201, description: 'Employee created successfully' })
+  @ApiOperation({
+    summary:
+      'Create a new employee with hourly rate and branches with hourly rate and branches',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'The employee has been successfully created.',
+    type: EmployeeResponseDto,
+  })
+  @ApiBody({ type: CreateEmployeeDto })
   async create(
     @Body() createEmployeeDto: CreateEmployeeDto,
-    @CurrentUser() user: User,
-  ) {
-    return this.employeesService.create({
-      ...createEmployeeDto,
-      createdBy: user.id,
-      updatedBy: user.id,
-    });
+  ): Promise<EmployeeResponseDto> {
+    return await this.employeesService.create(createEmployeeDto);
   }
 
   @Get()
-  // @CheckAbilities({ action: 'read', subject: 'Employee' })
-  @ApiOperation({ summary: 'Get all employees' })
-  @ApiResponse({ status: 200, description: 'Returns all employees' })
-  async findAll() {
-    return this.employeesService.findAll();
+  @ApiOperation({ summary: 'Retrieve a list of all employees' })
+  @ApiResponse({
+    status: 200,
+    description: 'A list of employees.',
+    type: [EmployeeResponseDto],
+  })
+  async findAll(): Promise<EmployeeResponseDto[]> {
+    return await this.employeesService.findAll();
   }
 
   @Get(':id')
-  // @CheckAbilities({ action: 'read', subject: 'Employee' })
-  @ApiOperation({ summary: 'Get employee by ID' })
-  @ApiResponse({ status: 200, description: 'Returns the employee' })
-  @ApiResponse({ status: 404, description: 'Employee not found' })
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.employeesService.findOne(id);
+  @ApiOperation({ summary: 'Retrieve an employee by ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'The employee found by ID.',
+    type: EmployeeResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Employee not found.' })
+  async findOne(@Param('id') id: string): Promise<EmployeeResponseDto> {
+    return await this.employeesService.findOne(+id);
   }
 
-  @Put(':id')
-  // @CheckAbilities({ action: 'update', subject: 'Employee' })
-  @ApiOperation({ summary: 'Update employee' })
-  @ApiResponse({ status: 200, description: 'Employee updated successfully' })
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update an employee by ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'The employee has been successfully updated.',
+    type: EmployeeResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Employee not found.' })
+  @ApiBody({ type: UpdateEmployeeDto })
   async update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id') id: string,
     @Body() updateEmployeeDto: UpdateEmployeeDto,
-    @CurrentUser() user: any,
-  ) {
-    return this.employeesService.update(id, {
-      ...updateEmployeeDto,
-      updatedBy: user.id,
-    });
+  ): Promise<EmployeeResponseDto> {
+    return await this.employeesService.update(+id, updateEmployeeDto);
   }
 
   @Delete(':id')
-  // @CheckAbilities({ action: 'delete', subject: 'Employee' })
-  @ApiOperation({ summary: 'Delete employee' })
-  @ApiResponse({ status: 200, description: 'Employee deleted successfully' })
-  async remove(@Param('id', ParseIntPipe) id: number) {
-    return this.employeesService.remove(id);
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete an employee by ID' })
+  @ApiResponse({
+    status: 204,
+    description: 'The employee has been successfully deleted.',
+  })
+  @ApiResponse({ status: 404, description: 'Employee not found.' })
+  async remove(@Param('id') id: string): Promise<void> {
+    await this.employeesService.remove(+id);
+  }
+
+  @Post(':id/hourly-rates')
+  @ApiOperation({ summary: 'Bulk upsert employee hourly rates' })
+  @ApiResponse({
+    status: 200,
+    description: 'Hourly rates synchronized successfully.',
+    type: [EmployeeHourlyRateResponseDto],
+  })
+  @ApiBody({ type: [UpsertEmployeeHourlyRateDto] })
+  async syncHourlyRates(
+    @Param('id') employeeId: string,
+    @Body() ratesDto: UpsertEmployeeHourlyRateDto[],
+  ): Promise<EmployeeHourlyRateResponseDto[]> {
+    return await this.employeesService.syncHourlyRates(+employeeId, ratesDto);
   }
 }

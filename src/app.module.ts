@@ -1,3 +1,4 @@
+import { EmployeeHourlyRatesModule } from '@modules/employee-hourly-rates/employee-hourly-rates.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from '@modules/auth/auth.module';
@@ -8,13 +9,12 @@ import { EmployeesModule } from '@modules/employees/employees.module';
 // import { BranchesModule } from '@modules/branches/branches.module';
 import { PrismaModule } from '@modules/prisma/prisma.module';
 // import { CaslModule } from '@modules/casl/casl.module';
-import { RolesModule } from './roles/roles.module';
 import { RolesModule } from './modules/roles/roles.module';
-import { PermissionsModule } from './src/modules/permissions/permissions.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
 
 @Module({
   imports: [
+    EmployeeHourlyRatesModule,
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',

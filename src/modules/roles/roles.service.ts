@@ -1,57 +1,139 @@
 import {
-  ConflictException,
+  BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { PrismaService } from '@modules/prisma/prisma.service';
+import { RoleResponseDto } from './dto/role-response.dto';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class RolesService {
   constructor(private prisma: PrismaService) {}
 
-  async create(createRoleDto: CreateRoleDto, currentUserId: number) {
-    const existing = await this.prisma.role.findUnique({
-      where: { name: createRoleDto.name },
-    });
-
-    if (existing) {
-      throw new ConflictException(
-        `Role '${createRoleDto.name}' already exists.`,
-      );
+  async create(
+    createRoleDto: CreateRoleDto,
+    currentUserId: number,
+  ): Promise<RoleResponseDto> {
+    const { name, permissionIds, ...rest } = createRoleDto;
+    try {
+      const role = await this.prisma.role.create({
+        data: {
+          ...rest,
+          name,
+          permissions: {
+            connect: permissionIds.map((id) => ({ id })),
+          },
+          createdBy: currentUserId,
+          updatedBy: currentUserId,
+        },
+        include: {
+          permissions: true,
+        },
+      });
+      return new RoleResponseDto(role);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new BadRequestException('Role name already exists');
+      }
+      throw error;
     }
+  }
 
-    return this.prisma.role.create({
-      data: {
-        ...createRoleDto,
-        createdBy: currentUserId,
-        updatedBy: currentUserId,
+  async findAll() {
+    // const skip = (page - 1) * limit;
+    // const totalCount = await this.prisma.role.count();
+    // const roles = await this.prisma.role.findMany({
+    //   skip,
+    //   take: limit,
+    //   include: {
+    //     permissions: true,
+    //   },
+    // });
+
+    const roles = await this.prisma.role.findMany({
+      // skip,
+      // take: limit,
+      include: {
+        permissions: true,
       },
     });
+    return roles.map((role) => new RoleResponseDto(role));
+
+    // return {
+    //   data: roleResponseDtos,
+    //   meta: {
+    //     totalItems: totalCount,
+    //     itemCount: roles.length,
+    //     itemsPerPage: limit,
+    //     totalPages: Math.ceil(totalCount / limit),
+    //     currentPage: page,
+    //   },
+    // };
   }
 
-  findAll() {
-    return `This action returns all roles`;
+  async findOne(id: number): Promise<RoleResponseDto> {
+    const role = await this.prisma.role.findUnique({
+      where: { id },
+      include: {
+        permissions: true,
+      },
+    });
+    if (!role) {
+      throw new NotFoundException(`Role with ID ${id} not found.`);
+    }
+    return new RoleResponseDto(role);
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} role`;
-  }
+  async update(
+    id: number,
+    updateRoleDto: UpdateRoleDto,
+  ): Promise<RoleResponseDto> {
+    const { permissionIds, ...rest } = updateRoleDto;
+    const data: Prisma.RoleUpdateInput = { ...rest };
 
-  async update(id: number, updateRoleDto: UpdateRoleDto) {
-    const existing = await this.prisma.role.findUnique({ where: { id } });
-    if (!existing) {
-      throw new NotFoundException(`Role with ID ${id} not found`);
+    if (permissionIds) {
+      data.permissions = {
+        set: permissionIds.map((permissionId) => ({ id: permissionId })),
+      };
     }
 
-    return this.prisma.role.update({
-      where: { id },
-      data: updateRoleDto,
-    });
+    try {
+      const role = await this.prisma.role.update({
+        where: { id },
+        data,
+        include: {
+          permissions: true,
+        },
+      });
+      return new RoleResponseDto(role);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException(`Role with ID ${id} not found.`);
+      }
+      throw error;
+    }
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} role`;
+  async remove(id: number): Promise<void> {
+    try {
+      await this.prisma.role.delete({ where: { id } });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException(`Role with ID ${id} not found.`);
+      }
+      throw error;
+    }
   }
 }

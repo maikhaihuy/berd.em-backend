@@ -1,31 +1,29 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Shift } from '@prisma/client';
 
-export class UserDto {
+export class ShiftResponseDto {
   @ApiProperty()
   id: number;
 
   @ApiProperty()
-  username: string;
+  name: string;
 
   @ApiProperty()
-  employeeId?: number | null;
+  abbreviation: string;
 
   @ApiProperty()
-  password: string;
+  maxSlots: number;
+
+  @ApiProperty()
+  branchId: number;
 
   @ApiProperty()
   createdAt: Date;
 
   @ApiProperty()
-  createdBy: number;
-
-  @ApiProperty()
   updatedAt: Date;
 
-  @ApiProperty()
-  updatedBy: number;
-
-  constructor(partial: Partial<UserDto>) {
+  constructor(partial: Partial<Shift>) {
     Object.assign(this, partial);
   }
 }

@@ -9,10 +9,10 @@ export class PermissionDto {
   action: string;
 
   @ApiProperty()
-  subject?: string;
+  subject?: string | null;
 
   @ApiProperty()
-  description?: string;
+  description?: string | null;
 
   @ApiProperty()
   createdAt: Date;

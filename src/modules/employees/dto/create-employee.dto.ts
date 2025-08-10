@@ -5,6 +5,8 @@ import {
   IsEmail,
   IsOptional,
   IsBoolean,
+  ArrayNotEmpty,
+  IsInt,
 } from 'class-validator';
 
 export class CreateEmployeeDto {
@@ -37,4 +39,12 @@ export class CreateEmployeeDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean = true;
+
+  @ApiProperty({
+    type: [Number],
+    description: 'An array of branch IDs to which the employee is assigned.',
+  })
+  @IsInt({ each: true })
+  @ArrayNotEmpty()
+  branchIds: number[];
 }

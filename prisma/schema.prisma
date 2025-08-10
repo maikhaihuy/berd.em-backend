@@ -162,7 +162,7 @@ model ShiftSchedule {
   // Relations
   employee     Employee      @relation(fields: [employeeId], references: [id])
   branch       Branch        @relation(fields: [branchId], references: [id])
-  timeLog      TimeLog?
+  timeLog      TimeLog? // TODO: có thể có nhiều timelog, trường hợp conflict khi timelog phủ 2-3 shift schedule
 
   @@map("shift_schedules")
 }

@@ -1,29 +1,32 @@
-import { IsString, IsNotEmpty, IsOptional, IsEmail } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Branch } from '@prisma/client';
 
-export class CreateBranchDto {
+export class BranchResponseDto {
   @ApiProperty()
-  @IsString()
-  @IsNotEmpty()
+  id: number;
+
+  @ApiProperty()
   name: string;
 
   @ApiProperty()
-  @IsString()
-  @IsNotEmpty()
   abbreviation: string;
 
   @ApiProperty()
-  @IsString()
-  @IsNotEmpty()
   address: string;
 
   @ApiProperty({ required: false })
-  @IsEmail()
-  @IsOptional()
   email?: string;
 
   @ApiProperty({ required: false })
-  @IsString()
-  @IsOptional()
   phone?: string;
+
+  @ApiProperty()
+  createdAt: Date;
+
+  @ApiProperty()
+  updatedAt: Date;
+
+  constructor(partial: Partial<Branch>) {
+    Object.assign(this, partial);
+  }
 }

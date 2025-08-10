@@ -1,14 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsNumber, ArrayMinSize } from 'class-validator';
+import { ArrayNotEmpty, IsInt } from 'class-validator';
 
 export class UpdateUserRolesDto {
   @ApiProperty({
-    example: [1, 2],
-    description: 'Array of role IDs to assign to the user',
     type: [Number],
+    description: 'An array of role IDs to assign to the user.',
   })
-  @IsArray()
-  @IsNumber({}, { each: true })
-  @ArrayMinSize(0)
+  @IsInt({ each: true })
+  @ArrayNotEmpty()
   roleIds: number[];
 }

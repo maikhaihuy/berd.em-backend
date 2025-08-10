@@ -1,31 +1,25 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-export class UserDto {
+export class PermissionResponseDto {
   @ApiProperty()
   id: number;
 
   @ApiProperty()
-  username: string;
+  action: string;
 
   @ApiProperty()
-  employeeId?: number | null;
+  subject: string;
 
   @ApiProperty()
-  password: string;
+  description?: string | null;
 
   @ApiProperty()
   createdAt: Date;
 
   @ApiProperty()
-  createdBy: number;
-
-  @ApiProperty()
   updatedAt: Date;
 
-  @ApiProperty()
-  updatedBy: number;
-
-  constructor(partial: Partial<UserDto>) {
+  constructor(partial: Partial<PermissionResponseDto>) {
     Object.assign(this, partial);
   }
 }

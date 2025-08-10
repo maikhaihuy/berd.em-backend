@@ -9,7 +9,7 @@ export class RoleDto {
   name: string;
 
   @ApiProperty()
-  description?: string;
+  description?: string | null;
 
   @ApiProperty()
   createdAt: Date;
@@ -24,5 +24,5 @@ export class RoleDto {
   updatedBy: number;
 
   // Relations
-  permissions?: PermissionDto[];
+  permissions?: PermissionDto[] | null;
 }

@@ -1,6 +1,20 @@
-import { PartialType } from '@nestjs/swagger';
-import { CreateRoleDto } from './create-role.dto';
+import { IsString, IsOptional, IsInt, ArrayNotEmpty } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 
-export class UpdateRoleDto extends PartialType(CreateRoleDto) {
-  id: number;
+export class UpdateRoleDto {
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @ApiProperty({ type: [Number], required: false })
+  @IsInt({ each: true })
+  @IsOptional()
+  @ArrayNotEmpty()
+  permissionIds?: number[];
 }
