@@ -172,26 +172,6 @@ export class UsersService {
     }
   }
 
-  async findByUsername(username: string): Promise<AuthUserResponseDto> {
-    const user = await this.prisma.user.findUnique({
-      where: { username },
-      include: {
-        roles: {
-          include: {
-            permissions: true,
-          },
-        },
-      },
-    });
-
-    if (!user) {
-      throw new NotFoundException(`User with ID ${username} not found.`);
-    }
-
-    // Map Prisma entity to DTO to satisfy the method's return type
-    return new AuthUserResponseDto(user);
-  }
-
   async findOneWithRelations(id: number): Promise<AuthUserResponseDto> {
     const user = await this.prisma.user.findUnique({
       where: { id },

@@ -36,7 +36,10 @@ CREATE TABLE "public"."users" (
     "id" SERIAL NOT NULL,
     "username" TEXT NOT NULL,
     "password" TEXT NOT NULL,
-    "employeeId" INTEGER,
+    "employeeId" INTEGER NOT NULL,
+    "hashedRefreshToken" TEXT,
+    "passwordResetToken" TEXT,
+    "passwordResetExpires" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdBy" INTEGER NOT NULL,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -122,7 +125,7 @@ CREATE TABLE "public"."shift_schedules" (
 -- CreateTable
 CREATE TABLE "public"."time_logs" (
     "id" SERIAL NOT NULL,
-    "shiftScheduleId" INTEGER,
+    "shiftScheduleId" INTEGER NOT NULL,
     "employeeId" INTEGER NOT NULL,
     "actualStartTime" TIMESTAMPTZ NOT NULL,
     "actualEndTime" TIMESTAMPTZ NOT NULL,
@@ -234,9 +237,6 @@ CREATE UNIQUE INDEX "roles_name_key" ON "public"."roles"("name");
 CREATE UNIQUE INDEX "permissions_action_subject_key" ON "public"."permissions"("action", "subject");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "time_logs_shiftScheduleId_key" ON "public"."time_logs"("shiftScheduleId");
-
--- CreateIndex
 CREATE UNIQUE INDEX "payroll_entries_timeLogId_key" ON "public"."payroll_entries"("timeLogId");
 
 -- CreateIndex
@@ -249,7 +249,7 @@ CREATE INDEX "_UserRoles_B_index" ON "public"."_UserRoles"("B");
 CREATE INDEX "_RolePermissions_B_index" ON "public"."_RolePermissions"("B");
 
 -- AddForeignKey
-ALTER TABLE "public"."users" ADD CONSTRAINT "users_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "public"."employees"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "public"."users" ADD CONSTRAINT "users_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "public"."employees"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."shifts" ADD CONSTRAINT "shifts_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES "public"."branches"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -264,7 +264,7 @@ ALTER TABLE "public"."shift_schedules" ADD CONSTRAINT "shift_schedules_employeeI
 ALTER TABLE "public"."shift_schedules" ADD CONSTRAINT "shift_schedules_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES "public"."branches"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."time_logs" ADD CONSTRAINT "time_logs_shiftScheduleId_fkey" FOREIGN KEY ("shiftScheduleId") REFERENCES "public"."shift_schedules"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "public"."time_logs" ADD CONSTRAINT "time_logs_shiftScheduleId_fkey" FOREIGN KEY ("shiftScheduleId") REFERENCES "public"."shift_schedules"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."time_logs" ADD CONSTRAINT "time_logs_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "public"."employees"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
