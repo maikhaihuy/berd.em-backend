@@ -10,7 +10,6 @@ import { CreateUserDto } from './dto/create-user.dto';
 
 import * as bcrypt from 'bcrypt';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { AuthUserResponseDto } from './dto/auth-user-response.dto';
 
 @Injectable()
 export class UsersService {

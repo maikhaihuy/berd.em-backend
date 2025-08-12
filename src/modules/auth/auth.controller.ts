@@ -43,9 +43,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Refresh access token using a refresh token' })
   @HttpCode(HttpStatus.OK)
   async refreshToken(@Request() req) {
-    return await this.authService.refreshToken(
-      req.user
-    );
+    return await this.authService.refreshToken(req.user);
   }
 
   @UseGuards(JwtAuthGuard)
