@@ -1,27 +1,44 @@
 import { Strategy } from 'passport-local';
 import { PassportStrategy } from '@nestjs/passport';
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { AuthService } from '../auth.service';
-import { LoginDto } from '../dto/login.dto';
-import { AuthUserResponseDto } from '@modules/users/dto/auth-user-response.dto';
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+
+import * as bcrypt from 'bcrypt';
+import { AuthUserDto } from '../dto/auth-user.dto';
+import { UsersService } from '@modules/users/users.service';
+import { PrismaService } from '@modules/prisma/prisma.service';
 
 @Injectable()
 export class LocalStrategy extends PassportStrategy(Strategy) {
-  constructor(private authService: AuthService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly usersService: UsersService,
+  ) {
     super({ usernameField: 'username', passwordField: 'password' });
   }
 
-  async validate(
-    username: string,
-    password: string,
-  ): Promise<AuthUserResponseDto | null> {
-    const user = await this.authService.validateUser({
-      username,
-      password,
-    } as LoginDto);
+  async validate(username: string, password: string): Promise<AuthUserDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { username },
+      include: {
+        roles: {
+          include: {
+            permissions: true,
+          },
+        },
+      },
+    });
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new NotFoundException(`User with ID ${username} not found.`);
     }
-    return user;
+
+    if (await bcrypt.compare(password, user.password)) {
+      throw new UnauthorizedException(`Username or password are not match.`);
+    }
+
+    return new AuthUserDto(user);
   }
 }
