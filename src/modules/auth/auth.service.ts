@@ -7,13 +7,13 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { Role, User } from '@prisma/client';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { AuthUserResponseDto } from '@modules/users/dto/auth-user-response.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { ConfigService } from '@nestjs/config';
+import { RoleDto } from '@modules/roles/dto/role.dto';
 
 @Injectable()
 export class AuthService {
@@ -94,17 +94,9 @@ export class AuthService {
     }
   }
 
-  login(user: AuthUserResponseDto): AuthResponseDto {
-    console.log(user);
-    const payload = {
-      username: user.username,
-      sub: user.id,
-      roles: user.roles.map((role) => role.name),
-    };
-    const access_token = this.jwtService.sign(payload);
-    return {
-      access_token,
-    } as AuthResponseDto;
+  async login(user: AuthUserResponseDto): Promise<AuthResponseDto> {
+    const authToken = await this.getTokens(user.id, user.username, user.roles);
+    return authToken as AuthResponseDto;
   }
 
   async refreshTokens(userId: number, refreshToken: string) {
@@ -168,19 +160,12 @@ export class AuthService {
     });
     if (
       !user ||
-      !user.passwordResetExpires ||
       !(user.passwordResetExpires instanceof Date) ||
-      user.passwordResetExpires.getTime() < Date.now()
+      (user.passwordResetExpires as Date).getTime() < Date.now()
     ) {
       throw new ForbiddenException('Token không hợp lệ hoặc đã hết hạn.');
     }
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const expiryTime =
-      user.passwordResetExpires instanceof Date
-        ? user.passwordResetExpires.getTime()
-        : Infinity;
 
-    console.log(expiryTime);
     const password = await bcrypt.hash(newPass, 10);
     const passwordResetToken = null;
     const passwordResetExpires = null;
@@ -198,7 +183,7 @@ export class AuthService {
   }
 
   // --- Helper Methods ---
-  private async getTokens(userId: number, email: string, roles: Role[]) {
+  private async getTokens(userId: number, email: string, roles: RoleDto[]) {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(
         { sub: userId, email, roles },

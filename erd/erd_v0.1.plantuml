@@ -1,0 +1,224 @@
+@startuml erd_v0.1
+!theme plain
+
+entity "Employee" {
+  + id (PK, Int)
+  --
+  name (String)
+  phone (String)
+  avatar (String?)
+  email (String?)
+  address (String?)
+  isActive (Boolean)
+  --
+  createdAt (DateTime)
+  createdBy (Int)
+  updatedAt (DateTime)
+  updatedBy (Int)
+}
+
+entity "User" {
+  + id (PK, Int)
+  --
+  username(String)
+  password (String) (Hashed)
+  employeeId (FK, Int) (Unique)
+  hashedRefreshToken (String?)
+  passwordResetToken (String?)
+  passwordResetExpires (DateTime?)
+  --
+  createdAt (DateTime)
+  createdBy (Int)
+  updatedAt (DateTime)
+  updatedBy (Int)
+}
+
+entity "Role" {
+  + id (PK, Int)
+  --
+  name (String) (e.g., "admin", "manager", "employee")
+  description (String?)
+  --
+  createdAt (DateTime)
+  createdBy (Int)
+  updatedAt (DateTime)
+  updatedBy (Int)
+}
+
+entity "Permission" {
+  + id (PK, Int)
+  --
+  action (String) (e.g., "manage", "create", "read", "update", "delete", "verify", "punch_in")
+  subject (String) (e.g., "all", "Employee", "ShiftSchedule", "TimeLog", "ownShift")
+  condition (Json?)
+  description (String?)
+  --
+  createdAt (DateTime)
+  createdBy (Int)
+  updatedAt (DateTime)
+  updatedBy (Int)
+}
+
+entity "UserRole" {
+  + userId (PK, FK, Int)
+  + roleId (PK, FK, Int)
+}
+
+entity "RolePermission" {
+  + roleId (PK, FK, Int)
+  + permissionId (PK, FK, Int)
+}
+
+
+entity "EmployeeBranch" {
+  + branchId (PK, FK, Int)
+  + employeeId (PK, FK, Int)
+}
+
+entity "Branch" {
+  + id (PK, Int)
+  --
+  name (String)
+  abbreviation (String)
+  address (String)
+  email (String?)
+  phone (String?)
+  --
+  createdAt (DateTime)
+  createdBy (Int)
+  updatedAt (DateTime)
+  updatedBy (Int)
+}
+
+entity "Shift" {
+  + id (PK, Int)
+  --
+  name (String)
+  abbreviation (String)
+  maxSlots (Int)
+  branchId (FK, Int)
+  --
+  createdAt (DateTime)
+  createdBy (Int)
+  updatedAt (DateTime)
+  updatedBy (Int)
+}
+
+entity "ShiftRequest" {
+  + id (PK, Int)
+  --
+  employeeId (FK, Int)
+  dateRegister (Date)
+  startTime (DateTimeOffset)
+  endTime (DateTimeOffset)
+  --
+  createdAt (DateTime)
+  createdBy (Int)
+  updatedAt (DateTime)
+  updatedBy (Int)
+}
+
+entity "ShiftSchedule" {
+  + id (PK, Int)
+  --
+  dateRegister (Date)
+  startTime (DateTimeOffset)
+  endTime (DateTimeOffset)
+  employeeId (FK, Int)
+  branchId (FK, Int)
+  note (String?)
+  --
+  createdAt (DateTime)
+  createdBy (Int)
+  updatedAt (DateTime)
+  updatedBy (Int)
+}
+
+entity "TimeLog" {
+  + id (PK, Int)
+  --
+  shiftScheduleId (FK, Int?)
+  employeeId (FK, Int)
+  actualStartTime (DateTimeOffset)
+  actualEndTime (DateTimeOffset)
+  overtimeMinutes (Int?)
+  absenceReason (String?)
+  status (String) // e.g., "Pending", "Verified", "Absent"
+  verifiedBy (FK, Int?)
+  verifiedAt (DateTimeOffset?)
+  note (String?)
+  createdAt (DateTime)
+  createdBy (Int)
+  updatedAt (DateTime)
+  updatedBy (Int)
+}
+
+entity "EmployeeHourlyRate" {
+  + id (PK, Int)
+  --
+  employeeId (FK, Int)
+  rate (Decimal)
+  effectiveDate (Date)
+  endDate (Date?)
+  note (String?)
+  createdAt (DateTime)
+  createdBy (Int)
+  updatedAt (DateTime)
+  updatedBy (Int)
+}
+
+entity "PayPeriod" {
+  + id (PK, Int)
+  --
+  startDate (Date)
+  endDate (Date)
+  status (String) // e.g., "Open", "Closed", "Finalized"
+  notes (String?)
+  createdAt (DateTime)
+  createdBy (Int)
+  updatedAt (DateTime)
+  updatedBy (Int)
+}
+
+entity "PayrollEntry" {
+  + id (PK, Int)
+  --
+  timeLogId (FK, Int)
+  employeeId (FK, Int)
+  payPeriodId (FK, Int)
+  workDate (Date)
+  payDate (Date)
+  calculatedHourlyRate (Decimal)
+  calculatedDurationMinutes (Int)
+  basePay (Decimal)
+  overtimePay (Decimal)
+  totalPay (Decimal)
+  isFinalized (Boolean)
+  auditTrailLink (String?)
+  calculatedAt (DateTime)
+  calculatedBy (FK, Int)
+  createdAt (DateTime)
+  createdBy (Int)
+  updatedAt (DateTime)
+  updatedBy (Int)
+}
+
+' Relationships
+User }o--o{ UserRole : userId
+Role }o--o{ UserRole : roleId
+Role }o--o{ RolePermission : roleId
+Permission ||--o{ RolePermission : permissionId
+Employee ||--o{ ShiftRequest : employeeId
+Employee ||--o{ ShiftSchedule : employeeId (assigned employee)
+Employee }o--o{ EmployeeBranch : employeeId
+Employee ||--o{ EmployeeHourlyRate : employeeId
+Employee ||--o{ TimeLog : employeeId (actual working employee)
+Employee ||--o{ PayrollEntry : employeeId (employee receiving pay)
+User ||--o| Employee : employeeId // One employee can be one user (or none)
+Branch ||--o{ Shift: branchId
+Branch ||--o{ ShiftSchedule : branchId
+Branch }o--o{ EmployeeBranch : branchId
+ShiftSchedule ||--o| TimeLog : shiftScheduleId // A schedule can have 0 or 1 actual time log
+PayPeriod ||--o{ PayrollEntry : payPeriodId
+TimeLog ||--o| PayrollEntry : timeLogId // A time log will generate 0 or 1 payroll entry
+@enduml

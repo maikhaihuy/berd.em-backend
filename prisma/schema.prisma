@@ -40,25 +40,6 @@ model Employee {
   @@map("employees")
 }
 
-model Branch {
-  id           Int      @id @default(autoincrement())
-  name         String
-  abbreviation String
-  address      String
-  email        String?
-  phone        String?
-  createdAt    DateTime @default(now())
-  createdBy    Int
-  updatedAt    DateTime @updatedAt
-  updatedBy    Int
-
-  // Relations
-  shifts    Shift[]
-  employees Employee[] @relation("EmployeeBranches")
-  shiftSchedules ShiftSchedule[]
-
-  @@map("branches")
-}
 
 model User {
   id       Int     @id @default(autoincrement())
@@ -102,6 +83,7 @@ model Permission {
   id          Int      @id @default(autoincrement())
   action      String
   subject     String
+  condition   Json?
   description String?
   createdAt   DateTime @default(now())
   createdBy   Int
@@ -113,6 +95,26 @@ model Permission {
 
   @@unique([action, subject])
   @@map("permissions")
+}
+
+model Branch {
+  id           Int      @id @default(autoincrement())
+  name         String
+  abbreviation String
+  address      String
+  email        String?
+  phone        String?
+  createdAt    DateTime @default(now())
+  createdBy    Int
+  updatedAt    DateTime @updatedAt
+  updatedBy    Int
+
+  // Relations
+  shifts    Shift[]
+  employees Employee[] @relation("EmployeeBranches")
+  shiftSchedules ShiftSchedule[]
+
+  @@map("branches")
 }
 
 model Shift {

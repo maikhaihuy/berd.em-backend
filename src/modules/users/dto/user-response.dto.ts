@@ -1,5 +1,5 @@
-import { Role } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
+import { RoleDto } from '@modules/roles/dto/role.dto';
 
 export class UserResponseDto {
   @ApiProperty()
@@ -24,7 +24,7 @@ export class UserResponseDto {
   updatedAt: Date;
 
   @ApiProperty({ type: [Object] }) // You might want to create a separate RoleResponseDto
-  roles: Role[];
+  roles: RoleDto[];
 
   constructor(partial: Partial<UserResponseDto>) {
     Object.assign(this, partial);
