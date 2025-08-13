@@ -1,4 +1,3 @@
-import { EmployeeHourlyRatesModule } from '@modules/employee-hourly-rates/employee-hourly-rates.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from '@modules/auth/auth.module';
@@ -11,6 +10,7 @@ import { PrismaModule } from '@modules/prisma/prisma.module';
 // import { CaslModule } from '@modules/casl/casl.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
+import { EmployeeHourlyRatesModule } from '@modules/employee-hourly-rates/employee-hourly-rates.module';
 
 @Module({
   imports: [

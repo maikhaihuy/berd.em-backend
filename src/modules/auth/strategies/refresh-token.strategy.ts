@@ -5,7 +5,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
-import { AuthUserDto } from '../dto/auth-user.dto';
+import { PublicUserDto } from '../dto/public-user.dto';
 
 interface RefreshTokenRequest {
   refresh_token: string;
@@ -27,7 +27,10 @@ export class JwtRefreshStrategy extends PassportStrategy(
     } as StrategyOptionsWithRequest);
   }
 
-  async validate(req: Request, payload: { sub: number }): Promise<AuthUserDto> {
+  async validate(
+    req: Request,
+    payload: { sub: number },
+  ): Promise<PublicUserDto> {
     const refreshToken = (req.body as RefreshTokenRequest)?.refresh_token;
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
@@ -52,6 +55,6 @@ export class JwtRefreshStrategy extends PassportStrategy(
       throw new UnauthorizedException('Access Denied');
     }
 
-    return new AuthUserDto(user);
+    return new PublicUserDto(user);
   }
 }

@@ -7,4 +7,8 @@ export class PublicUserDto {
 
   @Expose()
   username: string;
+
+  constructor(partial: Partial<PublicUserDto>) {
+    Object.assign(this, partial);
+  }
 }

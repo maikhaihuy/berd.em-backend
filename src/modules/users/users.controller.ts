@@ -9,14 +9,9 @@ import {
   Delete,
   HttpStatus,
   HttpCode,
+  UseGuards,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBody,
-  // ApiBearerAuth,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 // import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 // import { AbilitiesGuard } from '../../common/guards/abilities.guard';
@@ -25,11 +20,11 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserRolesDto } from './dto/update-user-roles.dto';
+import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 
 @ApiTags('users')
 @Controller('users')
-// @UseGuards(JwtAuthGuard)
-// @ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 

@@ -8,7 +8,7 @@ import {
 } from 'class-validator';
 
 export class RegisterDto {
-  @ApiProperty({ example: 'john_doe' })
+  @ApiProperty({ example: 'admin' })
   @IsString()
   @IsNotEmpty()
   username: string;
@@ -19,7 +19,7 @@ export class RegisterDto {
   @MinLength(6)
   password: string;
 
-  @ApiProperty({ example: 'John Doe' })
+  @ApiProperty({ example: 'Admin' })
   @IsString()
   @IsNotEmpty()
   name: string;

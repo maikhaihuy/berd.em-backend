@@ -16,27 +16,11 @@ CREATE TABLE "public"."employees" (
 );
 
 -- CreateTable
-CREATE TABLE "public"."branches" (
-    "id" SERIAL NOT NULL,
-    "name" TEXT NOT NULL,
-    "abbreviation" TEXT NOT NULL,
-    "address" TEXT NOT NULL,
-    "email" TEXT,
-    "phone" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "createdBy" INTEGER NOT NULL,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-    "updatedBy" INTEGER NOT NULL,
-
-    CONSTRAINT "branches_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "public"."users" (
     "id" SERIAL NOT NULL,
     "username" TEXT NOT NULL,
     "password" TEXT NOT NULL,
-    "employeeId" INTEGER NOT NULL,
+    "employeeId" INTEGER,
     "hashedRefreshToken" TEXT,
     "passwordResetToken" TEXT,
     "passwordResetExpires" TIMESTAMP(3),
@@ -66,6 +50,7 @@ CREATE TABLE "public"."permissions" (
     "id" SERIAL NOT NULL,
     "action" TEXT NOT NULL,
     "subject" TEXT NOT NULL,
+    "condition" JSONB,
     "description" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdBy" INTEGER NOT NULL,
@@ -73,6 +58,22 @@ CREATE TABLE "public"."permissions" (
     "updatedBy" INTEGER NOT NULL,
 
     CONSTRAINT "permissions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "public"."branches" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "abbreviation" TEXT NOT NULL,
+    "address" TEXT NOT NULL,
+    "email" TEXT,
+    "phone" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdBy" INTEGER NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedBy" INTEGER NOT NULL,
+
+    CONSTRAINT "branches_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -201,14 +202,6 @@ CREATE TABLE "public"."payroll_entries" (
 );
 
 -- CreateTable
-CREATE TABLE "public"."_EmployeeBranches" (
-    "A" INTEGER NOT NULL,
-    "B" INTEGER NOT NULL,
-
-    CONSTRAINT "_EmployeeBranches_AB_pkey" PRIMARY KEY ("A","B")
-);
-
--- CreateTable
 CREATE TABLE "public"."_UserRoles" (
     "A" INTEGER NOT NULL,
     "B" INTEGER NOT NULL,
@@ -222,6 +215,14 @@ CREATE TABLE "public"."_RolePermissions" (
     "B" INTEGER NOT NULL,
 
     CONSTRAINT "_RolePermissions_AB_pkey" PRIMARY KEY ("A","B")
+);
+
+-- CreateTable
+CREATE TABLE "public"."_EmployeeBranches" (
+    "A" INTEGER NOT NULL,
+    "B" INTEGER NOT NULL,
+
+    CONSTRAINT "_EmployeeBranches_AB_pkey" PRIMARY KEY ("A","B")
 );
 
 -- CreateIndex
@@ -240,16 +241,16 @@ CREATE UNIQUE INDEX "permissions_action_subject_key" ON "public"."permissions"("
 CREATE UNIQUE INDEX "payroll_entries_timeLogId_key" ON "public"."payroll_entries"("timeLogId");
 
 -- CreateIndex
-CREATE INDEX "_EmployeeBranches_B_index" ON "public"."_EmployeeBranches"("B");
-
--- CreateIndex
 CREATE INDEX "_UserRoles_B_index" ON "public"."_UserRoles"("B");
 
 -- CreateIndex
 CREATE INDEX "_RolePermissions_B_index" ON "public"."_RolePermissions"("B");
 
+-- CreateIndex
+CREATE INDEX "_EmployeeBranches_B_index" ON "public"."_EmployeeBranches"("B");
+
 -- AddForeignKey
-ALTER TABLE "public"."users" ADD CONSTRAINT "users_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "public"."employees"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."users" ADD CONSTRAINT "users_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "public"."employees"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."shifts" ADD CONSTRAINT "shifts_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES "public"."branches"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -288,12 +289,6 @@ ALTER TABLE "public"."payroll_entries" ADD CONSTRAINT "payroll_entries_payPeriod
 ALTER TABLE "public"."payroll_entries" ADD CONSTRAINT "payroll_entries_calculatedBy_fkey" FOREIGN KEY ("calculatedBy") REFERENCES "public"."users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."_EmployeeBranches" ADD CONSTRAINT "_EmployeeBranches_A_fkey" FOREIGN KEY ("A") REFERENCES "public"."branches"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."_EmployeeBranches" ADD CONSTRAINT "_EmployeeBranches_B_fkey" FOREIGN KEY ("B") REFERENCES "public"."employees"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "public"."_UserRoles" ADD CONSTRAINT "_UserRoles_A_fkey" FOREIGN KEY ("A") REFERENCES "public"."roles"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -304,3 +299,9 @@ ALTER TABLE "public"."_RolePermissions" ADD CONSTRAINT "_RolePermissions_A_fkey"
 
 -- AddForeignKey
 ALTER TABLE "public"."_RolePermissions" ADD CONSTRAINT "_RolePermissions_B_fkey" FOREIGN KEY ("B") REFERENCES "public"."roles"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."_EmployeeBranches" ADD CONSTRAINT "_EmployeeBranches_A_fkey" FOREIGN KEY ("A") REFERENCES "public"."branches"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."_EmployeeBranches" ADD CONSTRAINT "_EmployeeBranches_B_fkey" FOREIGN KEY ("B") REFERENCES "public"."employees"("id") ON DELETE CASCADE ON UPDATE CASCADE;

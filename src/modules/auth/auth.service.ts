@@ -1,12 +1,18 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { TokenDto } from './dto/token.dto';
 import { ConfigService } from '@nestjs/config';
-import { AuthUserDto } from './dto/auth-user.dto';
-import { RoleDto } from '@modules/roles/dto/role.dto';
+import { RegisterDto } from './dto/register.dto';
+import { User } from '@prisma/client';
+import { PublicUserDto } from './dto/public-user.dto';
 
 @Injectable()
 export class AuthService {
@@ -16,62 +22,63 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
-  // async register(registerDto: RegisterDto): Promise<Omit<User, 'password'>> {
-  //   // 1. Kiểm tra username đã tồn tại chưa
-  //   const existingUser = await this.prisma.user.findUnique({
-  //     where: { username: registerDto.username },
-  //   });
-  //   if (existingUser) {
-  //     throw new BadRequestException('Username already exists');
-  //   }
+  async register(registerDto: RegisterDto): Promise<Omit<User, 'password'>> {
+    // 1. Kiểm tra username đã tồn tại chưa
+    const existingUser = await this.prisma.user.findUnique({
+      where: { username: registerDto.username },
+    });
+    if (existingUser) {
+      throw new BadRequestException('Username already exists');
+    }
 
-  //   // 2. Hash mật khẩu
-  //   const hashedPassword = await bcrypt.hash(registerDto.password, 10);
+    // 2. Hash mật khẩu
+    const hashedPassword = await bcrypt.hash(registerDto.password, 10);
 
-  //   // 3. Tìm role 'employee' mặc định để gán
-  //   const employeeRole = await this.prisma.role.findFirst({
-  //     where: { name: 'employee' },
-  //   });
-  //   if (!employeeRole) {
-  //     throw new NotFoundException(
-  //       'Default "employee" role not found. Please seed the database.',
-  //     );
-  //   }
+    // 3. Tìm role 'employee' mặc định để gán
+    const employeeRole = await this.prisma.role.findFirst({
+      where: { name: 'Employee' },
+    });
+    if (!employeeRole) {
+      throw new NotFoundException(
+        'Default "employee" role not found. Please seed the database.',
+      );
+    }
 
-  //   // 4. Tạo user mới và gán role
-  //   try {
-  //     const user = await this.prisma.user.create({
-  //       data: {
-  //         username: registerDto.username,
-  //         password: hashedPassword,
-  //         roles: {
-  //           connect: { id: employeeRole.id },
-  //         },
-  //         // Cần một cách để xác định createdBy và updatedBy, ví dụ: user mặc định
-  //         createdBy: 1,
-  //         updatedBy: 1,
-  //       },
-  //     });
+    // 4. Tạo user mới và gán role
+    try {
+      const user = await this.prisma.user.create({
+        data: {
+          username: registerDto.username,
+          password: hashedPassword,
+          roles: {
+            connect: { id: employeeRole.id },
+          },
+          // Cần một cách để xác định createdBy và updatedBy, ví dụ: user mặc định
+          createdBy: 1,
+          updatedBy: 1,
+        },
+      });
 
-  //     // 5. Trả về user mà không bao gồm mật khẩu
-  //     const { password, ...result } = user;
-  //     console.log(password);
-  //     return result;
-  //   } catch (error) {
-  //     console.log(error);
-  //     throw new BadRequestException('Failed to create user.');
-  //   }
-  // }
-
-  async login(user: AuthUserDto): Promise<TokenDto> {
-    const authToken = await this.getTokens(user.id, user.username, user.roles);
-    return authToken as TokenDto;
+      // 5. Trả về user mà không bao gồm mật khẩu
+      const { password, ...result } = user;
+      console.log(password);
+      return result;
+    } catch (error) {
+      console.log(error);
+      throw new BadRequestException('Failed to create user.');
+    }
   }
 
-  async refreshToken(user: AuthUserDto): Promise<TokenDto> {
-    const tokens = await this.getTokens(user.id, user.username, user.roles);
-    await this.updateRefreshToken(user.id, tokens.refreshToken);
-    return tokens;
+  async login(user: PublicUserDto): Promise<TokenDto> {
+    const authToken = await this.getTokens(user.id, user.username);
+    await this.updateRefreshToken(user.id, authToken.refreshToken);
+    return authToken;
+  }
+
+  async refreshToken(user: PublicUserDto): Promise<TokenDto> {
+    const authToken = await this.getTokens(user.id, user.username);
+    await this.updateRefreshToken(user.id, authToken.refreshToken);
+    return authToken;
   }
 
   async logout(userId: number) {
@@ -139,22 +146,20 @@ export class AuthService {
   }
 
   // --- Helper Methods ---
-  private async getTokens(userId: number, email: string, roles: RoleDto[]) {
+  private async getTokens(userId: number, email: string) {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(
-        { sub: userId, email, roles },
+        { sub: userId, email },
         {
           secret: this.configService.get<string>('JWT_SECRET'),
-          expiresIn: this.configService.get<string>('JWT_EXPIRATION_TIME'),
+          expiresIn: this.configService.get<string>('JWT_EXPIRATION'),
         },
       ),
       this.jwtService.signAsync(
-        { sub: userId, email, roles },
+        { sub: userId, email },
         {
           secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-          expiresIn: this.configService.get<string>(
-            'JWT_REFRESH_EXPIRATION_TIME',
-          ),
+          expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRATION'),
         },
       ),
     ]);
