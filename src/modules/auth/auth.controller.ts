@@ -52,6 +52,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Refresh access token using a refresh token' })
   @HttpCode(HttpStatus.OK)
   async refreshToken(@Request() req) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const user = req.user as RefreshTokenPayload;
     return await this.authService.refreshToken(user, user.tokenId);
   }
@@ -72,6 +73,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Logout from current device only' })
   @HttpCode(HttpStatus.OK)
   async logoutDevice(@Request() req) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const user = req.user as RefreshTokenPayload;
     await this.authService.logout(user.id, user.tokenId);
     return { message: 'Device logout successful' };
@@ -92,10 +94,12 @@ export class AuthController {
   @ApiOperation({ summary: 'Get active sessions for current user' })
   @HttpCode(HttpStatus.OK)
   async getActiveSessions(@Request() req) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
-    const tokens = await this.refreshTokenService.getUserActiveTokens(req.user.id);
+    const tokens = await this.refreshTokenService.getUserActiveTokens(
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+      req.user.id,
+    );
     return {
-      activeSessions: tokens.map(token => ({
+      activeSessions: tokens.map((token) => ({
         id: token.id,
         createdAt: token.createdAt,
         expiresAt: token.expiresAt,

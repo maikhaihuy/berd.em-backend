@@ -3,8 +3,9 @@ import { ExtractJwt, Strategy, StrategyOptionsWithRequest } from 'passport-jwt';
 import { Request } from 'express';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { RefreshTokenService } from '../refresh-token.service';
 import { PublicUserDto } from '../dto/public-user.dto';
+import { PrismaService } from '@modules/prisma/prisma.service';
+import * as bcrypt from 'bcrypt';
 
 interface RefreshTokenRequest {
   refresh_token: string;
@@ -21,7 +22,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
 ) {
   constructor(
     private readonly configService: ConfigService,
-    private readonly refreshTokenService: RefreshTokenService,
+    private readonly prisma: PrismaService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromBodyField('refresh_token'),
@@ -43,14 +44,27 @@ export class JwtRefreshStrategy extends PassportStrategy(
     }
 
     // Validate the refresh token using the service
-    const tokenRecord = await this.refreshTokenService.validateRefreshToken(refreshToken);
-    
-    if (!tokenRecord || !tokenRecord.user) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      include: {
+        refreshTokens: {
+          where: {
+            revokedAt: null,
+            expiresAt: { gte: new Date() },
+          },
+        },
+      },
+    });
+    // Find the token that matches the provided token
+    const tokenRecord = user?.refreshTokens[0];
+    if (
+      !tokenRecord ||
+      !(await bcrypt.compare(refreshToken, tokenRecord.tokenHash))
+    ) {
       throw new UnauthorizedException('Access Denied');
     }
 
-    const userDto = new PublicUserDto(tokenRecord.user);
-    
+    const userDto = new PublicUserDto(user);
     return {
       ...userDto,
       tokenId: tokenRecord.id,

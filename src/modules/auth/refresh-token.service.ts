@@ -37,31 +37,6 @@ export class RefreshTokenService {
   }
 
   /**
-   * Validate a refresh token and return the associated user
-   */
-  async validateRefreshToken(token: string): Promise<RefreshToken | null> {
-    // Get all non-revoked, non-expired tokens
-    const tokens = await this.prisma.refreshToken.findMany({
-      where: {
-        revokedAt: null,
-        expiresAt: { gte: new Date() },
-      },
-      include: {
-        user: true,
-      },
-    });
-
-    // Find the token that matches the provided token
-    for (const tokenRecord of tokens) {
-      if (await bcrypt.compare(token, tokenRecord.tokenHash)) {
-        return tokenRecord;
-      }
-    }
-
-    return null;
-  }
-
-  /**
    * Revoke a specific refresh token
    */
   async revokeRefreshToken(tokenId: string): Promise<void> {
