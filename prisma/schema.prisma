@@ -59,8 +59,24 @@ model User {
   roles          Role[]     @relation("UserRoles")
   verifiedTimeLogs TimeLog[] @relation("TimeLogVerifier")
   calculatedPayrolls PayrollEntry[] @relation("PayrollCalculator")
+  refreshTokens  RefreshToken[]
 
   @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    Int
+  tokenHash String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, tokenHash])
+  @@map("refresh_tokens")
 }
 
 model Role {

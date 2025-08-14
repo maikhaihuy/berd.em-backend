@@ -3,12 +3,15 @@ import { ExtractJwt, Strategy, StrategyOptionsWithRequest } from 'passport-jwt';
 import { Request } from 'express';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '@modules/prisma/prisma.service';
-import * as bcrypt from 'bcrypt';
+import { RefreshTokenService } from '../refresh-token.service';
 import { PublicUserDto } from '../dto/public-user.dto';
 
 interface RefreshTokenRequest {
   refresh_token: string;
+}
+
+export interface RefreshTokenPayload extends PublicUserDto {
+  tokenId: string;
 }
 
 @Injectable()
@@ -18,43 +21,39 @@ export class JwtRefreshStrategy extends PassportStrategy(
 ) {
   constructor(
     private readonly configService: ConfigService,
-    private readonly prisma: PrismaService,
+    private readonly refreshTokenService: RefreshTokenService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromBodyField('refresh_token'),
       secretOrKey: configService.get<string>('JWT_REFRESH_SECRET'),
       passReqToCallback: true,
+      ignoreExpiration: true, // We'll handle expiration manually
     } as StrategyOptionsWithRequest);
   }
 
   async validate(
     req: Request,
     payload: { sub: number },
-  ): Promise<PublicUserDto> {
+  ): Promise<RefreshTokenPayload> {
     const refreshToken = (req.body as RefreshTokenRequest)?.refresh_token;
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
-    });
-
-    if (!user || !user.hashedRefreshToken) {
-      throw new UnauthorizedException('Access Denied');
-    }
 
     // Ensure refresh token is present in the request body
     if (!refreshToken || typeof refreshToken !== 'string') {
       throw new UnauthorizedException('Access Denied');
     }
 
-    // So sánh refresh token từ request với token đã hash trong DB
-    const isRefreshTokenMatching = await bcrypt.compare(
-      refreshToken,
-      user.hashedRefreshToken,
-    );
-
-    if (!isRefreshTokenMatching) {
+    // Validate the refresh token using the service
+    const tokenRecord = await this.refreshTokenService.validateRefreshToken(refreshToken);
+    
+    if (!tokenRecord || !tokenRecord.user) {
       throw new UnauthorizedException('Access Denied');
     }
 
-    return new PublicUserDto(user);
+    const userDto = new PublicUserDto(tokenRecord.user);
+    
+    return {
+      ...userDto,
+      tokenId: tokenRecord.id,
+    };
   }
 }

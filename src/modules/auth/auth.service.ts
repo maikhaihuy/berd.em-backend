@@ -13,6 +13,7 @@ import { ConfigService } from '@nestjs/config';
 import { RegisterDto } from './dto/register.dto';
 import { User } from '@prisma/client';
 import { PublicUserDto } from './dto/public-user.dto';
+import { RefreshTokenService } from './refresh-token.service';
 
 @Injectable()
 export class AuthService {
@@ -20,6 +21,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly refreshTokenService: RefreshTokenService,
   ) {}
 
   async register(registerDto: RegisterDto): Promise<Omit<User, 'password'>> {
@@ -70,22 +72,38 @@ export class AuthService {
   }
 
   async login(user: PublicUserDto): Promise<TokenDto> {
-    const authToken = await this.getTokens(user.id, user.username);
-    await this.updateRefreshToken(user.id, authToken.refreshToken);
-    return authToken;
+    const accessToken = await this.generateAccessToken(user.id, user.username);
+    const { token: refreshToken } =
+      await this.refreshTokenService.generateRefreshToken(user.id);
+
+    return {
+      accessToken,
+      refreshToken,
+    };
   }
 
-  async refreshToken(user: PublicUserDto): Promise<TokenDto> {
-    const authToken = await this.getTokens(user.id, user.username);
-    await this.updateRefreshToken(user.id, authToken.refreshToken);
-    return authToken;
+  async refreshToken(
+    user: PublicUserDto,
+    oldTokenId: string,
+  ): Promise<TokenDto> {
+    const accessToken = await this.generateAccessToken(user.id, user.username);
+    const { token: refreshToken } =
+      await this.refreshTokenService.rotateRefreshToken(oldTokenId, user.id);
+
+    return {
+      accessToken,
+      refreshToken,
+    };
   }
 
-  async logout(userId: number) {
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: { hashedRefreshToken: null },
-    });
+  async logout(userId: number, tokenId?: string) {
+    if (tokenId) {
+      // Revoke specific token
+      await this.refreshTokenService.revokeRefreshToken(tokenId);
+    } else {
+      // Revoke all tokens for user
+      await this.refreshTokenService.revokeAllUserTokens(userId);
+    }
   }
 
   async forgotPassword(username: string) {
@@ -146,35 +164,19 @@ export class AuthService {
   }
 
   // --- Helper Methods ---
-  private async getTokens(userId: number, email: string) {
-    const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(
-        { sub: userId, email },
-        {
-          secret: this.configService.get<string>('JWT_SECRET'),
-          expiresIn: this.configService.get<string>('JWT_EXPIRATION'),
-        },
-      ),
-      this.jwtService.signAsync(
-        { sub: userId, email },
-        {
-          secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-          expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRATION'),
-        },
-      ),
-    ]);
-
-    return {
-      accessToken,
-      refreshToken,
-    };
-  }
-
-  private async updateRefreshToken(userId: number, refreshToken: string) {
-    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { hashedRefreshToken },
-    });
+  private async generateAccessToken(
+    userId: number,
+    email: string,
+  ): Promise<string> {
+    return this.jwtService.signAsync(
+      {
+        sub: userId,
+        email,
+      },
+      {
+        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+        expiresIn: '15m',
+      },
+    );
   }
 }
