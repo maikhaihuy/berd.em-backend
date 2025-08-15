@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { RefreshToken } from '@prisma/client';
+import { RefreshToken, User } from '@prisma/client';
 
 @Injectable()
 export class RefreshTokenService {
@@ -34,6 +34,41 @@ export class RefreshTokenService {
     });
 
     return { token, tokenRecord };
+  }
+
+  /**
+   * Validate a refresh token
+   */
+  async validateRefreshToken(
+    token: string,
+    userId: number,
+  ): Promise<{ user: User; tokenRecord: RefreshToken } | null> {
+    // Get user with active tokens
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        refreshTokens: {
+          where: {
+            revokedAt: null,
+            expiresAt: { gte: new Date() },
+          },
+        },
+      },
+    });
+
+    if (!user || !user.refreshTokens.length) {
+      return null;
+    }
+
+    // Find matching token
+    for (const tokenRecord of user.refreshTokens) {
+      const isValid = await bcrypt.compare(token, tokenRecord.tokenHash);
+      if (isValid) {
+        return { user, tokenRecord };
+      }
+    }
+
+    return null;
   }
 
   /**

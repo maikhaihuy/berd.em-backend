@@ -27,7 +27,13 @@ import { JwtRefreshStrategy } from './strategies/refresh-token.strategy';
     ConfigModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, RefreshTokenService, LocalStrategy, JwtStrategy, JwtRefreshStrategy],
+  providers: [
+    AuthService,
+    RefreshTokenService,
+    LocalStrategy,
+    JwtStrategy,
+    JwtRefreshStrategy,
+  ],
   exports: [AuthService, RefreshTokenService],
 })
 export class AuthModule {}
