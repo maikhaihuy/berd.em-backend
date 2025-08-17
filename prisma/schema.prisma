@@ -1,0 +1,316 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- ENUMS ---
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TimeLogStatus {
+  PENDING                 // Chưa đủ actual_start/end
+  SUBMITTED               // Đã có đủ actual_start & end
+  ADJUSTMENT_REQUESTED    // Nhân viên yêu cầu chỉnh sửa
+  REJECT                  // Quản lý từ chối chỉnh sửa
+  VERIFIED                // Trưởng ca xác nhận, sẵn sàng cho payroll
+}
+
+enum PayPeriodStatus {
+  OPEN
+  CLOSED
+  FINALIZED
+}
+
+
+// --- MODELS ---
+model User {
+  id          Int       @id @default(autoincrement())
+  username    String    @unique
+  password    String
+  status      UserStatus
+  employeeId  Int?      @unique
+  employee    Employee? @relation(fields: [employeeId], references: [id])
+
+  refreshTokens       RefreshToken[]
+  resetTokens         PasswordResetToken[]
+  roles               Role[]    @relation("UserRoles")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model RefreshToken {
+  id          String         @id @default(uuid()) @db.Uuid
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  hashedToken String
+  device      String?
+  ipAddress   String?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@unique([id, userId])
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  hashToken String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Role {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  createdBy   Int
+  updatedAt   DateTime  @updatedAt
+  updatedBy   Int
+
+  users       User[]   @relation("UserRoles")
+  permissions Permission[] @relation("RolePermissions")
+}
+
+model Permission {
+  id          Int       @id @default(autoincrement())
+  action      String
+  subject     String
+  condition   Json?
+  description String?
+  createdAt   DateTime  @default(now())
+  createdBy   Int
+  updatedAt   DateTime  @updatedAt
+  updatedBy   Int
+
+  roles Role[]   @relation("RolePermissions")
+}
+
+model Branch {
+  id           Int       @id @default(autoincrement())
+  name         String
+  abbreviation String
+  address      String
+  email        String?
+  phone        String?
+  createdAt    DateTime  @default(now())
+  createdBy    Int
+  updatedAt    DateTime  @updatedAt
+  updatedBy    Int
+
+  employees EmployeeBranch[]
+  shifts    Shift[]
+  schedules Schedule[]
+}
+
+model Shift {
+  id           Int       @id @default(autoincrement())
+  branchId     Int
+  branch       Branch    @relation(fields: [branchId], references: [id])
+  name         String
+  abbreviation String
+  maxSlots     Int
+  startTime    DateTime
+  endTime      DateTime
+  multiplier   Decimal
+  createdAt    DateTime  @default(now())
+  createdBy    Int
+  updatedAt    DateTime  @updatedAt
+  updatedBy    Int
+
+  schedules    Schedule[]
+}
+
+model Employee {
+  id                  Int       @id @default(autoincrement())
+  fullName            String
+  phoneNumber         String
+  dateOfBirth         DateTime?
+  avatar              String?
+  email               String?
+  address             String?
+  probationStartDate  DateTime?
+  officialStartDate   DateTime?
+  createdAt           DateTime  @default(now())
+  createdBy           Int
+  updatedAt           DateTime  @updatedAt
+  updatedBy           Int
+
+  user                User?
+  hourlyRates         EmployeeHourlyRate[]
+  branches            EmployeeBranch[]
+  availabilities      Availability[]
+  schedules           Schedule[]
+  payrollEntries      PayrollEntry[]
+
+  // Timelog mà nhân viên sở hữu
+  workTimeLogs     TimeLog[]  @relation("EmployeeWorkTimeLogs")
+  // Timelog mà nhân viên này verify cho người khác
+  verifiedTimeLogs TimeLog[]  @relation("EmployeeVerifiedTimeLogs")
+
+  // 1 nhân viên có thể gửi nhiều đơn nghỉ phép
+  leaveRequestsAsAbsence     LeaveRequest[] @relation("AbsenceEmployee")
+
+  // 1 nhân viên có thể được chỉ định thay thế cho nhiều đơn nghỉ phép
+  leaveRequestsAsReplacement LeaveRequest[] @relation("ReplacementEmployee")
+}
+
+model EmployeeHourlyRate {
+  id          Int       @id @default(autoincrement())
+  employeeId  Int
+  employee    Employee  @relation(fields: [employeeId], references: [id])
+  rate        Decimal
+  effectiveDate DateTime
+  endDate     DateTime?
+  note        String?
+  createdAt   DateTime  @default(now())
+  createdBy   Int
+  updatedAt   DateTime  @updatedAt
+  updatedBy   Int
+}
+
+model EmployeeBranch {
+  employeeId Int
+  branchId   Int
+  isPrimary  Boolean  @default(false)
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  branch     Branch   @relation(fields: [branchId], references: [id])
+
+  @@id([employeeId, branchId])
+}
+
+model Availability {
+  id        Int       @id @default(autoincrement())
+  employeeId Int
+  employee  Employee  @relation(fields: [employeeId], references: [id])
+  startTime DateTime
+  endTime   DateTime
+  createdAt DateTime  @default(now())
+  createdBy Int
+  updatedAt DateTime  @updatedAt
+  updatedBy Int
+}
+
+model Schedule {
+  id         Int       @id @default(autoincrement())
+  shiftId    Int
+  employeeId Int
+  branchId   Int
+  shift      Shift     @relation(fields: [shiftId], references: [id])
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+  branch     Branch    @relation(fields: [branchId], references: [id])
+  startTime  DateTime
+  endTime    DateTime
+  note       String?
+  createdAt  DateTime  @default(now())
+  createdBy  Int
+  updatedAt  DateTime  @updatedAt
+  updatedBy  Int
+
+  timeLogs   TimeLog[]
+  leaveRequests LeaveRequest[]
+  histories  ScheduleHistory[]
+}
+
+model LeaveRequest {
+  id                   Int       @id @default(autoincrement())
+  scheduleId           Int
+  absenceEmployeeId    Int
+  replacementEmployeeId Int
+  reason               String
+  approverId           Int
+  status               LeaveStatus
+  createdAt            DateTime  @default(now())
+  createdBy            Int
+  updatedAt            DateTime  @updatedAt
+  updatedBy            Int
+
+  schedule             Schedule  @relation(fields: [scheduleId], references: [id])
+  absenceEmployee      Employee  @relation("AbsenceEmployee", fields: [absenceEmployeeId], references: [id])
+  replacementEmployee  Employee  @relation("ReplacementEmployee", fields: [replacementEmployeeId], references: [id])
+}
+
+model TimeLog {
+  id                Int       @id @default(autoincrement())
+  scheduleId        Int
+  employeeId        Int
+  actualStartTime   DateTime?
+  actualEndTime     DateTime?
+  requestStartTime  DateTime?
+  requestEndTime  DateTime?
+  overtimeMinutes   Int?
+  requestDate       DateTime?
+  requestReason     String?
+  status            TimeLogStatus
+  verifiedBy        Int?
+  verifiedAt        DateTime?
+  note              String?
+  createdAt         DateTime  @default(now())
+  createdBy         Int
+  updatedAt         DateTime  @updatedAt
+  updatedBy         Int
+
+  schedule          Schedule  @relation(fields: [scheduleId], references: [id])
+  employee          Employee  @relation("EmployeeWorkTimeLogs", fields: [employeeId], references: [id])
+  verifier          Employee? @relation("EmployeeVerifiedTimeLogs", fields: [verifiedBy], references: [id])
+  payrollEntry      PayrollEntry?
+}
+
+model PayPeriod {
+  id        Int       @id @default(autoincrement())
+  startDate DateTime
+  endDate   DateTime
+  status    PayPeriodStatus
+  notes     String?
+  createdAt DateTime  @default(now())
+  createdBy Int
+  updatedAt DateTime  @updatedAt
+  updatedBy Int
+
+  payrollEntries PayrollEntry[]
+}
+
+model PayrollEntry {
+  id          Int       @id @default(autoincrement())
+  timeLogId   Int       @unique
+  employeeId  Int
+  payPeriodId Int
+  payDate     DateTime
+  workDate    DateTime
+  calculatedAt DateTime
+  calculatedBy Int
+  totalPay    Decimal
+  createdAt   DateTime  @default(now())
+  createdBy   Int
+  updatedAt   DateTime  @updatedAt
+  updatedBy   Int
+
+  timeLog     TimeLog   @relation(fields: [timeLogId], references: [id])
+  employee    Employee  @relation(fields: [employeeId], references: [id])
+  payPeriod   PayPeriod @relation(fields: [payPeriodId], references: [id])
+}
+
+model ScheduleHistory {
+  id             Int      @id @default(autoincrement())
+  shiftScheduleId Int
+  changedById     Int
+  changeDetails   Json
+  changedAt       DateTime
+  schedule        Schedule @relation(fields: [shiftScheduleId], references: [id])
+}

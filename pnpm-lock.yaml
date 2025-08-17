@@ -36,7 +36,7 @@ importers:
         specifier: ^11.2.0
         version: 11.2.0(@nestjs/common@11.1.5(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.5)(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)
       '@prisma/client':
-        specifier: ^6.13.0
+        specifier: 6.13.0
         version: 6.13.0(prisma@6.13.0(typescript@5.9.2))(typescript@5.9.2)
       bcrypt:
         specifier: ^6.0.0
@@ -56,9 +56,6 @@ importers:
       passport-local:
         specifier: ^1.0.0
         version: 1.0.0
-      prisma:
-        specifier: ^6.13.0
-        version: 6.13.0(typescript@5.9.2)
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -68,6 +65,9 @@ importers:
       swagger-ui-express:
         specifier: ^5.0.1
         version: 5.0.1(express@5.1.0)
+      uuid:
+        specifier: ^11.1.0
+        version: 11.1.0
     devDependencies:
       '@eslint/eslintrc':
         specifier: ^3.2.0
@@ -123,6 +123,9 @@ importers:
       prettier:
         specifier: ^3.4.2
         version: 3.6.2
+      prisma:
+        specifier: 6.13.0
+        version: 6.13.0(typescript@5.9.2)
       source-map-support:
         specifier: ^0.5.21
         version: 0.5.21
@@ -3322,6 +3325,10 @@ packages:
   utils-merge@1.0.1:
     resolution: {integrity: sha512-pMZTvIkT1d+TFGvDOqodOclx0QWkkgi6Tdoa8gC8ffGAAqz9pzPTZWAybbsHHoED/ztMtkv/VoYTYyShUn81hA==}
     engines: {node: '>= 0.4.0'}
+
+  uuid@11.1.0:
+    resolution: {integrity: sha512-0/A9rDy9P7cJ+8w1c9WD9V//9Wj15Ce2MPz8Ri6032usz+NfePxx5AcN3bN+r6ZL6jEo066/yNYB3tn4pQEx+A==}
+    hasBin: true
 
   v8-compile-cache-lib@3.0.1:
     resolution: {integrity: sha512-wa7YjyUGfNZngI/vtK0UHAN+lgDCxBPCylVXGp0zu59Fz5aiGtNXaq3DhIov063MorB+VfufLh3JlF2KdTK3xg==}
@@ -7036,6 +7043,8 @@ snapshots:
   util-deprecate@1.0.2: {}
 
   utils-merge@1.0.1: {}
+
+  uuid@11.1.0: {}
 
   v8-compile-cache-lib@3.0.1: {}
 
