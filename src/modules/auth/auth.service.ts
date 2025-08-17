@@ -2,7 +2,6 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -11,70 +10,157 @@ import { PrismaService } from '@modules/prisma/prisma.service';
 import { TokenDto } from './dto/token.dto';
 import { ConfigService } from '@nestjs/config';
 import { RegisterDto } from './dto/register.dto';
-import { User } from '@prisma/client';
-import { PublicUserDto } from './dto/public-user.dto';
+import { Prisma } from '@prisma/client';
 import { RefreshTokenService } from './refresh-token.service';
+import { AuthenticatedUserDto } from './dto/authenticated-user.dto';
+import { AccessTokenPayloadDto } from './dto/access-token-payload.dto';
+import { RefreshSessionDto } from './dto/refresh-session.dto';
+import { JwtTokenService } from './jwt-token.service';
+import { RefreshTokenPayloadDto } from './dto/refresh-token-payload.dto';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly jwtTokenService: JwtTokenService,
     private readonly configService: ConfigService,
     private readonly refreshTokenService: RefreshTokenService,
   ) {}
 
-  async register(registerDto: RegisterDto): Promise<Omit<User, 'password'>> {
-    // 1. Kiểm tra username đã tồn tại chưa
+  async register(registerDto: RegisterDto): Promise<AuthenticatedUserDto> {
+    const {
+      username,
+      password,
+      fullName,
+      phoneNumber,
+      email,
+      address,
+      dateOfBirth,
+      probationStartDate,
+      officialStartDate,
+      roleIds,
+      branchIds,
+    } = registerDto;
+
+    // Check if user already exists
     const existingUser = await this.prisma.user.findUnique({
-      where: { username: registerDto.username },
+      where: { username },
     });
     if (existingUser) {
       throw new BadRequestException('Username already exists');
     }
 
-    // 2. Hash mật khẩu
-    const hashedPassword = await bcrypt.hash(registerDto.password, 10);
-
-    // 3. Tìm role 'employee' mặc định để gán
-    const employeeRole = await this.prisma.role.findFirst({
-      where: { name: 'Employee' },
+    // Validate roles exist
+    const roles = await this.prisma.role.findMany({
+      where: { id: { in: roleIds } },
     });
-    if (!employeeRole) {
-      throw new NotFoundException(
-        'Default "employee" role not found. Please seed the database.',
-      );
+    if (roles.length !== roleIds.length) {
+      throw new BadRequestException('One or more roles do not exist');
     }
 
-    // 4. Tạo user mới và gán role
+    // Validate branches exist if provided
+    if (branchIds && branchIds.length > 0) {
+      const branches = await this.prisma.branch.findMany({
+        where: { id: { in: branchIds } },
+      });
+      if (branches.length !== branchIds.length) {
+        throw new BadRequestException('One or more branches do not exist');
+      }
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     try {
-      const user = await this.prisma.user.create({
-        data: {
-          username: registerDto.username,
-          password: hashedPassword,
-          roles: {
-            connect: { id: employeeRole.id },
+      // Use transaction to create both User and Employee
+      const result = await this.prisma.$transaction(async (tx) => {
+        // Create Employee first
+        const employee = await tx.employee.create({
+          data: {
+            fullName,
+            phoneNumber,
+            email,
+            address,
+            dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+            probationStartDate: probationStartDate
+              ? new Date(probationStartDate)
+              : undefined,
+            officialStartDate: officialStartDate
+              ? new Date(officialStartDate)
+              : undefined,
+            createdBy: 1, // TODO: Get from current user context
+            updatedBy: 1, // TODO: Get from current user context
           },
-          // Cần một cách để xác định createdBy và updatedBy, ví dụ: user mặc định
-          createdBy: 1,
-          updatedBy: 1,
-        },
+        });
+
+        // Create User with reference to Employee
+        const user = await tx.user.create({
+          data: {
+            username,
+            password: hashedPassword,
+            status: 'ACTIVE',
+            employeeId: employee.id,
+          },
+        });
+
+        // Connect roles directly to user (many-to-many)
+        if (roleIds && roleIds.length > 0) {
+          await tx.user.update({
+            where: { id: user.id },
+            data: {
+              roles: {
+                connect: roleIds.map((roleId) => ({ id: roleId })),
+              },
+            },
+          });
+        }
+
+        // Create EmployeeBranch relationships with isPrimary field
+        if (branchIds && branchIds.length > 0) {
+          for (let i = 0; i < branchIds.length; i++) {
+            await tx.employeeBranch.create({
+              data: {
+                employeeId: employee.id,
+                branchId: branchIds[i],
+                isPrimary: i === 0, // First branch is primary
+              },
+            });
+          }
+        }
+
+        return { user, employee };
       });
 
-      // 5. Trả về user mà không bao gồm mật khẩu
-      const { password, ...result } = user;
-      console.log(password);
-      return result;
+      return new AuthenticatedUserDto({
+        id: result.user.id,
+        username: result.user.username,
+        employeeId: result.user.employeeId || 0,
+      });
     } catch (error) {
-      console.log(error);
-      throw new BadRequestException('Failed to create user.');
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new BadRequestException('Username already exists');
+      }
+      throw error;
     }
   }
 
-  async login(user: PublicUserDto): Promise<TokenDto> {
-    const accessToken = await this.generateAccessToken(user.id, user.username);
+  async login(user: AuthenticatedUserDto): Promise<TokenDto> {
+    const accessToken = this.jwtTokenService.generateAccessToken({
+      sub: user.id,
+      email: user.username,
+      roles: user.roles,
+    } as AccessTokenPayloadDto);
+
     const { token: refreshToken } =
-      await this.refreshTokenService.generateRefreshToken(user.id);
+      await this.refreshTokenService.createRefreshToken({
+        sub: user.id,
+        email: user.username,
+        roles: user.roles,
+      } as RefreshTokenPayloadDto);
 
     return {
       accessToken,
@@ -82,13 +168,21 @@ export class AuthService {
     };
   }
 
-  async refreshToken(
-    user: PublicUserDto,
-    oldTokenId: string,
-  ): Promise<TokenDto> {
-    const accessToken = await this.generateAccessToken(user.id, user.username);
+  async refreshToken(refreshSession: RefreshSessionDto): Promise<TokenDto> {
+    const accessToken = this.jwtTokenService.generateAccessToken({
+      sub: refreshSession.id,
+      email: refreshSession.username,
+      roles: refreshSession.roles,
+    } as AccessTokenPayloadDto);
     const { token: refreshToken } =
-      await this.refreshTokenService.rotateRefreshToken(oldTokenId, user.id);
+      await this.refreshTokenService.rotateRefreshToken(
+        refreshSession.tokenId,
+        {
+          sub: refreshSession.id,
+          email: refreshSession.username,
+          roles: refreshSession.roles,
+        } as RefreshTokenPayloadDto,
+      );
 
     return {
       accessToken,
@@ -117,14 +211,20 @@ export class AuthService {
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
-    const passwordResetToken = await bcrypt.hash(resetToken, 10);
-    const passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 phút
+    const hashToken = await bcrypt.hash(resetToken, 10);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 phút
 
-    await this.prisma.user.update({
-      where: { id: user.id },
+    // Delete any existing reset tokens for this user
+    await this.prisma.passwordResetToken.deleteMany({
+      where: { userId: user.id },
+    });
+
+    // Create new reset token
+    await this.prisma.passwordResetToken.create({
       data: {
-        passwordResetToken,
-        passwordResetExpires,
+        userId: user.id,
+        hashToken,
+        expiresAt,
       },
     });
 
@@ -135,48 +235,43 @@ export class AuthService {
   }
 
   async resetPassword(token: string, newPass: string) {
-    const hashedToken = await bcrypt.hash(token, 10);
-    const user = await this.prisma.user.findFirst({
-      where: { hashedRefreshToken: hashedToken },
+    // Find valid reset token
+    const resetTokenRecord = await this.prisma.passwordResetToken.findFirst({
+      where: {
+        expiresAt: { gt: new Date() },
+      },
+      include: {
+        user: true,
+      },
     });
-    if (
-      !user ||
-      !(user.passwordResetExpires instanceof Date) ||
-      user.passwordResetExpires.getTime() < Date.now()
-    ) {
+
+    if (!resetTokenRecord) {
+      throw new ForbiddenException('Token không hợp lệ hoặc đã hết hạn.');
+    }
+
+    // Verify the token
+    const isValidToken = await bcrypt.compare(
+      token,
+      resetTokenRecord.hashToken,
+    );
+    if (!isValidToken) {
       throw new ForbiddenException('Token không hợp lệ hoặc đã hết hạn.');
     }
 
     const password = await bcrypt.hash(newPass, 10);
-    const passwordResetToken = null;
-    const passwordResetExpires = null;
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        password,
-        passwordResetToken,
-        passwordResetExpires,
-      },
+    // Update user password and delete reset token
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: resetTokenRecord.userId },
+        data: { password },
+      });
+
+      await tx.passwordResetToken.delete({
+        where: { id: resetTokenRecord.id },
+      });
     });
 
     return { message: 'Mật khẩu đã được đặt lại thành công.' };
-  }
-
-  // --- Helper Methods ---
-  private async generateAccessToken(
-    userId: number,
-    email: string,
-  ): Promise<string> {
-    return this.jwtService.signAsync(
-      {
-        sub: userId,
-        email,
-      },
-      {
-        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-        expiresIn: '15m',
-      },
-    );
   }
 }

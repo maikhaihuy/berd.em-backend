@@ -4,7 +4,6 @@ import {
   IsNotEmpty,
   IsEmail,
   IsOptional,
-  IsBoolean,
   ArrayNotEmpty,
   IsInt,
 } from 'class-validator';
@@ -13,12 +12,12 @@ export class CreateEmployeeDto {
   @ApiProperty({ example: 'John Doe' })
   @IsString()
   @IsNotEmpty()
-  name: string;
+  fullName: string;
 
   @ApiProperty({ example: '+1234567890' })
   @IsString()
   @IsNotEmpty()
-  phone: string;
+  phoneNumber: string;
 
   @ApiProperty({ example: 'https://example.com/avatar.jpg', required: false })
   @IsString()
@@ -35,10 +34,17 @@ export class CreateEmployeeDto {
   @IsOptional()
   address?: string;
 
-  @ApiProperty({ example: true, default: true })
-  @IsBoolean()
+  @ApiProperty({ example: '1990-01-01', required: false })
   @IsOptional()
-  isActive?: boolean = true;
+  dateOfBirth?: string;
+
+  @ApiProperty({ example: '2023-01-01', required: false })
+  @IsOptional()
+  probationStartDate?: string;
+
+  @ApiProperty({ example: '2023-06-01', required: false })
+  @IsOptional()
+  officialStartDate?: string;
 
   @ApiProperty({
     type: [Number],

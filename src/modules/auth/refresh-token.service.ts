@@ -1,83 +1,55 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@modules/prisma/prisma.service';
-import * as bcrypt from 'bcrypt';
-import * as crypto from 'crypto';
-import { RefreshToken, User } from '@prisma/client';
+import { v4 as uuidv4 } from 'uuid';
+import { RefreshToken } from '@prisma/client';
+import { JwtTokenService } from './jwt-token.service';
+import { ConfigService } from '@nestjs/config';
+import { RefreshTokenPayloadDto } from './dto/refresh-token-payload.dto';
 
 @Injectable()
 export class RefreshTokenService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+    private readonly jwtTokenService: JwtTokenService,
+  ) {}
 
   /**
    * Generate a new refresh token for a user
    */
-  async generateRefreshToken(
-    userId: number,
+  async createRefreshToken(
+    payload: RefreshTokenPayloadDto,
   ): Promise<{ token: string; tokenRecord: RefreshToken }> {
-    // Generate a random token
-    const token = crypto.randomBytes(32).toString('hex');
+    const uuid = uuidv4();
+    payload.jti = uuid;
+    const userId = payload.sub;
+    const expiresIn = this.config.get<string>('JWT_REFRESH_EXPIRATION', '7d');
+    const expiresAt = new Date(
+      Date.now() + this.jwtTokenService.parseExpirationTime(expiresIn),
+    );
 
-    // Hash the token for storage
-    const tokenHash = await bcrypt.hash(token, 10);
-
-    // Set expiration to 7 days from now
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
+    const refreshToken = this.jwtTokenService.generateRefreshToken(payload);
+    const tokenHash = await this.jwtTokenService.hashToken(refreshToken);
 
     // Store the hashed token in database
     const tokenRecord = await this.prisma.refreshToken.create({
       data: {
+        id: uuid,
         userId,
-        tokenHash,
+        hashedToken: tokenHash,
         expiresAt,
       },
     });
 
-    return { token, tokenRecord };
-  }
-
-  /**
-   * Validate a refresh token
-   */
-  async validateRefreshToken(
-    token: string,
-    userId: number,
-  ): Promise<{ user: User; tokenRecord: RefreshToken } | null> {
-    // Get user with active tokens
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        refreshTokens: {
-          where: {
-            revokedAt: null,
-            expiresAt: { gte: new Date() },
-          },
-        },
-      },
-    });
-
-    if (!user || !user.refreshTokens.length) {
-      return null;
-    }
-
-    // Find matching token
-    for (const tokenRecord of user.refreshTokens) {
-      const isValid = await bcrypt.compare(token, tokenRecord.tokenHash);
-      if (isValid) {
-        return { user, tokenRecord };
-      }
-    }
-
-    return null;
+    return { token: refreshToken, tokenRecord };
   }
 
   /**
    * Revoke a specific refresh token
    */
   async revokeRefreshToken(tokenId: string): Promise<void> {
-    await this.prisma.refreshToken.update({
+    await this.prisma.refreshToken.delete({
       where: { id: tokenId },
-      data: { revokedAt: new Date() },
     });
   }
 
@@ -85,26 +57,11 @@ export class RefreshTokenService {
    * Revoke all refresh tokens for a user
    */
   async revokeAllUserTokens(userId: number): Promise<void> {
-    await this.prisma.refreshToken.updateMany({
+    await this.prisma.refreshToken.deleteMany({
       where: {
         userId,
-        revokedAt: null,
-      },
-      data: { revokedAt: new Date() },
-    });
-  }
-
-  /**
-   * Clean up expired tokens (can be called periodically)
-   */
-  async cleanupExpiredTokens(): Promise<number> {
-    const result = await this.prisma.refreshToken.deleteMany({
-      where: {
-        OR: [{ expiresAt: { lt: new Date() } }, { revokedAt: { not: null } }],
       },
     });
-
-    return result.count;
   }
 
   /**
@@ -114,7 +71,6 @@ export class RefreshTokenService {
     return this.prisma.refreshToken.findMany({
       where: {
         userId,
-        revokedAt: null,
         expiresAt: { gte: new Date() },
       },
       orderBy: { createdAt: 'desc' },
@@ -126,12 +82,12 @@ export class RefreshTokenService {
    */
   async rotateRefreshToken(
     oldTokenId: string,
-    userId: number,
+    payload: RefreshTokenPayloadDto,
   ): Promise<{ token: string; tokenRecord: RefreshToken }> {
     // Revoke the old token
     await this.revokeRefreshToken(oldTokenId);
 
     // Generate a new token
-    return this.generateRefreshToken(userId);
+    return this.createRefreshToken(payload);
   }
 }

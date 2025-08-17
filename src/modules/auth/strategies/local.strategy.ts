@@ -8,7 +8,7 @@ import {
 
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '@modules/prisma/prisma.service';
-import { PublicUserDto } from '../dto/public-user.dto';
+import { AuthenticatedUserDto } from '../dto/authenticated-user.dto';
 
 @Injectable()
 export class LocalStrategy extends PassportStrategy(Strategy) {
@@ -16,18 +16,33 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
     super({ usernameField: 'username', passwordField: 'password' });
   }
 
-  async validate(username: string, password: string): Promise<PublicUserDto> {
+  async validate(
+    username: string,
+    password: string,
+  ): Promise<AuthenticatedUserDto> {
     const user = await this.prisma.user.findUnique({
       where: { username },
+      include: {
+        roles: true,
+      },
     });
+
     if (!user) {
-      throw new NotFoundException(`User with ID ${username} not found.`);
+      throw new NotFoundException(`User with username ${username} not found.`);
     }
+
+    // TODO: Add status check when UserStatus enum is properly implemented
+    // if (user.status !== 'ACTIVE') {
+    //   throw new UnauthorizedException('User account is not active.');
+    // }
 
     if (!(await bcrypt.compare(password, user.password))) {
-      throw new UnauthorizedException(`Username or password are not match.`);
+      throw new UnauthorizedException('Username or password are not match.');
     }
 
-    return new PublicUserDto(user);
+    return new AuthenticatedUserDto({
+      id: user.id,
+      username: user.username,
+    });
   }
 }

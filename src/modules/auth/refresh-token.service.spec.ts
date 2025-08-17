@@ -81,9 +81,11 @@ describe('RefreshTokenService', () => {
         revokedAt: null,
       };
 
-      (prismaService.refreshToken.create as jest.Mock).mockResolvedValue(mockTokenRecord);
+      (prismaService.refreshToken.create as jest.Mock).mockResolvedValue(
+        mockTokenRecord,
+      );
 
-      const result = await service.generateRefreshToken(testUser.id);
+      const result = await service.createRefreshToken(testUser.id);
 
       expect(result).toBeDefined();
       expect(result.token).toBeDefined();
@@ -109,16 +111,21 @@ describe('RefreshTokenService', () => {
         revokedAt: null,
       };
 
-      (prismaService.refreshToken.create as jest.Mock).mockResolvedValue(mockTokenRecord);
+      (prismaService.refreshToken.create as jest.Mock).mockResolvedValue(
+        mockTokenRecord,
+      );
 
-      await service.generateRefreshToken(testUser.id);
+      await service.createRefreshToken(testUser.id);
 
-      const createCall = (prismaService.refreshToken.create as jest.Mock).mock.calls[0][0];
+      const createCall = (prismaService.refreshToken.create as jest.Mock).mock
+        .calls[0][0];
       const expiresAt = createCall.data.expiresAt;
       const sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      
+
       // Allow 1 second difference for test execution time
-      expect(Math.abs(expiresAt.getTime() - sevenDaysFromNow.getTime())).toBeLessThan(1000);
+      expect(
+        Math.abs(expiresAt.getTime() - sevenDaysFromNow.getTime()),
+      ).toBeLessThan(1000);
     });
   });
 
@@ -126,7 +133,7 @@ describe('RefreshTokenService', () => {
     it('should validate a correct refresh token', async () => {
       const token = 'valid-token';
       const hashedToken = await bcrypt.hash(token, 10);
-      
+
       const mockUser = {
         ...testUser,
         refreshTokens: [
@@ -164,7 +171,7 @@ describe('RefreshTokenService', () => {
     it('should return null for invalid token', async () => {
       const token = 'invalid-token';
       const hashedToken = await bcrypt.hash('different-token', 10);
-      
+
       const mockUser = {
         ...testUser,
         refreshTokens: [
@@ -194,7 +201,10 @@ describe('RefreshTokenService', () => {
 
       (prismaService.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
 
-      const result = await service.validateRefreshToken('any-token', testUser.id);
+      const result = await service.validateRefreshToken(
+        'any-token',
+        testUser.id,
+      );
 
       expect(result).toBeNull();
     });
@@ -202,7 +212,10 @@ describe('RefreshTokenService', () => {
     it('should return null when user not found', async () => {
       (prismaService.user.findUnique as jest.Mock).mockResolvedValue(null);
 
-      const result = await service.validateRefreshToken('any-token', testUser.id);
+      const result = await service.validateRefreshToken(
+        'any-token',
+        testUser.id,
+      );
 
       expect(result).toBeNull();
     });
@@ -220,7 +233,9 @@ describe('RefreshTokenService', () => {
         revokedAt: new Date(),
       };
 
-      (prismaService.refreshToken.update as jest.Mock).mockResolvedValue(mockUpdatedToken);
+      (prismaService.refreshToken.update as jest.Mock).mockResolvedValue(
+        mockUpdatedToken,
+      );
 
       await service.revokeRefreshToken(tokenId);
 
@@ -236,7 +251,9 @@ describe('RefreshTokenService', () => {
       const userId = testUser.id;
       const mockUpdateResult = { count: 3 };
 
-      (prismaService.refreshToken.updateMany as jest.Mock).mockResolvedValue(mockUpdateResult);
+      (prismaService.refreshToken.updateMany as jest.Mock).mockResolvedValue(
+        mockUpdateResult,
+      );
 
       await service.revokeAllUserTokens(userId);
 
@@ -271,7 +288,9 @@ describe('RefreshTokenService', () => {
         },
       ];
 
-      (prismaService.refreshToken.findMany as jest.Mock).mockResolvedValue(mockTokens);
+      (prismaService.refreshToken.findMany as jest.Mock).mockResolvedValue(
+        mockTokens,
+      );
 
       const result = await service.getUserActiveTokens(testUser.id);
 
@@ -291,7 +310,7 @@ describe('RefreshTokenService', () => {
     it('should rotate refresh token successfully', async () => {
       const oldTokenId = 'old-token-id';
       const userId = testUser.id;
-      
+
       const mockOldToken: RefreshToken = {
         id: oldTokenId,
         userId,
@@ -310,21 +329,25 @@ describe('RefreshTokenService', () => {
         revokedAt: null,
       };
 
-      (prismaService.refreshToken.update as jest.Mock).mockResolvedValue(mockOldToken);
-      (prismaService.refreshToken.create as jest.Mock).mockResolvedValue(mockNewToken);
+      (prismaService.refreshToken.update as jest.Mock).mockResolvedValue(
+        mockOldToken,
+      );
+      (prismaService.refreshToken.create as jest.Mock).mockResolvedValue(
+        mockNewToken,
+      );
 
       const result = await service.rotateRefreshToken(oldTokenId, userId);
 
       expect(result).toBeDefined();
       expect(result.token).toBeDefined();
       expect(result.tokenRecord).toEqual(mockNewToken);
-      
+
       // Verify old token was revoked
       expect(prismaService.refreshToken.update).toHaveBeenCalledWith({
         where: { id: oldTokenId },
         data: { revokedAt: expect.any(Date) },
       });
-      
+
       // Verify new token was created
       expect(prismaService.refreshToken.create).toHaveBeenCalledWith({
         data: {
@@ -340,7 +363,9 @@ describe('RefreshTokenService', () => {
     it('should cleanup expired and revoked tokens', async () => {
       const mockDeleteResult = { count: 5 };
 
-      (prismaService.refreshToken.deleteMany as jest.Mock).mockResolvedValue(mockDeleteResult);
+      (prismaService.refreshToken.deleteMany as jest.Mock).mockResolvedValue(
+        mockDeleteResult,
+      );
 
       const result = await service.cleanupExpiredTokens();
 
@@ -358,7 +383,9 @@ describe('RefreshTokenService', () => {
     it('should return 0 when no tokens to cleanup', async () => {
       const mockDeleteResult = { count: 0 };
 
-      (prismaService.refreshToken.deleteMany as jest.Mock).mockResolvedValue(mockDeleteResult);
+      (prismaService.refreshToken.deleteMany as jest.Mock).mockResolvedValue(
+        mockDeleteResult,
+      );
 
       const result = await service.cleanupExpiredTokens();
 

@@ -133,6 +133,9 @@ export class BranchesService {
             data: toCreate.map((shift) => ({
               ...shift,
               branchId,
+              startTime: new Date(shift.startTime),
+              endTime: new Date(shift.endTime),
+              multiplier: new Prisma.Decimal(shift.multiplier),
               createdBy: 1, // Placeholder
               updatedBy: 1, // Placeholder
             })),
@@ -147,6 +150,9 @@ export class BranchesService {
                 where: { id: shift.id },
                 data: {
                   ...shift,
+                  startTime: new Date(shift.startTime),
+                  endTime: new Date(shift.endTime),
+                  multiplier: new Prisma.Decimal(shift.multiplier),
                   updatedBy: 1, // Placeholder
                 },
               }),

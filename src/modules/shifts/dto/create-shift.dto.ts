@@ -1,4 +1,11 @@
-import { IsString, IsNotEmpty, IsInt, IsPositive } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsInt,
+  IsPositive,
+  IsDateString,
+  IsDecimal,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateShiftDto {
@@ -16,6 +23,18 @@ export class CreateShiftDto {
   @IsInt()
   @IsPositive()
   maxSlots: number;
+
+  @ApiProperty()
+  @IsDateString()
+  startTime: string;
+
+  @ApiProperty()
+  @IsDateString()
+  endTime: string;
+
+  @ApiProperty()
+  @IsDecimal()
+  multiplier: string;
 
   @ApiProperty()
   @IsInt()

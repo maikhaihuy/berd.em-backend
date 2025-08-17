@@ -60,7 +60,7 @@ describe('AuthService', () => {
           useValue: {
             get: jest.fn((key: string) => {
               const config = {
-                JWT_SECRET: 'test-jwt-secret',
+                JWT_ACCESS_SECRET: 'test-jwt-secret',
                 JWT_EXPIRES_IN: '15m',
                 JWT_REFRESH_SECRET: 'test-refresh-secret',
                 JWT_REFRESH_EXPIRES_IN: '7d',
@@ -147,7 +147,7 @@ describe('AuthService', () => {
       };
 
       (jwtService.sign as jest.Mock).mockReturnValue(mockAccessToken);
-      (refreshTokenService.generateRefreshToken as jest.Mock).mockResolvedValue({
+      (refreshTokenService.createRefreshToken as jest.Mock).mockResolvedValue({
         token: mockRefreshToken,
         tokenRecord: mockTokenRecord,
       });
@@ -168,7 +168,9 @@ describe('AuthService', () => {
         username: testUser.username,
         sub: testUser.id,
       });
-      expect(refreshTokenService.generateRefreshToken).toHaveBeenCalledWith(testUser.id);
+      expect(refreshTokenService.createRefreshToken).toHaveBeenCalledWith(
+        testUser.id,
+      );
     });
   });
 
@@ -198,7 +200,9 @@ describe('AuthService', () => {
         },
       };
 
-      (refreshTokenService.validateRefreshToken as jest.Mock).mockResolvedValue(mockValidationResult);
+      (refreshTokenService.validateRefreshToken as jest.Mock).mockResolvedValue(
+        mockValidationResult,
+      );
       (jwtService.sign as jest.Mock).mockReturnValue(mockAccessToken);
       (refreshTokenService.rotateRefreshToken as jest.Mock).mockResolvedValue({
         token: mockNewRefreshToken,
@@ -217,23 +221,31 @@ describe('AuthService', () => {
         },
       });
 
-      expect(refreshTokenService.validateRefreshToken).toHaveBeenCalledWith(oldRefreshToken, testUser.id);
+      expect(refreshTokenService.validateRefreshToken).toHaveBeenCalledWith(
+        oldRefreshToken,
+        testUser.id,
+      );
       expect(refreshTokenService.rotateRefreshToken).toHaveBeenCalledWith(
         mockValidationResult.tokenRecord.id,
-        testUser.id
+        testUser.id,
       );
     });
 
     it('should throw UnauthorizedException for invalid refresh token', async () => {
       const invalidRefreshToken = 'invalid-refresh-token';
 
-      (refreshTokenService.validateRefreshToken as jest.Mock).mockResolvedValue(null);
+      (refreshTokenService.validateRefreshToken as jest.Mock).mockResolvedValue(
+        null,
+      );
 
-      await expect(service.refreshTokens(invalidRefreshToken, testUser.id))
-        .rejects
-        .toThrow(UnauthorizedException);
+      await expect(
+        service.refreshTokens(invalidRefreshToken, testUser.id),
+      ).rejects.toThrow(UnauthorizedException);
 
-      expect(refreshTokenService.validateRefreshToken).toHaveBeenCalledWith(invalidRefreshToken, testUser.id);
+      expect(refreshTokenService.validateRefreshToken).toHaveBeenCalledWith(
+        invalidRefreshToken,
+        testUser.id,
+      );
     });
   });
 
@@ -252,33 +264,48 @@ describe('AuthService', () => {
         },
       };
 
-      (refreshTokenService.validateRefreshToken as jest.Mock).mockResolvedValue(mockValidationResult);
-      (refreshTokenService.revokeRefreshToken as jest.Mock).mockResolvedValue(undefined);
+      (refreshTokenService.validateRefreshToken as jest.Mock).mockResolvedValue(
+        mockValidationResult,
+      );
+      (refreshTokenService.revokeRefreshToken as jest.Mock).mockResolvedValue(
+        undefined,
+      );
 
       await service.logout(refreshToken, testUser.id);
 
-      expect(refreshTokenService.validateRefreshToken).toHaveBeenCalledWith(refreshToken, testUser.id);
-      expect(refreshTokenService.revokeRefreshToken).toHaveBeenCalledWith(mockValidationResult.tokenRecord.id);
+      expect(refreshTokenService.validateRefreshToken).toHaveBeenCalledWith(
+        refreshToken,
+        testUser.id,
+      );
+      expect(refreshTokenService.revokeRefreshToken).toHaveBeenCalledWith(
+        mockValidationResult.tokenRecord.id,
+      );
     });
 
     it('should throw UnauthorizedException for invalid refresh token during logout', async () => {
       const invalidRefreshToken = 'invalid-refresh-token';
 
-      (refreshTokenService.validateRefreshToken as jest.Mock).mockResolvedValue(null);
+      (refreshTokenService.validateRefreshToken as jest.Mock).mockResolvedValue(
+        null,
+      );
 
-      await expect(service.logout(invalidRefreshToken, testUser.id))
-        .rejects
-        .toThrow(UnauthorizedException);
+      await expect(
+        service.logout(invalidRefreshToken, testUser.id),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 
   describe('logoutFromAllDevices', () => {
     it('should logout user from all devices', async () => {
-      (refreshTokenService.revokeAllUserTokens as jest.Mock).mockResolvedValue(undefined);
+      (refreshTokenService.revokeAllUserTokens as jest.Mock).mockResolvedValue(
+        undefined,
+      );
 
       await service.logoutFromAllDevices(testUser.id);
 
-      expect(refreshTokenService.revokeAllUserTokens).toHaveBeenCalledWith(testUser.id);
+      expect(refreshTokenService.revokeAllUserTokens).toHaveBeenCalledWith(
+        testUser.id,
+      );
     });
   });
 
@@ -303,21 +330,29 @@ describe('AuthService', () => {
         },
       ];
 
-      (refreshTokenService.getUserActiveTokens as jest.Mock).mockResolvedValue(mockActiveSessions);
+      (refreshTokenService.getUserActiveTokens as jest.Mock).mockResolvedValue(
+        mockActiveSessions,
+      );
 
       const result = await service.getUserActiveSessions(testUser.id);
 
-      expect(result).toEqual(mockActiveSessions.map(session => ({
-        id: session.id,
-        createdAt: session.createdAt,
-        expiresAt: session.expiresAt,
-      })));
+      expect(result).toEqual(
+        mockActiveSessions.map((session) => ({
+          id: session.id,
+          createdAt: session.createdAt,
+          expiresAt: session.expiresAt,
+        })),
+      );
 
-      expect(refreshTokenService.getUserActiveTokens).toHaveBeenCalledWith(testUser.id);
+      expect(refreshTokenService.getUserActiveTokens).toHaveBeenCalledWith(
+        testUser.id,
+      );
     });
 
     it('should return empty array when user has no active sessions', async () => {
-      (refreshTokenService.getUserActiveTokens as jest.Mock).mockResolvedValue([]);
+      (refreshTokenService.getUserActiveTokens as jest.Mock).mockResolvedValue(
+        [],
+      );
 
       const result = await service.getUserActiveSessions(testUser.id);
 
@@ -329,7 +364,9 @@ describe('AuthService', () => {
     it('should cleanup expired tokens', async () => {
       const mockCleanupCount = 5;
 
-      (refreshTokenService.cleanupExpiredTokens as jest.Mock).mockResolvedValue(mockCleanupCount);
+      (refreshTokenService.cleanupExpiredTokens as jest.Mock).mockResolvedValue(
+        mockCleanupCount,
+      );
 
       const result = await service.cleanupExpiredTokens();
 
@@ -356,10 +393,10 @@ describe('AuthService', () => {
 
       // Mock user validation
       (prismaService.user.findUnique as jest.Mock).mockResolvedValue(testUser);
-      
+
       // Mock token generation
       (jwtService.sign as jest.Mock).mockReturnValue(mockAccessToken);
-      (refreshTokenService.generateRefreshToken as jest.Mock).mockResolvedValue({
+      (refreshTokenService.createRefreshToken as jest.Mock).mockResolvedValue({
         token: mockRefreshToken,
         tokenRecord: mockTokenRecord,
       });
@@ -380,7 +417,7 @@ describe('AuthService', () => {
       const oldRefreshToken = 'old-refresh-token';
       const newAccessToken = 'new-access-token';
       const newRefreshToken = 'new-refresh-token';
-      
+
       const mockValidationResult = {
         user: testUser,
         tokenRecord: {
@@ -402,7 +439,9 @@ describe('AuthService', () => {
         revokedAt: null,
       };
 
-      (refreshTokenService.validateRefreshToken as jest.Mock).mockResolvedValue(mockValidationResult);
+      (refreshTokenService.validateRefreshToken as jest.Mock).mockResolvedValue(
+        mockValidationResult,
+      );
       (jwtService.sign as jest.Mock).mockReturnValue(newAccessToken);
       (refreshTokenService.rotateRefreshToken as jest.Mock).mockResolvedValue({
         token: newRefreshToken,
@@ -415,7 +454,7 @@ describe('AuthService', () => {
       expect(result.refresh_token).toBe(newRefreshToken);
       expect(refreshTokenService.rotateRefreshToken).toHaveBeenCalledWith(
         mockValidationResult.tokenRecord.id,
-        testUser.id
+        testUser.id,
       );
     });
   });

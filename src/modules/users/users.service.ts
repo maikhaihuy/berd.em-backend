@@ -47,9 +47,7 @@ export class UsersService {
           roles: {
             connect: roleIds.map((id) => ({ id })),
           },
-          // createdBy and updatedBy logic needs to be handled in the service/middleware
-          createdBy: 1, // Placeholder
-          updatedBy: 1, // Placeholder
+          status: 'ACTIVE',
         },
         include: {
           roles: true,

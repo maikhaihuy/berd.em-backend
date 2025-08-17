@@ -21,21 +21,68 @@ export class EmployeesService {
     const { branchIds, ...rest } = createEmployeeDto;
 
     try {
-      const employee = await this.prisma.employee.create({
-        data: {
-          ...rest,
-          // Kết nối branches
-          branches: {
-            connect: branchIds.map((id) => ({ id })),
-          },
+      const employee = await this.prisma.$transaction(async (tx) => {
+        // Create employee first
+        const {
+          dateOfBirth,
+          probationStartDate,
+          officialStartDate,
+          ...otherFields
+        } = rest;
+        const employeeData: Prisma.EmployeeCreateInput = {
+          ...otherFields,
           createdBy: 1, // Placeholder
           updatedBy: 1, // Placeholder
-        },
-        include: {
-          hourlyRates: true,
-          branches: true,
-        },
+        };
+
+        // Convert date strings to Date objects if provided
+        if (dateOfBirth) {
+          employeeData.dateOfBirth = new Date(dateOfBirth);
+        }
+        if (probationStartDate) {
+          employeeData.probationStartDate = new Date(probationStartDate);
+        }
+        if (officialStartDate) {
+          employeeData.officialStartDate = new Date(officialStartDate);
+        }
+
+        const newEmployee = await tx.employee.create({
+          data: employeeData,
+        });
+
+        // Create EmployeeBranch relationships with isPrimary field
+        if (branchIds && branchIds.length > 0) {
+          for (let i = 0; i < branchIds.length; i++) {
+            await tx.employeeBranch.create({
+              data: {
+                employeeId: newEmployee.id,
+                branchId: branchIds[i],
+                isPrimary: i === 0, // First branch is primary
+              },
+            });
+          }
+        }
+
+        // Return employee with relationships
+        const employeeWithRelations = await tx.employee.findUnique({
+          where: { id: newEmployee.id },
+          include: {
+            hourlyRates: true,
+            branches: {
+              include: {
+                branch: true,
+              },
+            },
+          },
+        });
+
+        if (!employeeWithRelations) {
+          throw new NotFoundException('Failed to create employee');
+        }
+
+        return employeeWithRelations;
       });
+
       return new EmployeeResponseDto(employee);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -71,23 +118,76 @@ export class EmployeesService {
   ): Promise<EmployeeResponseDto> {
     const { branchIds, ...rest } = updateEmployeeDto;
 
-    const data: Prisma.EmployeeUpdateInput = { ...rest };
-
-    // Cập nhật branches
-    if (branchIds) {
-      data.branches = {
-        set: branchIds.map((id) => ({ id })),
-      };
-    }
-
     try {
-      const employee = await this.prisma.employee.update({
-        where: { id },
-        data,
-        include: {
-          branches: true,
-        },
+      const employee = await this.prisma.$transaction(async (tx) => {
+        // Update employee basic info
+        const {
+          dateOfBirth,
+          probationStartDate,
+          officialStartDate,
+          ...otherFields
+        } = rest;
+        const updateData: Prisma.EmployeeUpdateInput = {
+          ...otherFields,
+          updatedBy: 1, // Placeholder
+        };
+
+        // Convert date strings to Date objects if provided
+        if (dateOfBirth) {
+          updateData.dateOfBirth = new Date(dateOfBirth);
+        }
+        if (probationStartDate) {
+          updateData.probationStartDate = new Date(probationStartDate);
+        }
+        if (officialStartDate) {
+          updateData.officialStartDate = new Date(officialStartDate);
+        }
+
+        await tx.employee.update({
+          where: { id },
+          data: updateData,
+        });
+
+        // Update EmployeeBranch relationships if branchIds provided
+        if (branchIds !== undefined) {
+          // Delete existing relationships
+          await tx.employeeBranch.deleteMany({
+            where: { employeeId: id },
+          });
+
+          // Create new relationships
+          if (branchIds.length > 0) {
+            for (let i = 0; i < branchIds.length; i++) {
+              await tx.employeeBranch.create({
+                data: {
+                  employeeId: id,
+                  branchId: branchIds[i],
+                  isPrimary: i === 0, // First branch is primary
+                },
+              });
+            }
+          }
+        }
+
+        // Return updated employee with relationships
+        const updatedEmployee = await tx.employee.findUnique({
+          where: { id },
+          include: {
+            branches: {
+              include: {
+                branch: true,
+              },
+            },
+          },
+        });
+
+        if (!updatedEmployee) {
+          throw new NotFoundException(`Employee with ID ${id} not found.`);
+        }
+
+        return updatedEmployee;
       });
+
       return new EmployeeResponseDto(employee);
     } catch (error) {
       if (

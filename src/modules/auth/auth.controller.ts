@@ -13,13 +13,16 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RefreshTokenService } from './refresh-token.service';
 import { LocalAuthGuard } from '@common/guards/local-auth.guard';
-import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
+import { JwtAccessGuard } from '@common/guards/jwt-access.guard';
 import { JwtRefreshGuard } from '@common/guards/jwt-refresh.guard';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import { RefreshTokenPayload } from './strategies/refresh-token.strategy';
+import { RefreshSession } from './decorators/refresh-session.decorator';
+import { AuthenticatedUser } from './decorators/authenticated-user.decorator';
+import { AuthenticatedUserDto } from './dto/authenticated-user.dto';
+import { RefreshSessionDto } from './dto/refresh-session.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -41,9 +44,11 @@ export class AuthController {
   @ApiOperation({ summary: 'Login user' })
   @HttpCode(HttpStatus.OK)
   @UsePipes(ValidationPipe)
-  login(@Body() login: LoginDto, @Request() req) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
-    return this.authService.login(req.user);
+  login(
+    @Body() login: LoginDto,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
+  ) {
+    return this.authService.login(user);
   }
 
   @UseGuards(JwtRefreshGuard)
@@ -51,19 +56,16 @@ export class AuthController {
   @ApiBearerAuth('jwt-refresh')
   @ApiOperation({ summary: 'Refresh access token using a refresh token' })
   @HttpCode(HttpStatus.OK)
-  async refreshToken(@Request() req) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const user = req.user as RefreshTokenPayload;
-    return await this.authService.refreshToken(user, user.tokenId);
+  async refreshToken(@RefreshSession() refreshSession: RefreshSessionDto) {
+    return await this.authService.refreshToken(refreshSession);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAccessGuard)
   @Post('logout')
   @ApiOperation({ summary: 'Logout and invalidate refresh token' })
   @HttpCode(HttpStatus.OK)
-  async logout(@Request() req) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
-    await this.authService.logout(req.user.id);
+  async logout(@RefreshSession() refreshSession: RefreshSessionDto) {
+    await this.authService.logout(refreshSession.id);
     return { message: 'Logout successful' };
   }
 
@@ -72,32 +74,26 @@ export class AuthController {
   @ApiBearerAuth('jwt-refresh')
   @ApiOperation({ summary: 'Logout from current device only' })
   @HttpCode(HttpStatus.OK)
-  async logoutDevice(@Request() req) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const user = req.user as RefreshTokenPayload;
-    await this.authService.logout(user.id, user.tokenId);
+  async logoutDevice(@RefreshSession() refreshSession: RefreshSessionDto) {
+    await this.authService.logout(refreshSession.id, refreshSession.tokenId);
     return { message: 'Device logout successful' };
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAccessGuard)
   @Post('logout-all')
   @ApiOperation({ summary: 'Logout from all devices' })
   @HttpCode(HttpStatus.OK)
-  async logoutAll(@Request() req) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
-    await this.refreshTokenService.revokeAllUserTokens(req.user.id);
+  async logoutAll(@AuthenticatedUser() user: AuthenticatedUserDto) {
+    await this.refreshTokenService.revokeAllUserTokens(user.id);
     return { message: 'Logged out from all devices' };
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAccessGuard)
   @Post('active-sessions')
   @ApiOperation({ summary: 'Get active sessions for current user' })
   @HttpCode(HttpStatus.OK)
-  async getActiveSessions(@Request() req) {
-    const tokens = await this.refreshTokenService.getUserActiveTokens(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
-      req.user.id,
-    );
+  async getActiveSessions(@AuthenticatedUser() user: AuthenticatedUserDto) {
+    const tokens = await this.refreshTokenService.getUserActiveTokens(user.id);
     return {
       activeSessions: tokens.map((token) => ({
         id: token.id,

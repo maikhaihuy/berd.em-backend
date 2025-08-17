@@ -15,10 +15,10 @@ import { CreateEmployeeHourlyRateDto } from './dto/create-employee-hourly-rate.d
 import { UpdateEmployeeHourlyRateDto } from './dto/update-employee-hourly-rate.dto';
 import { EmployeeHourlyRateResponseDto } from './dto/employee-hourly-rate-response.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { JwtAccessGuard } from '../../common/guards/jwt-access.guard';
 
 @ApiTags('employee-hourly-rates')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAccessGuard)
 @Controller('employee-hourly-rates')
 export class EmployeeHourlyRatesController {
   constructor(

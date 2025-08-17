@@ -5,6 +5,8 @@ import {
   IsString,
   IsNotEmpty,
   IsPositive,
+  IsDecimal,
+  IsDateString,
 } from 'class-validator';
 
 export class UpsertShiftDto {
@@ -30,4 +32,16 @@ export class UpsertShiftDto {
   @IsInt()
   @IsPositive()
   maxSlots: number;
+
+  @ApiProperty({ example: '2023-01-01T08:00:00Z' })
+  @IsDateString()
+  startTime: string;
+
+  @ApiProperty({ example: '2023-01-01T16:00:00Z' })
+  @IsDateString()
+  endTime: string;
+
+  @ApiProperty({ example: '1.0' })
+  @IsDecimal()
+  multiplier: string;
 }

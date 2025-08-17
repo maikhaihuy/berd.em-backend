@@ -6,8 +6,8 @@ import { AuthModule } from './auth.module';
 import { AuthService } from './auth.service';
 import { RefreshTokenService } from './refresh-token.service';
 import { LocalStrategy } from './strategies/local.strategy';
-import { JwtStrategy } from './strategies/jwt.strategy';
-import { JwtRefreshStrategy } from './strategies/refresh-token.strategy';
+import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
+import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { PrismaModule } from '../prisma/prisma.module';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
@@ -30,7 +30,8 @@ describe('AuthModule', () => {
         JwtModule.registerAsync({
           imports: [ConfigModule],
           useFactory: async (configService: ConfigService) => ({
-            secret: configService.get<string>('JWT_SECRET') || 'test-secret',
+            secret:
+              configService.get<string>('JWT_ACCESS_SECRET') || 'test-secret',
             signOptions: { expiresIn: '15m' },
           }),
           inject: [ConfigService],
@@ -41,7 +42,7 @@ describe('AuthModule', () => {
         AuthService,
         RefreshTokenService,
         LocalStrategy,
-        JwtStrategy,
+        JwtAccessStrategy,
         JwtRefreshStrategy,
       ],
       exports: [AuthService, RefreshTokenService],
@@ -140,8 +141,8 @@ describe('AuthModule', () => {
     });
 
     it('should generate refresh token', async () => {
-      const result = await refreshTokenService.generateRefreshToken(testUser.id);
-      
+      const result = await refreshTokenService.createRefreshToken(testUser.id);
+
       expect(result).toBeDefined();
       expect(result.token).toBeDefined();
       expect(result.tokenRecord).toBeDefined();
@@ -151,10 +152,14 @@ describe('AuthModule', () => {
     });
 
     it('should validate refresh token', async () => {
-      const { token, tokenRecord } = await refreshTokenService.generateRefreshToken(testUser.id);
-      
-      const validationResult = await refreshTokenService.validateRefreshToken(token, testUser.id);
-      
+      const { token, tokenRecord } =
+        await refreshTokenService.createRefreshToken(testUser.id);
+
+      const validationResult = await refreshTokenService.validateRefreshToken(
+        token,
+        testUser.id,
+      );
+
       expect(validationResult).toBeDefined();
       expect(validationResult.user.id).toBe(testUser.id);
       expect(validationResult.tokenRecord.id).toBe(tokenRecord.id);
@@ -162,21 +167,26 @@ describe('AuthModule', () => {
 
     it('should reject invalid token', async () => {
       const invalidToken = 'invalid-token';
-      
-      const validationResult = await refreshTokenService.validateRefreshToken(invalidToken, testUser.id);
-      
+
+      const validationResult = await refreshTokenService.validateRefreshToken(
+        invalidToken,
+        testUser.id,
+      );
+
       expect(validationResult).toBeNull();
     });
 
     it('should revoke refresh token', async () => {
-      const { tokenRecord } = await refreshTokenService.generateRefreshToken(testUser.id);
-      
+      const { tokenRecord } = await refreshTokenService.createRefreshToken(
+        testUser.id,
+      );
+
       await refreshTokenService.revokeRefreshToken(tokenRecord.id);
-      
+
       const revokedToken = await prismaService.refreshToken.findUnique({
         where: { id: tokenRecord.id },
       });
-      
+
       expect(revokedToken.revokedAt).toBeDefined();
       expect(revokedToken.revokedAt).toBeInstanceOf(Date);
     });
@@ -185,7 +195,9 @@ describe('AuthModule', () => {
       // Create multiple tokens
       const tokens = [];
       for (let i = 0; i < 3; i++) {
-        const result = await refreshTokenService.generateRefreshToken(testUser.id);
+        const result = await refreshTokenService.createRefreshToken(
+          testUser.id,
+        );
         tokens.push(result.tokenRecord);
       }
 
@@ -201,21 +213,25 @@ describe('AuthModule', () => {
     });
 
     it('should rotate refresh token', async () => {
-      const { token: oldToken, tokenRecord: oldTokenRecord } = await refreshTokenService.generateRefreshToken(testUser.id);
-      
-      const { token: newToken, tokenRecord: newTokenRecord } = await refreshTokenService.rotateRefreshToken(
-        oldTokenRecord.id,
-        testUser.id
-      );
-      
+      const { token: oldToken, tokenRecord: oldTokenRecord } =
+        await refreshTokenService.createRefreshToken(testUser.id);
+
+      const { token: newToken, tokenRecord: newTokenRecord } =
+        await refreshTokenService.rotateRefreshToken(
+          oldTokenRecord.id,
+          testUser.id,
+        );
+
       expect(newToken).toBeDefined();
       expect(newToken).not.toBe(oldToken);
       expect(newTokenRecord.id).not.toBe(oldTokenRecord.id);
-      
+
       // Check old token is revoked
-      const oldTokenAfterRotation = await prismaService.refreshToken.findUnique({
-        where: { id: oldTokenRecord.id },
-      });
+      const oldTokenAfterRotation = await prismaService.refreshToken.findUnique(
+        {
+          where: { id: oldTokenRecord.id },
+        },
+      );
       expect(oldTokenAfterRotation.revokedAt).toBeDefined();
     });
 
@@ -223,17 +239,23 @@ describe('AuthModule', () => {
       // Create multiple tokens
       const activeTokens = [];
       for (let i = 0; i < 3; i++) {
-        const result = await refreshTokenService.generateRefreshToken(testUser.id);
+        const result = await refreshTokenService.createRefreshToken(
+          testUser.id,
+        );
         activeTokens.push(result.tokenRecord);
       }
 
       // Revoke one token
       await refreshTokenService.revokeRefreshToken(activeTokens[0].id);
 
-      const userActiveTokens = await refreshTokenService.getUserActiveTokens(testUser.id);
-      
+      const userActiveTokens = await refreshTokenService.getUserActiveTokens(
+        testUser.id,
+      );
+
       expect(userActiveTokens).toHaveLength(2);
-      expect(userActiveTokens.every(token => token.revokedAt === null)).toBe(true);
+      expect(userActiveTokens.every((token) => token.revokedAt === null)).toBe(
+        true,
+      );
     });
 
     it('should cleanup expired tokens', async () => {
@@ -247,12 +269,13 @@ describe('AuthModule', () => {
       });
 
       const deletedCount = await refreshTokenService.cleanupExpiredTokens();
-      
+
       expect(deletedCount).toBeGreaterThanOrEqual(1);
-      
-      const expiredTokenAfterCleanup = await prismaService.refreshToken.findUnique({
-        where: { id: expiredToken.id },
-      });
+
+      const expiredTokenAfterCleanup =
+        await prismaService.refreshToken.findUnique({
+          where: { id: expiredToken.id },
+        });
       expect(expiredTokenAfterCleanup).toBeNull();
     });
   });
@@ -274,14 +297,18 @@ describe('AuthModule', () => {
 
       // Create tokens for different devices
       for (const device of devices) {
-        const result = await refreshTokenService.generateRefreshToken(testUser.id);
+        const result = await refreshTokenService.createRefreshToken(
+          testUser.id,
+        );
         deviceTokens.push({ device, ...result });
       }
 
       expect(deviceTokens).toHaveLength(3);
 
       // Get all active sessions
-      const activeSessions = await refreshTokenService.getUserActiveTokens(testUser.id);
+      const activeSessions = await refreshTokenService.getUserActiveTokens(
+        testUser.id,
+      );
       expect(activeSessions).toHaveLength(3);
     });
 
@@ -289,27 +316,33 @@ describe('AuthModule', () => {
       // Create multiple sessions
       const sessions = [];
       for (let i = 0; i < 3; i++) {
-        const result = await refreshTokenService.generateRefreshToken(testUser.id);
+        const result = await refreshTokenService.createRefreshToken(
+          testUser.id,
+        );
         sessions.push(result);
       }
 
       // Logout from one device
       await refreshTokenService.revokeRefreshToken(sessions[0].tokenRecord.id);
 
-      const remainingSessions = await refreshTokenService.getUserActiveTokens(testUser.id);
+      const remainingSessions = await refreshTokenService.getUserActiveTokens(
+        testUser.id,
+      );
       expect(remainingSessions).toHaveLength(2);
     });
 
     it('should support logout all devices', async () => {
       // Create multiple sessions
       for (let i = 0; i < 3; i++) {
-        await refreshTokenService.generateRefreshToken(testUser.id);
+        await refreshTokenService.createRefreshToken(testUser.id);
       }
 
       // Logout from all devices
       await refreshTokenService.revokeAllUserTokens(testUser.id);
 
-      const remainingSessions = await refreshTokenService.getUserActiveTokens(testUser.id);
+      const remainingSessions = await refreshTokenService.getUserActiveTokens(
+        testUser.id,
+      );
       expect(remainingSessions).toHaveLength(0);
     });
   });
@@ -340,10 +373,7 @@ describe('AuthModule', () => {
     // Clean up expired or revoked tokens
     await prismaService.refreshToken.deleteMany({
       where: {
-        OR: [
-          { expiresAt: { lt: new Date() } },
-          { revokedAt: { not: null } },
-        ],
+        OR: [{ expiresAt: { lt: new Date() } }, { revokedAt: { not: null } }],
       },
     });
   }

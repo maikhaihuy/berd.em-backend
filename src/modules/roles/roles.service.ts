@@ -23,6 +23,7 @@ export class RolesService {
         data: {
           ...rest,
           name,
+          description: '',
           permissions: {
             connect: permissionIds.map((id) => ({ id })),
           },

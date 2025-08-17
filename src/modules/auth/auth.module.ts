@@ -5,10 +5,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { RefreshTokenService } from './refresh-token.service';
-import { JwtStrategy } from './strategies/jwt.strategy';
+import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 import { UsersModule } from '../users/users.module';
-import { JwtRefreshStrategy } from './strategies/refresh-token.strategy';
+import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 
 @Module({
   imports: [
@@ -17,9 +17,9 @@ import { JwtRefreshStrategy } from './strategies/refresh-token.strategy';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'),
+        secret: configService.get<string>('JWT_ACCESS_SECRET'),
         signOptions: {
-          expiresIn: configService.get<string>('JWT_EXPIRATION', '7d'),
+          expiresIn: configService.get<string>('JWT_ACCESS_EXPIRATION', '7d'),
         },
       }),
       inject: [ConfigService],
@@ -31,7 +31,7 @@ import { JwtRefreshStrategy } from './strategies/refresh-token.strategy';
     AuthService,
     RefreshTokenService,
     LocalStrategy,
-    JwtStrategy,
+    JwtAccessStrategy,
     JwtRefreshStrategy,
   ],
   exports: [AuthService, RefreshTokenService],

@@ -16,12 +16,12 @@ import { CreateBranchDto } from './dto/create-branch.dto';
 import { UpdateBranchDto } from './dto/update-branch.dto';
 import { BranchResponseDto } from './dto/branch-response.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { JwtAccessGuard } from '../../common/guards/jwt-access.guard';
 import { ShiftResponseDto } from '@modules/shifts/dto/shift-response.dto';
 import { UpsertShiftDto } from '@modules/shifts/dto/upsert-shift.dto';
 
 @ApiTags('branches')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAccessGuard)
 @Controller('branches')
 export class BranchesController {
   constructor(private readonly branchesService: BranchesService) {}

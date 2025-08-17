@@ -1,7 +1,6 @@
 import {
   IsString,
   IsOptional,
-  IsBoolean,
   IsEmail,
   IsInt,
   ArrayNotEmpty,
@@ -12,12 +11,12 @@ export class UpdateEmployeeDto {
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
-  name?: string;
+  fullName?: string;
 
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
-  phone?: string;
+  phoneNumber?: string;
 
   @ApiProperty({ required: false })
   @IsString()
@@ -35,9 +34,16 @@ export class UpdateEmployeeDto {
   address?: string;
 
   @ApiProperty({ required: false })
-  @IsBoolean()
   @IsOptional()
-  isActive?: boolean;
+  dateOfBirth?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  probationStartDate?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  officialStartDate?: string;
 
   @ApiProperty({ type: [Number], required: false })
   @IsInt({ each: true })
