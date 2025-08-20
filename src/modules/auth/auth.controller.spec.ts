@@ -5,11 +5,12 @@ import { RefreshTokenService } from './refresh-token.service';
 import { LocalAuthGuard } from '@common/guards/local-auth.guard';
 import { JwtAccessGuard } from '@common/guards/jwt-access.guard';
 import { JwtRefreshGuard } from '@common/guards/jwt-refresh.guard';
-import { User } from '@prisma/client';
+import { User, UserStatus } from '@prisma/client';
 
 describe('AuthController', () => {
   let controller: AuthController;
   let authService: AuthService;
+  let refreshTokenService: RefreshTokenService;
   let testUser: User;
 
   // Mock guards
@@ -43,26 +44,26 @@ describe('AuthController', () => {
         {
           provide: RefreshTokenService,
           useValue: {
-            generateRefreshToken: jest.fn(),
             createRefreshToken: jest.fn(),
-            findRefreshToken: jest.fn(),
-            deleteExpiredTokens: jest.fn(),
             revokeRefreshToken: jest.fn(),
-            revokeAllRefreshTokens: jest.fn(),
+            revokeAllUserTokens: jest.fn(),
+            getUserActiveTokens: jest.fn(),
+            rotateRefreshToken: jest.fn(),
           },
         },
       ],
     })
       .overrideGuard(LocalAuthGuard)
-        .useValue(mockLocalAuthGuard)
-        .overrideGuard(JwtAccessGuard)
-        .useValue(mockJwtAccessGuard)
-        .overrideGuard(JwtRefreshGuard)
-        .useValue(mockJwtRefreshGuard)
+      .useValue(mockLocalAuthGuard)
+      .overrideGuard(JwtAccessGuard)
+      .useValue(mockJwtAccessGuard)
+      .overrideGuard(JwtRefreshGuard)
+      .useValue(mockJwtRefreshGuard)
       .compile();
 
     controller = module.get<AuthController>(AuthController);
     authService = module.get<AuthService>(AuthService);
+    refreshTokenService = module.get<RefreshTokenService>(RefreshTokenService);
 
     // Mock test user
     testUser = {
@@ -70,13 +71,9 @@ describe('AuthController', () => {
       username: 'testuser',
       password: 'hashedpassword',
       employeeId: null,
-      hashedRefreshToken: null,
-      passwordResetToken: null,
-      passwordResetExpires: null,
       createdAt: new Date(),
-      createdBy: 1,
       updatedAt: new Date(),
-      updatedBy: 1,
+      status: UserStatus.ACTIVE,
     };
   });
 
@@ -155,14 +152,16 @@ describe('AuthController', () => {
         },
       };
 
-      (authService.refreshTokens as jest.Mock).mockResolvedValue(mockRefreshResult);
+      (authService.refreshTokens as jest.Mock).mockResolvedValue(
+        mockRefreshResult,
+      );
 
       const result = await controller.refresh(mockRequest as any);
 
       expect(result).toEqual(mockRefreshResult);
       expect(authService.refreshTokens).toHaveBeenCalledWith(
         'old-refresh-token',
-        testUser.id
+        testUser.id,
       );
     });
 
@@ -184,12 +183,17 @@ describe('AuthController', () => {
         },
       };
 
-      (authService.refreshTokens as jest.Mock).mockResolvedValue(mockRefreshResult);
+      (authService.refreshTokens as jest.Mock).mockResolvedValue(
+        mockRefreshResult,
+      );
 
       const result = await controller.refresh(mockRequest as any);
 
       expect(result).toEqual(mockRefreshResult);
-      expect(authService.refreshTokens).toHaveBeenCalledWith(undefined, undefined);
+      expect(authService.refreshTokens).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+      );
     });
   });
 
@@ -209,7 +213,7 @@ describe('AuthController', () => {
       expect(result).toEqual({ message: 'Logged out successfully' });
       expect(authService.logout).toHaveBeenCalledWith(
         'refresh-token-to-revoke',
-        testUser.id
+        testUser.id,
       );
     });
 
@@ -243,10 +247,10 @@ describe('AuthController', () => {
 
       const result = await controller.logoutDevice(mockRequest as any);
 
-      expect(result).toEqual({ message: 'Logged out from device successfully' });
+      expect(result).toEqual({ message: 'Logged out successfully' });
       expect(authService.logout).toHaveBeenCalledWith(
         'device-refresh-token',
-        testUser.id
+        testUser.id,
       );
     });
   });
@@ -259,12 +263,16 @@ describe('AuthController', () => {
         },
       };
 
-      (authService.logoutFromAllDevices as jest.Mock).mockResolvedValue(undefined);
+      (refreshTokenService.revokeAllUserTokens as jest.Mock).mockResolvedValue(
+        undefined,
+      );
 
       const result = await controller.logoutAll(mockRequest as any);
 
-      expect(result).toEqual({ message: 'Logged out from all devices successfully' });
-      expect(authService.logoutFromAllDevices).toHaveBeenCalledWith(testUser.id);
+      expect(result).toEqual({ message: 'Logged out from all devices' });
+      expect(refreshTokenService.revokeAllUserTokens).toHaveBeenCalledWith(
+        testUser.id,
+      );
     });
 
     it('should handle logout all with missing user data', async () => {
@@ -274,12 +282,16 @@ describe('AuthController', () => {
         },
       };
 
-      (authService.logoutFromAllDevices as jest.Mock).mockResolvedValue(undefined);
+      (refreshTokenService.revokeAllUserTokens as jest.Mock).mockResolvedValue(
+        undefined,
+      );
 
       const result = await controller.logoutAll(mockRequest as any);
 
-      expect(result).toEqual({ message: 'Logged out from all devices successfully' });
-      expect(authService.logoutFromAllDevices).toHaveBeenCalledWith(undefined);
+      expect(result).toEqual({ message: 'Logged out from all devices' });
+      expect(refreshTokenService.revokeAllUserTokens).toHaveBeenCalledWith(
+        undefined,
+      );
     });
   });
 
@@ -304,15 +316,18 @@ describe('AuthController', () => {
         },
       };
 
-      (authService.getUserActiveSessions as jest.Mock).mockResolvedValue(mockActiveSessions);
+      (refreshTokenService.getUserActiveTokens as jest.Mock).mockResolvedValue(
+        mockActiveSessions,
+      );
 
       const result = await controller.getActiveSessions(mockRequest as any);
 
       expect(result).toEqual({
-        sessions: mockActiveSessions,
-        count: mockActiveSessions.length,
+        activeSessions: mockActiveSessions,
       });
-      expect(authService.getUserActiveSessions).toHaveBeenCalledWith(testUser.id);
+      expect(refreshTokenService.getUserActiveTokens).toHaveBeenCalledWith(
+        testUser.id,
+      );
     });
 
     it('should return empty sessions when user has no active sessions', async () => {
@@ -322,13 +337,14 @@ describe('AuthController', () => {
         },
       };
 
-      (authService.getUserActiveSessions as jest.Mock).mockResolvedValue([]);
+      (refreshTokenService.getUserActiveTokens as jest.Mock).mockResolvedValue(
+        [],
+      );
 
       const result = await controller.getActiveSessions(mockRequest as any);
 
       expect(result).toEqual({
-        sessions: [],
-        count: 0,
+        activeSessions: [],
       });
     });
 
@@ -339,49 +355,18 @@ describe('AuthController', () => {
         },
       };
 
-      (authService.getUserActiveSessions as jest.Mock).mockResolvedValue([]);
+      (refreshTokenService.getUserActiveTokens as jest.Mock).mockResolvedValue(
+        [],
+      );
 
       const result = await controller.getActiveSessions(mockRequest as any);
 
       expect(result).toEqual({
-        sessions: [],
-        count: 0,
+        activeSessions: [],
       });
-      expect(authService.getUserActiveSessions).toHaveBeenCalledWith(undefined);
-    });
-  });
-
-  describe('getProfile', () => {
-    it('should return user profile successfully', async () => {
-      const mockRequest = {
-        user: testUser,
-      };
-
-      const result = await controller.getProfile(mockRequest as any);
-
-      expect(result).toEqual({
-        id: testUser.id,
-        username: testUser.username,
-        employeeId: testUser.employeeId,
-        createdAt: testUser.createdAt,
-        updatedAt: testUser.updatedAt,
-      });
-    });
-
-    it('should handle missing user in request', async () => {
-      const mockRequest = {
-        user: undefined,
-      };
-
-      const result = await controller.getProfile(mockRequest as any);
-
-      expect(result).toEqual({
-        id: undefined,
-        username: undefined,
-        employeeId: undefined,
-        createdAt: undefined,
-        updatedAt: undefined,
-      });
+      expect(refreshTokenService.getUserActiveTokens).toHaveBeenCalledWith(
+        undefined,
+      );
     });
   });
 
@@ -392,8 +377,8 @@ describe('AuthController', () => {
       expect(guards).toContain(LocalAuthGuard);
     });
 
-    it('should use JwtRefreshGuard for refresh endpoint', () => {
-      const guards = Reflect.getMetadata('__guards__', controller.refresh);
+    it('should use JwtRefreshGuard for refreshToken endpoint', () => {
+      const guards = Reflect.getMetadata('__guards__', controller.refreshToken);
       expect(guards).toBeDefined();
       expect(guards).toContain(JwtRefreshGuard);
     });
@@ -417,13 +402,10 @@ describe('AuthController', () => {
     });
 
     it('should use JwtAccessGuard for getActiveSessions endpoint', () => {
-      const guards = Reflect.getMetadata('__guards__', controller.getActiveSessions);
-      expect(guards).toBeDefined();
-      expect(guards).toContain(JwtAccessGuard);
-    });
-
-    it('should use JwtAccessGuard for getProfile endpoint', () => {
-      const guards = Reflect.getMetadata('__guards__', controller.getProfile);
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        controller.getActiveSessions,
+      );
       expect(guards).toBeDefined();
       expect(guards).toContain(JwtAccessGuard);
     });
@@ -438,7 +420,9 @@ describe('AuthController', () => {
       const error = new Error('Login service error');
       (authService.login as jest.Mock).mockRejectedValue(error);
 
-      await expect(controller.login(mockRequest as any)).rejects.toThrow('Login service error');
+      await expect(controller.login(mockRequest as any)).rejects.toThrow(
+        'Login service error',
+      );
     });
 
     it('should handle service errors in refresh', async () => {
@@ -450,9 +434,11 @@ describe('AuthController', () => {
       };
 
       const error = new Error('Refresh service error');
-      (authService.refreshTokens as jest.Mock).mockRejectedValue(error);
+      (authService.refreshToken as jest.Mock).mockRejectedValue(error);
 
-      await expect(controller.refresh(mockRequest as any)).rejects.toThrow('Refresh service error');
+      await expect(controller.refreshToken(mockRequest as any)).rejects.toThrow(
+        'Refresh service error',
+      );
     });
 
     it('should handle service errors in logout', async () => {
@@ -466,7 +452,9 @@ describe('AuthController', () => {
       const error = new Error('Logout service error');
       (authService.logout as jest.Mock).mockRejectedValue(error);
 
-      await expect(controller.logout(mockRequest as any)).rejects.toThrow('Logout service error');
+      await expect(controller.logout(mockRequest as any)).rejects.toThrow(
+        'Logout service error',
+      );
     });
 
     it('should handle service errors in logoutAll', async () => {
@@ -477,9 +465,13 @@ describe('AuthController', () => {
       };
 
       const error = new Error('Logout all service error');
-      (authService.logoutFromAllDevices as jest.Mock).mockRejectedValue(error);
+      (refreshTokenService.revokeAllUserTokens as jest.Mock).mockRejectedValue(
+        error,
+      );
 
-      await expect(controller.logoutAll(mockRequest as any)).rejects.toThrow('Logout all service error');
+      await expect(controller.logoutAll(mockRequest as any)).rejects.toThrow(
+        'Logout all service error',
+      );
     });
 
     it('should handle service errors in getActiveSessions', async () => {
@@ -490,9 +482,13 @@ describe('AuthController', () => {
       };
 
       const error = new Error('Get sessions service error');
-      (authService.getUserActiveSessions as jest.Mock).mockRejectedValue(error);
+      (refreshTokenService.getUserActiveTokens as jest.Mock).mockRejectedValue(
+        error,
+      );
 
-      await expect(controller.getActiveSessions(mockRequest as any)).rejects.toThrow('Get sessions service error');
+      await expect(
+        controller.getActiveSessions(mockRequest as any),
+      ).rejects.toThrow('Get sessions service error');
     });
   });
 });

@@ -1,23 +1,36 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RefreshTokenService } from './refresh-token.service';
-import { PrismaService } from '../prisma/prisma.service';
-import { ConfigModule } from '@nestjs/config';
-import * as bcrypt from 'bcrypt';
-import { RefreshToken, User } from '@prisma/client';
+import { PrismaService } from '@modules/prisma/prisma.service';
+import { JwtTokenService } from './jwt-token.service';
+import { ConfigService } from '@nestjs/config';
+import { RefreshTokenPayloadDto } from './dto/refresh-token-payload.dto';
+import { RefreshToken } from '@prisma/client';
 
 describe('RefreshTokenService', () => {
   let service: RefreshTokenService;
   let prismaService: PrismaService;
-  let testUser: User;
+  let jwtTokenService: JwtTokenService;
+  let configService: ConfigService;
 
-  beforeAll(async () => {
+  const mockRefreshTokenPayload: RefreshTokenPayloadDto = {
+    sub: 1,
+    email: 'test@example.com',
+    roles: ['employee'],
+    jti: undefined, // Will be set by the service
+  };
+
+  const mockTokenRecord: RefreshToken = {
+    id: 'test-token-id',
+    userId: 1,
+    device: 'test-device',
+    ipAddress: 'test-ip',
+    hashedToken: 'hashed-token',
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    createdAt: new Date(),
+  };
+
+  beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      imports: [
-        ConfigModule.forRoot({
-          isGlobal: true,
-          envFilePath: '.env.test',
-        }),
-      ],
       providers: [
         RefreshTokenService,
         {
@@ -25,19 +38,26 @@ describe('RefreshTokenService', () => {
           useValue: {
             refreshToken: {
               create: jest.fn(),
-              findUnique: jest.fn(),
-              findMany: jest.fn(),
-              update: jest.fn(),
-              updateMany: jest.fn(),
-              deleteMany: jest.fn(),
-              count: jest.fn(),
-            },
-            user: {
-              findUnique: jest.fn(),
-              create: jest.fn(),
               delete: jest.fn(),
               deleteMany: jest.fn(),
+              findMany: jest.fn(),
+              findUnique: jest.fn(),
+              update: jest.fn(),
             },
+          },
+        },
+        {
+          provide: JwtTokenService,
+          useValue: {
+            generateRefreshToken: jest.fn(),
+            hashToken: jest.fn(),
+            parseExpirationTime: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn(),
           },
         },
       ],
@@ -45,24 +65,11 @@ describe('RefreshTokenService', () => {
 
     service = module.get<RefreshTokenService>(RefreshTokenService);
     prismaService = module.get<PrismaService>(PrismaService);
-
-    // Mock test user
-    testUser = {
-      id: 1,
-      username: 'testuser',
-      password: 'hashedpassword',
-      employeeId: null,
-      hashedRefreshToken: null,
-      passwordResetToken: null,
-      passwordResetExpires: null,
-      createdAt: new Date(),
-      createdBy: 1,
-      updatedAt: new Date(),
-      updatedBy: 1,
-    };
+    jwtTokenService = module.get<JwtTokenService>(JwtTokenService);
+    configService = module.get<ConfigService>(ConfigService);
   });
 
-  beforeEach(() => {
+  afterEach(() => {
     jest.clearAllMocks();
   });
 
@@ -70,235 +77,150 @@ describe('RefreshTokenService', () => {
     expect(service).toBeDefined();
   });
 
-  describe('generateRefreshToken', () => {
-    it('should generate a refresh token successfully', async () => {
-      const mockTokenRecord: RefreshToken = {
-        id: 'token-id-123',
-        userId: testUser.id,
-        tokenHash: 'hashed-token',
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        createdAt: new Date(),
-        revokedAt: null,
-      };
+  describe('createRefreshToken', () => {
+    it('should create a new refresh token successfully', async () => {
+      const mockToken = 'generated-refresh-token';
+      const mockHashedToken = 'hashed-token';
+      const mockExpirationTime = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
 
-      (prismaService.refreshToken.create as jest.Mock).mockResolvedValue(
-        mockTokenRecord,
+      jest.spyOn(configService, 'get').mockReturnValue('7d');
+      jest
+        .spyOn(jwtTokenService, 'parseExpirationTime')
+        .mockReturnValue(mockExpirationTime);
+      jest
+        .spyOn(jwtTokenService, 'generateRefreshToken')
+        .mockReturnValue(mockToken);
+      jest
+        .spyOn(jwtTokenService, 'hashToken')
+        .mockResolvedValue(mockHashedToken);
+      jest
+        .spyOn(prismaService.refreshToken, 'create')
+        .mockResolvedValue(mockTokenRecord);
+
+      const result = await service.createRefreshToken(mockRefreshTokenPayload);
+
+      expect(result).toEqual({
+        token: mockToken,
+        tokenRecord: mockTokenRecord,
+      });
+
+      expect(configService.get).toHaveBeenCalledWith(
+        'JWT_REFRESH_EXPIRATION',
+        '7d',
       );
-
-      const result = await service.createRefreshToken(testUser.id);
-
-      expect(result).toBeDefined();
-      expect(result.token).toBeDefined();
-      expect(result.tokenRecord).toEqual(mockTokenRecord);
-      expect(typeof result.token).toBe('string');
-      expect(result.token.length).toBe(64); // 32 bytes * 2 (hex)
+      expect(jwtTokenService.parseExpirationTime).toHaveBeenCalledWith('7d');
+      expect(jwtTokenService.generateRefreshToken).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ...mockRefreshTokenPayload,
+          jti: expect.any(String),
+        }),
+      );
+      expect(jwtTokenService.hashToken).toHaveBeenCalledWith(mockToken);
       expect(prismaService.refreshToken.create).toHaveBeenCalledWith({
         data: {
-          userId: testUser.id,
-          tokenHash: expect.any(String),
+          id: expect.any(String),
+          device: expect.any(String),
+          ipAddress: expect.any(String),
+          userId: mockRefreshTokenPayload.sub,
+          hashedToken: mockHashedToken,
           expiresAt: expect.any(Date),
         },
       });
     });
 
-    it('should set expiration to 7 days from now', async () => {
-      const mockTokenRecord: RefreshToken = {
-        id: 'token-id-123',
-        userId: testUser.id,
-        tokenHash: 'hashed-token',
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        createdAt: new Date(),
-        revokedAt: null,
-      };
+    it('should handle database errors during token creation', async () => {
+      const mockToken = 'generated-refresh-token';
+      const mockHashedToken = 'hashed-token';
+      const mockExpirationTime = 7 * 24 * 60 * 60 * 1000;
+      const dbError = new Error('Database connection failed');
 
-      (prismaService.refreshToken.create as jest.Mock).mockResolvedValue(
-        mockTokenRecord,
-      );
+      jest.spyOn(configService, 'get').mockReturnValue('7d');
+      jest
+        .spyOn(jwtTokenService, 'parseExpirationTime')
+        .mockReturnValue(mockExpirationTime);
+      jest
+        .spyOn(jwtTokenService, 'generateRefreshToken')
+        .mockReturnValue(mockToken);
+      jest
+        .spyOn(jwtTokenService, 'hashToken')
+        .mockResolvedValue(mockHashedToken);
+      jest
+        .spyOn(prismaService.refreshToken, 'create')
+        .mockRejectedValue(dbError);
 
-      await service.createRefreshToken(testUser.id);
-
-      const createCall = (prismaService.refreshToken.create as jest.Mock).mock
-        .calls[0][0];
-      const expiresAt = createCall.data.expiresAt;
-      const sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-      // Allow 1 second difference for test execution time
-      expect(
-        Math.abs(expiresAt.getTime() - sevenDaysFromNow.getTime()),
-      ).toBeLessThan(1000);
-    });
-  });
-
-  describe('validateRefreshToken', () => {
-    it('should validate a correct refresh token', async () => {
-      const token = 'valid-token';
-      const hashedToken = await bcrypt.hash(token, 10);
-
-      const mockUser = {
-        ...testUser,
-        refreshTokens: [
-          {
-            id: 'token-id-123',
-            userId: testUser.id,
-            tokenHash: hashedToken,
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            createdAt: new Date(),
-            revokedAt: null,
-          },
-        ],
-      };
-
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
-
-      const result = await service.validateRefreshToken(token, testUser.id);
-
-      expect(result).toBeDefined();
-      expect(result.user).toEqual(mockUser);
-      expect(result.tokenRecord).toEqual(mockUser.refreshTokens[0]);
-      expect(prismaService.user.findUnique).toHaveBeenCalledWith({
-        where: { id: testUser.id },
-        include: {
-          refreshTokens: {
-            where: {
-              revokedAt: null,
-              expiresAt: { gte: expect.any(Date) },
-            },
-          },
-        },
-      });
-    });
-
-    it('should return null for invalid token', async () => {
-      const token = 'invalid-token';
-      const hashedToken = await bcrypt.hash('different-token', 10);
-
-      const mockUser = {
-        ...testUser,
-        refreshTokens: [
-          {
-            id: 'token-id-123',
-            userId: testUser.id,
-            tokenHash: hashedToken,
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            createdAt: new Date(),
-            revokedAt: null,
-          },
-        ],
-      };
-
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
-
-      const result = await service.validateRefreshToken(token, testUser.id);
-
-      expect(result).toBeNull();
-    });
-
-    it('should return null when user has no active tokens', async () => {
-      const mockUser = {
-        ...testUser,
-        refreshTokens: [],
-      };
-
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
-
-      const result = await service.validateRefreshToken(
-        'any-token',
-        testUser.id,
-      );
-
-      expect(result).toBeNull();
-    });
-
-    it('should return null when user not found', async () => {
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(null);
-
-      const result = await service.validateRefreshToken(
-        'any-token',
-        testUser.id,
-      );
-
-      expect(result).toBeNull();
+      await expect(
+        service.createRefreshToken(mockRefreshTokenPayload),
+      ).rejects.toThrow('Database connection failed');
     });
   });
 
   describe('revokeRefreshToken', () => {
     it('should revoke a refresh token', async () => {
       const tokenId = 'token-id-123';
-      const mockUpdatedToken: RefreshToken = {
-        id: tokenId,
-        userId: testUser.id,
-        tokenHash: 'hashed-token',
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        createdAt: new Date(),
-        revokedAt: new Date(),
-      };
 
-      (prismaService.refreshToken.update as jest.Mock).mockResolvedValue(
-        mockUpdatedToken,
-      );
+      jest
+        .spyOn(prismaService.refreshToken, 'delete')
+        .mockResolvedValue(mockTokenRecord);
 
       await service.revokeRefreshToken(tokenId);
 
-      expect(prismaService.refreshToken.update).toHaveBeenCalledWith({
+      expect(prismaService.refreshToken.delete).toHaveBeenCalledWith({
         where: { id: tokenId },
-        data: { revokedAt: expect.any(Date) },
       });
     });
   });
 
   describe('revokeAllUserTokens', () => {
     it('should revoke all user tokens', async () => {
-      const userId = testUser.id;
-      const mockUpdateResult = { count: 3 };
+      const userId = 1;
+      const mockDeleteResult = { count: 3 };
 
-      (prismaService.refreshToken.updateMany as jest.Mock).mockResolvedValue(
-        mockUpdateResult,
-      );
+      jest
+        .spyOn(prismaService.refreshToken, 'deleteMany')
+        .mockResolvedValue(mockDeleteResult);
 
       await service.revokeAllUserTokens(userId);
 
-      expect(prismaService.refreshToken.updateMany).toHaveBeenCalledWith({
-        where: {
-          userId,
-          revokedAt: null,
-        },
-        data: { revokedAt: expect.any(Date) },
+      expect(prismaService.refreshToken.deleteMany).toHaveBeenCalledWith({
+        where: { userId },
       });
     });
   });
 
   describe('getUserActiveTokens', () => {
     it('should return active tokens for user', async () => {
+      const userId = 1;
       const mockTokens: RefreshToken[] = [
         {
           id: 'token-1',
-          userId: testUser.id,
-          tokenHash: 'hash-1',
+          userId: userId,
+          device: 'test-device',
+          ipAddress: 'test-ip',
+          hashedToken: 'hash-1',
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
           createdAt: new Date(),
-          revokedAt: null,
         },
         {
           id: 'token-2',
-          userId: testUser.id,
-          tokenHash: 'hash-2',
+          userId: userId,
+          device: 'test-device',
+          ipAddress: 'test-ip',
+          hashedToken: 'hash-2',
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
           createdAt: new Date(),
-          revokedAt: null,
         },
       ];
 
-      (prismaService.refreshToken.findMany as jest.Mock).mockResolvedValue(
-        mockTokens,
-      );
+      jest
+        .spyOn(prismaService.refreshToken, 'findMany')
+        .mockResolvedValue(mockTokens);
 
-      const result = await service.getUserActiveTokens(testUser.id);
+      const result = await service.getUserActiveTokens(userId);
 
       expect(result).toEqual(mockTokens);
       expect(prismaService.refreshToken.findMany).toHaveBeenCalledWith({
         where: {
-          userId: testUser.id,
-          revokedAt: null,
+          userId,
           expiresAt: { gte: expect.any(Date) },
         },
         orderBy: { createdAt: 'desc' },
@@ -309,87 +231,56 @@ describe('RefreshTokenService', () => {
   describe('rotateRefreshToken', () => {
     it('should rotate refresh token successfully', async () => {
       const oldTokenId = 'old-token-id';
-      const userId = testUser.id;
+      const mockToken = 'new-refresh-token';
+      const mockHashedToken = 'new-hashed-token';
+      const mockExpirationTime = 7 * 24 * 60 * 60 * 1000;
 
-      const mockOldToken: RefreshToken = {
-        id: oldTokenId,
-        userId,
-        tokenHash: 'old-hash',
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        createdAt: new Date(),
-        revokedAt: new Date(),
-      };
+      // Mock the revoke operation
+      jest
+        .spyOn(prismaService.refreshToken, 'delete')
+        .mockResolvedValue(mockTokenRecord);
 
-      const mockNewToken: RefreshToken = {
-        id: 'new-token-id',
-        userId,
-        tokenHash: 'new-hash',
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        createdAt: new Date(),
-        revokedAt: null,
-      };
+      // Mock the create operation
+      jest.spyOn(configService, 'get').mockReturnValue('7d');
+      jest
+        .spyOn(jwtTokenService, 'parseExpirationTime')
+        .mockReturnValue(mockExpirationTime);
+      jest
+        .spyOn(jwtTokenService, 'generateRefreshToken')
+        .mockReturnValue(mockToken);
+      jest
+        .spyOn(jwtTokenService, 'hashToken')
+        .mockResolvedValue(mockHashedToken);
+      jest
+        .spyOn(prismaService.refreshToken, 'create')
+        .mockResolvedValue(mockTokenRecord);
 
-      (prismaService.refreshToken.update as jest.Mock).mockResolvedValue(
-        mockOldToken,
+      const result = await service.rotateRefreshToken(
+        oldTokenId,
+        mockRefreshTokenPayload,
       );
-      (prismaService.refreshToken.create as jest.Mock).mockResolvedValue(
-        mockNewToken,
-      );
 
-      const result = await service.rotateRefreshToken(oldTokenId, userId);
+      expect(result).toEqual({
+        token: mockToken,
+        tokenRecord: mockTokenRecord,
+      });
 
-      expect(result).toBeDefined();
-      expect(result.token).toBeDefined();
-      expect(result.tokenRecord).toEqual(mockNewToken);
-
-      // Verify old token was revoked
-      expect(prismaService.refreshToken.update).toHaveBeenCalledWith({
+      // Verify old token was deleted
+      expect(prismaService.refreshToken.delete).toHaveBeenCalledWith({
         where: { id: oldTokenId },
-        data: { revokedAt: expect.any(Date) },
       });
 
       // Verify new token was created
       expect(prismaService.refreshToken.create).toHaveBeenCalledWith({
         data: {
-          userId,
-          tokenHash: expect.any(String),
+          id: expect.any(String),
+          device: expect.any(String),
+          ipAddress: expect.any(String),
+          userId: mockRefreshTokenPayload.sub,
+          hashedToken: mockHashedToken,
           expiresAt: expect.any(Date),
         },
       });
-    });
-  });
-
-  describe('cleanupExpiredTokens', () => {
-    it('should cleanup expired and revoked tokens', async () => {
-      const mockDeleteResult = { count: 5 };
-
-      (prismaService.refreshToken.deleteMany as jest.Mock).mockResolvedValue(
-        mockDeleteResult,
-      );
-
-      const result = await service.cleanupExpiredTokens();
-
-      expect(result).toBe(5);
-      expect(prismaService.refreshToken.deleteMany).toHaveBeenCalledWith({
-        where: {
-          OR: [
-            { expiresAt: { lt: expect.any(Date) } },
-            { revokedAt: { not: null } },
-          ],
-        },
-      });
-    });
-
-    it('should return 0 when no tokens to cleanup', async () => {
-      const mockDeleteResult = { count: 0 };
-
-      (prismaService.refreshToken.deleteMany as jest.Mock).mockResolvedValue(
-        mockDeleteResult,
-      );
-
-      const result = await service.cleanupExpiredTokens();
-
-      expect(result).toBe(0);
     });
   });
 });

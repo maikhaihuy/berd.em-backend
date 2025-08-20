@@ -10,7 +10,11 @@ import { User } from '@prisma/client';
 import { JwtTokenService } from './jwt-token.service';
 
 describe('AuthService', () => {
-  let service: AuthService;  let prismaService: PrismaService;  let jwtService: JwtService;  let jwtTokenService: JwtTokenService;  let refreshTokenService: RefreshTokenService;
+  let service: AuthService;
+  let prismaService: PrismaService;
+  let jwtService: JwtService;
+  let jwtTokenService: JwtTokenService;
+  let refreshTokenService: RefreshTokenService;
   let testUser: User;
 
   beforeAll(async () => {
@@ -35,17 +39,19 @@ describe('AuthService', () => {
               delete: jest.fn(),
             },
             role: {
-              findMany: jest.fn().mockResolvedValue([{ id: 1, name: 'employee' }]),
+              findMany: jest
+                .fn()
+                .mockResolvedValue([{ id: 1, name: 'employee' }]),
             },
             branch: {
               findMany: jest.fn().mockResolvedValue([{ id: 1, name: 'main' }]),
             },
             passwordResetToken: {
-               findFirst: jest.fn(),
-               create: jest.fn(),
-               delete: jest.fn(),
-               deleteMany: jest.fn(),
-             },
+              findFirst: jest.fn(),
+              create: jest.fn(),
+              delete: jest.fn(),
+              deleteMany: jest.fn(),
+            },
             employee: {
               create: jest.fn(),
             },
@@ -67,7 +73,19 @@ describe('AuthService', () => {
             rotateRefreshToken: jest.fn(),
           },
         },
-        {          provide: JwtService,          useValue: {            sign: jest.fn(),            verify: jest.fn(),          },        },        {          provide: JwtTokenService,          useValue: {            generateAccessToken: jest.fn(),            generateRefreshToken: jest.fn(),            hashToken: jest.fn(),            parseExpirationTime: jest.fn(),          },        },
+        {
+          provide: JwtService,
+          useValue: { sign: jest.fn(), verify: jest.fn() },
+        },
+        {
+          provide: JwtTokenService,
+          useValue: {
+            generateAccessToken: jest.fn(),
+            generateRefreshToken: jest.fn(),
+            hashToken: jest.fn(),
+            parseExpirationTime: jest.fn(),
+          },
+        },
         {
           provide: ConfigService,
           useValue: {
@@ -85,7 +103,11 @@ describe('AuthService', () => {
       ],
     }).compile();
 
-    service = module.get<AuthService>(AuthService);    prismaService = module.get<PrismaService>(PrismaService);    jwtService = module.get<JwtService>(JwtService);    jwtTokenService = module.get<JwtTokenService>(JwtTokenService);    refreshTokenService = module.get<RefreshTokenService>(RefreshTokenService);
+    service = module.get<AuthService>(AuthService);
+    prismaService = module.get<PrismaService>(PrismaService);
+    jwtService = module.get<JwtService>(JwtService);
+    jwtTokenService = module.get<JwtTokenService>(JwtTokenService);
+    refreshTokenService = module.get<RefreshTokenService>(RefreshTokenService);
 
     // Mock test user
     testUser = {
@@ -93,13 +115,8 @@ describe('AuthService', () => {
       username: 'testuser',
       password: await bcrypt.hash('testpassword', 10),
       employeeId: null,
-      hashedRefreshToken: null,
-      passwordResetToken: null,
-      passwordResetExpires: null,
       createdAt: new Date(),
-      createdBy: 1,
       updatedAt: new Date(),
-      updatedBy: 1,
     };
   });
 
@@ -130,7 +147,7 @@ describe('AuthService', () => {
       (prismaService.user.findUnique as jest.Mock).mockResolvedValue(null);
       (prismaService.$transaction as jest.Mock).mockResolvedValue({
         user: { id: 1, username: 'newuser', employeeId: 1 },
-        employee: { id: 1 }
+        employee: { id: 1 },
       });
 
       const result = await service.register(registerDto);
@@ -173,7 +190,9 @@ describe('AuthService', () => {
         revokedAt: null,
       };
 
-      (jwtTokenService.generateAccessToken as jest.Mock).mockReturnValue(mockAccessToken);
+      (jwtTokenService.generateAccessToken as jest.Mock).mockReturnValue(
+        mockAccessToken,
+      );
       (refreshTokenService.createRefreshToken as jest.Mock).mockResolvedValue({
         token: mockRefreshToken,
         tokenRecord: mockTokenRecord,
@@ -213,7 +232,9 @@ describe('AuthService', () => {
         tokenId: 'old-token-id',
       };
 
-      (jwtTokenService.generateAccessToken as jest.Mock).mockReturnValue(mockAccessToken);
+      (jwtTokenService.generateAccessToken as jest.Mock).mockReturnValue(
+        mockAccessToken,
+      );
       (refreshTokenService.rotateRefreshToken as jest.Mock).mockResolvedValue({
         token: mockNewRefreshToken,
       });
@@ -248,14 +269,16 @@ describe('AuthService', () => {
         tokenId: 'old-token-id',
       };
 
-      (jwtTokenService.generateAccessToken as jest.Mock).mockReturnValue('access-token');
+      (jwtTokenService.generateAccessToken as jest.Mock).mockReturnValue(
+        'access-token',
+      );
       (refreshTokenService.rotateRefreshToken as jest.Mock).mockRejectedValue(
         new Error('Token rotation failed'),
       );
 
-      await expect(
-        service.refreshToken(mockRefreshSession),
-      ).rejects.toThrow('Token rotation failed');
+      await expect(service.refreshToken(mockRefreshSession)).rejects.toThrow(
+        'Token rotation failed',
+      );
 
       expect(refreshTokenService.rotateRefreshToken).toHaveBeenCalledWith(
         'old-token-id',
@@ -391,11 +414,13 @@ describe('AuthService', () => {
       (prismaService.user.findUnique as jest.Mock).mockResolvedValue(null);
       (prismaService.$transaction as jest.Mock).mockResolvedValue({
         user: mockUser,
-        employee: { id: 1 }
+        employee: { id: 1 },
       });
 
       // Mock login
-      (jwtTokenService.generateAccessToken as jest.Mock).mockReturnValue(mockAccessToken);
+      (jwtTokenService.generateAccessToken as jest.Mock).mockReturnValue(
+        mockAccessToken,
+      );
       (refreshTokenService.createRefreshToken as jest.Mock).mockResolvedValue({
         token: mockRefreshToken,
       });
@@ -422,7 +447,9 @@ describe('AuthService', () => {
         tokenId: 'old-token-id',
       };
 
-      (jwtTokenService.generateAccessToken as jest.Mock).mockReturnValue(newAccessToken);
+      (jwtTokenService.generateAccessToken as jest.Mock).mockReturnValue(
+        newAccessToken,
+      );
       (refreshTokenService.rotateRefreshToken as jest.Mock).mockResolvedValue({
         token: newRefreshToken,
       });

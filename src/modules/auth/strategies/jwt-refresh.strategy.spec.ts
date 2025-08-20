@@ -36,8 +36,6 @@ describe('JwtRefreshStrategy', () => {
     ],
   };
 
-
-
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -144,9 +142,9 @@ describe('JwtRefreshStrategy', () => {
     it('should throw UnauthorizedException when user not found', async () => {
       (prismaService.user.findUnique as jest.Mock).mockResolvedValue(null);
 
-      await expect(
-        strategy.validate(mockRequest, mockPayload),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(strategy.validate(mockRequest, mockPayload)).rejects.toThrow(
+        UnauthorizedException,
+      );
 
       expect(prismaService.user.findUnique).toHaveBeenCalledWith({
         where: { id: mockPayload.sub },
@@ -167,9 +165,9 @@ describe('JwtRefreshStrategy', () => {
         .mockResolvedValueOnce(false)
         .mockResolvedValueOnce(false);
 
-      await expect(
-        strategy.validate(mockRequest, mockPayload),
-      ).rejects.toThrow(new UnauthorizedException('Invalid refresh token'));
+      await expect(strategy.validate(mockRequest, mockPayload)).rejects.toThrow(
+        new UnauthorizedException('Invalid refresh token'),
+      );
 
       expect(bcrypt.compare).toHaveBeenCalledTimes(2);
     });
@@ -184,9 +182,9 @@ describe('JwtRefreshStrategy', () => {
         userWithNoTokens,
       );
 
-      await expect(
-        strategy.validate(mockRequest, mockPayload),
-      ).rejects.toThrow(new UnauthorizedException('Invalid refresh token'));
+      await expect(strategy.validate(mockRequest, mockPayload)).rejects.toThrow(
+        new UnauthorizedException('Invalid refresh token'),
+      );
 
       expect(bcrypt.compare).not.toHaveBeenCalled();
     });
