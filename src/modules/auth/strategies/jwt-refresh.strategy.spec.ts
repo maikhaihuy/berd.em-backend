@@ -6,13 +6,13 @@ import { UnauthorizedException } from '@nestjs/common';
 import { RefreshTokenPayloadDto } from '../dto/refresh-token-payload.dto';
 import { RefreshSessionDto } from '../dto/refresh-session.dto';
 import { Request } from 'express';
+import { UserStatus } from '@prisma/client';
+import bcrypt from 'bcrypt';
 
 // Mock bcrypt module
 jest.mock('bcrypt', () => ({
   compare: jest.fn(),
 }));
-
-const bcrypt = require('bcrypt');
 
 describe('JwtRefreshStrategy', () => {
   let strategy: JwtRefreshStrategy;
@@ -21,6 +21,11 @@ describe('JwtRefreshStrategy', () => {
   const mockUser = {
     id: 1,
     username: 'testuser',
+    password: 'hashedPassword',
+    status: UserStatus.ACTIVE,
+    employeeId: 123,
+    createdAt: new Date(),
+    updatedAt: new Date(),
     roles: [{ name: 'employee' }],
     refreshTokens: [
       {
@@ -86,7 +91,9 @@ describe('JwtRefreshStrategy', () => {
     };
 
     it('should validate and return user session when token matches first record', async () => {
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      const findUniqueSpy = jest
+        .spyOn(prismaService.user, 'findUnique')
+        .mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
 
       const result = await strategy.validate(mockRequest, mockPayload);
@@ -97,13 +104,13 @@ describe('JwtRefreshStrategy', () => {
       expect(result.roles).toEqual(['employee']);
       expect(result.tokenId).toBe('token-1');
 
-      expect(prismaService.user.findUnique).toHaveBeenCalledWith({
+      expect(findUniqueSpy).toHaveBeenCalledWith({
         where: { id: mockPayload.sub },
         include: {
           roles: true,
           refreshTokens: {
             where: {
-              expiresAt: { gte: expect.any(Date) },
+              expiresAt: { gte: new Date() },
             },
           },
         },
@@ -116,7 +123,7 @@ describe('JwtRefreshStrategy', () => {
     });
 
     it('should validate and return user session when token matches second record', async () => {
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      jest.spyOn(prismaService.user, 'findUnique').mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock)
         .mockResolvedValueOnce(false)
         .mockResolvedValueOnce(true);
@@ -140,19 +147,21 @@ describe('JwtRefreshStrategy', () => {
     });
 
     it('should throw UnauthorizedException when user not found', async () => {
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(null);
+      const findUniqueSpy = jest
+        .spyOn(prismaService.user, 'findUnique')
+        .mockResolvedValue(null);
 
       await expect(strategy.validate(mockRequest, mockPayload)).rejects.toThrow(
         UnauthorizedException,
       );
 
-      expect(prismaService.user.findUnique).toHaveBeenCalledWith({
+      expect(findUniqueSpy).toHaveBeenCalledWith({
         where: { id: mockPayload.sub },
         include: {
           roles: true,
           refreshTokens: {
             where: {
-              expiresAt: { gte: expect.any(Date) },
+              expiresAt: { gte: new Date() },
             },
           },
         },
@@ -160,7 +169,7 @@ describe('JwtRefreshStrategy', () => {
     });
 
     it('should throw UnauthorizedException when no refresh token matches', async () => {
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      jest.spyOn(prismaService.user, 'findUnique').mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock)
         .mockResolvedValueOnce(false)
         .mockResolvedValueOnce(false);
@@ -202,7 +211,7 @@ describe('JwtRefreshStrategy', () => {
     });
 
     it('should return first matching token when multiple tokens match', async () => {
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      jest.spyOn(prismaService.user, 'findUnique').mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock)
         .mockResolvedValueOnce(true)
         .mockResolvedValueOnce(true);

@@ -4,6 +4,7 @@ import * as bcrypt from 'bcrypt';
 import { LocalStrategy } from './local.strategy';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { AuthenticatedUserDto } from '../dto/authenticated-user.dto';
+import { UserStatus } from '@prisma/client';
 
 // Mock bcrypt
 jest.mock('bcrypt');
@@ -18,7 +19,7 @@ describe('LocalStrategy', () => {
     username: 'testuser',
     password: 'hashedPassword',
     employeeId: null,
-    status: 'ACTIVE',
+    status: UserStatus.ACTIVE,
     roles: [{ name: 'employee' }],
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -59,14 +60,16 @@ describe('LocalStrategy', () => {
       const username = 'testuser';
       const password = 'plainPassword';
 
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      const jestFindUnique = jest
+        .spyOn(prismaService.user, 'findUnique')
+        .mockResolvedValue(mockUser);
       mockedBcrypt.compare.mockResolvedValue(true as never);
 
       // Act
       const result = await strategy.validate(username, password);
 
       // Assert
-      expect(prismaService.user.findUnique).toHaveBeenCalledWith({
+      expect(jestFindUnique).toHaveBeenCalledWith({
         where: { username },
         include: {
           roles: true,
@@ -83,13 +86,15 @@ describe('LocalStrategy', () => {
       const username = 'nonexistentuser';
       const password = 'plainPassword';
 
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(null);
+      const jestFindUnique = jest
+        .spyOn(prismaService.user, 'findUnique')
+        .mockResolvedValue(null);
 
       // Act & Assert
       await expect(strategy.validate(username, password)).rejects.toThrow(
         new NotFoundException(`User with username ${username} not found.`),
       );
-      expect(prismaService.user.findUnique).toHaveBeenCalledWith({
+      expect(jestFindUnique).toHaveBeenCalledWith({
         where: { username },
         include: {
           roles: true,
@@ -103,14 +108,16 @@ describe('LocalStrategy', () => {
       const username = 'testuser';
       const password = 'wrongPassword';
 
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      const jestFindUnique = jest
+        .spyOn(prismaService.user, 'findUnique')
+        .mockResolvedValue(mockUser);
       mockedBcrypt.compare.mockResolvedValue(false as never);
 
       // Act & Assert
       await expect(strategy.validate(username, password)).rejects.toThrow(
         new UnauthorizedException('Username or password are not match.'),
       );
-      expect(prismaService.user.findUnique).toHaveBeenCalledWith({
+      expect(jestFindUnique).toHaveBeenCalledWith({
         where: { username },
         include: {
           roles: true,
@@ -125,14 +132,16 @@ describe('LocalStrategy', () => {
       const password = 'plainPassword';
       const bcryptError = new Error('Bcrypt error');
 
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
-      mockedBcrypt.compare.mockRejectedValue(bcryptError);
+      const jestFindUnique = jest
+        .spyOn(prismaService.user, 'findUnique')
+        .mockResolvedValue(mockUser);
+      mockedBcrypt.compare.mockRejectedValue(bcryptError as never);
 
       // Act & Assert
       await expect(strategy.validate(username, password)).rejects.toThrow(
         bcryptError,
       );
-      expect(prismaService.user.findUnique).toHaveBeenCalledWith({
+      expect(jestFindUnique).toHaveBeenCalledWith({
         where: { username },
         include: {
           roles: true,
@@ -147,13 +156,15 @@ describe('LocalStrategy', () => {
       const password = 'plainPassword';
       const dbError = new Error('Database connection error');
 
-      (prismaService.user.findUnique as jest.Mock).mockRejectedValue(dbError);
+      const jestFindUnique = jest
+        .spyOn(prismaService.user, 'findUnique')
+        .mockRejectedValue(dbError);
 
       // Act & Assert
       await expect(strategy.validate(username, password)).rejects.toThrow(
         dbError,
       );
-      expect(prismaService.user.findUnique).toHaveBeenCalledWith({
+      expect(jestFindUnique).toHaveBeenCalledWith({
         where: { username },
         include: {
           roles: true,

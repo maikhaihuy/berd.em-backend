@@ -5,6 +5,7 @@ import { JwtAccessStrategy } from './jwt-access.strategy';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { AuthenticatedUserDto } from '../dto/authenticated-user.dto';
 import { AccessTokenPayloadDto } from '../dto/access-token-payload.dto';
+import { UserStatus } from '@prisma/client';
 
 describe('JwtAccessStrategy', () => {
   let strategy: JwtAccessStrategy;
@@ -16,7 +17,7 @@ describe('JwtAccessStrategy', () => {
     username: 'testuser',
     password: 'hashedPassword',
     employeeId: 123,
-    status: 'ACTIVE',
+    status: UserStatus.ACTIVE,
     roles: [
       {
         id: 1,
@@ -83,13 +84,15 @@ describe('JwtAccessStrategy', () => {
   describe('validate', () => {
     it('should return authenticated user when token payload is valid', async () => {
       // Arrange
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      const findUniqueSpy = jest
+        .spyOn(prismaService.user, 'findUnique')
+        .mockResolvedValue(mockUser);
 
       // Act
       const result = await strategy.validate(mockPayload);
 
       // Assert
-      expect(prismaService.user.findUnique).toHaveBeenCalledWith({
+      expect(findUniqueSpy).toHaveBeenCalledWith({
         where: { id: mockPayload.sub },
         include: {
           roles: {
@@ -108,22 +111,24 @@ describe('JwtAccessStrategy', () => {
 
     it('should throw UnauthorizedException when user does not exist', async () => {
       // Arrange
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(null);
+      jest.spyOn(prismaService.user, 'findUnique').mockResolvedValue(null);
 
       // Act & Assert
       await expect(strategy.validate(mockPayload)).rejects.toThrow(
         UnauthorizedException,
       );
-      expect(prismaService.user.findUnique).toHaveBeenCalledWith({
-        where: { id: mockPayload.sub },
-        include: {
-          roles: {
-            include: {
-              permissions: true,
+      expect(jest.spyOn(prismaService.user, 'findUnique')).toHaveBeenCalledWith(
+        {
+          where: { id: mockPayload.sub },
+          include: {
+            roles: {
+              include: {
+                permissions: true,
+              },
             },
           },
         },
-      });
+      );
     });
 
     it('should handle user with multiple roles', async () => {
@@ -178,16 +183,18 @@ describe('JwtAccessStrategy', () => {
 
       // Act & Assert
       await expect(strategy.validate(mockPayload)).rejects.toThrow(dbError);
-      expect(prismaService.user.findUnique).toHaveBeenCalledWith({
-        where: { id: mockPayload.sub },
-        include: {
-          roles: {
-            include: {
-              permissions: true,
+      expect(jest.spyOn(prismaService.user, 'findUnique')).toHaveBeenCalledWith(
+        {
+          where: { id: mockPayload.sub },
+          include: {
+            roles: {
+              include: {
+                permissions: true,
+              },
             },
           },
         },
-      });
+      );
     });
 
     it('should handle payload with different user ID', async () => {
@@ -202,16 +209,18 @@ describe('JwtAccessStrategy', () => {
       await expect(strategy.validate(differentPayload)).rejects.toThrow(
         UnauthorizedException,
       );
-      expect(prismaService.user.findUnique).toHaveBeenCalledWith({
-        where: { id: 999 },
-        include: {
-          roles: {
-            include: {
-              permissions: true,
+      expect(jest.spyOn(prismaService.user, 'findUnique')).toHaveBeenCalledWith(
+        {
+          where: { id: 999 },
+          include: {
+            roles: {
+              include: {
+                permissions: true,
+              },
             },
           },
         },
-      });
+      );
     });
   });
 });
