@@ -63,6 +63,32 @@ export class BranchesController {
     return await this.branchesService.findOne(+id);
   }
 
+  @Get(':id/shifts')
+  @ApiOperation({ summary: 'Retrieve list of shifts by branchId' })
+  @ApiResponse({
+    status: 200,
+    description: 'The shifts found by branchId.',
+    type: [ShiftResponseDto],
+  })
+  @ApiResponse({ status: 404, description: 'Branch not found.' })
+  async findShifts(@Param('id') id: string): Promise<ShiftResponseDto[]> {
+    return await this.branchesService.findShifts(+id);
+  }
+
+  @Get(':id/shifts')
+  @ApiOperation({
+    summary: 'Retrieve list of schedules by branchId and week of the date',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The shifts found by branchId.',
+    type: [ShiftResponseDto],
+  })
+  @ApiResponse({ status: 404, description: 'Branch not found.' })
+  async findSchedules(@Param('id') id: string): Promise<ShiftResponseDto[]> {
+    return await this.branchesService.findShifts(+id);
+  }
+
   @Patch(':id')
   @ApiOperation({ summary: 'Update a branch by ID' })
   @ApiResponse({

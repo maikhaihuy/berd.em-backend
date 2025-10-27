@@ -136,6 +136,7 @@ export class BranchesService {
               startTime: new Date(shift.startTime),
               endTime: new Date(shift.endTime),
               multiplier: new Prisma.Decimal(shift.multiplier),
+              // status: shift.status,
               createdBy: 1, // Placeholder
               updatedBy: 1, // Placeholder
             })),
@@ -175,5 +176,10 @@ export class BranchesService {
       }
       throw error;
     }
+  }
+
+  async findShifts(branchId: number): Promise<ShiftResponseDto[]> {
+    const shifts = await this.prisma.shift.findMany({ where: { branchId } });
+    return shifts.map((branch) => new ShiftResponseDto(branch));
   }
 }

@@ -13,6 +13,8 @@ import { PermissionsModule } from './modules/permissions/permissions.module';
 import { EmployeeHourlyRatesModule } from '@modules/employee-hourly-rates/employee-hourly-rates.module';
 import { AvailabilityModule } from '@modules/availability/availability.module';
 import { ScheduleModule } from '@modules/schedule/schedule.module';
+import { RostersModule } from './rosters/rosters.module';
+import { RosterModule } from './modules/roster/roster.module';
 
 @Module({
   imports: [
@@ -33,6 +35,8 @@ import { ScheduleModule } from '@modules/schedule/schedule.module';
     BranchesModule,
     AvailabilityModule,
     ScheduleModule,
+    RostersModule,
+    RosterModule,
   ],
   // providers: [
   //   {

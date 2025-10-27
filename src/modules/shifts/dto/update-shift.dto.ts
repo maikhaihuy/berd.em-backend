@@ -1,5 +1,13 @@
-import { IsString, IsOptional, IsInt, IsPositive } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsInt,
+  IsPositive,
+  IsDecimal,
+  IsDateString,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { ShiftStatus } from '@prisma/client';
 
 export class UpdateShiftDto {
   @ApiProperty({ required: false })
@@ -18,9 +26,22 @@ export class UpdateShiftDto {
   @IsPositive()
   maxSlots?: number;
 
-  @ApiProperty({ required: false })
-  @IsInt()
+  @ApiProperty()
+  @IsDateString()
   @IsOptional()
-  @IsPositive()
-  branchId?: number;
+  startTime?: string;
+
+  @ApiProperty()
+  @IsDateString()
+  @IsOptional()
+  endTime?: string;
+
+  @ApiProperty()
+  @IsDecimal()
+  @IsOptional()
+  multiplier?: string;
+
+  @ApiProperty()
+  @IsOptional()
+  status?: ShiftStatus;
 }

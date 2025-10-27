@@ -9,7 +9,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// --- ENUMS ---
+// --- ENUMs ---
+
 enum UserStatus {
   ACTIVE
   INACTIVE
@@ -19,6 +20,7 @@ enum LeaveStatus {
   PENDING
   APPROVED
   REJECTED
+  CANCELLED
 }
 
 enum TimeLogStatus {
@@ -35,6 +37,28 @@ enum PayPeriodStatus {
   FINALIZED
 }
 
+enum ShiftStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum ScheduleStatus {
+  DRAFT
+  PUBLISHED
+  LOCKED
+  CANCELLED
+  COMPLETED
+}
+
+enum RosterStatus {
+  ASSIGNED
+  PENDING
+  SCHEDULED
+  COMPLETED
+  ABSENT
+}
 
 // --- MODELS ---
 model User {
@@ -126,9 +150,10 @@ model Shift {
   name         String
   abbreviation String
   maxSlots     Int
-  startTime    DateTime
-  endTime      DateTime
+  startTime    DateTime  // Time field
+  endTime      DateTime  // Time field
   multiplier   Decimal
+  status       ShiftStatus
   createdAt    DateTime  @default(now())
   createdBy    Int
   updatedAt    DateTime  @updatedAt
@@ -156,7 +181,7 @@ model Employee {
   hourlyRates         EmployeeHourlyRate[]
   branches            EmployeeBranch[]
   availabilities      Availability[]
-  schedules           Schedule[]
+  rosters             Roster[]
   payrollEntries      PayrollEntry[]
 
   // Timelog mà nhân viên sở hữu
@@ -210,45 +235,69 @@ model Availability {
 model Schedule {
   id         Int       @id @default(autoincrement())
   shiftId    Int
-  employeeId Int
   branchId   Int
   shift      Shift     @relation(fields: [shiftId], references: [id])
-  employee   Employee  @relation(fields: [employeeId], references: [id])
   branch     Branch    @relation(fields: [branchId], references: [id])
-  startTime  DateTime
-  endTime    DateTime
+  name       String
+  abbreviation String
+  maxSlots   Int
+  workDate   DateTime  // Date field
+  startTime  DateTime  // Time field
+  endTime    DateTime  // Time field
+  status     ScheduleStatus
   note       String?
   createdAt  DateTime  @default(now())
   createdBy  Int
   updatedAt  DateTime  @updatedAt
   updatedBy  Int
 
-  timeLogs   TimeLog[]
-  leaveRequests LeaveRequest[]
-  histories  ScheduleHistory[]
+  rosters    Roster[]
+}
+
+model Roster {
+  id             Int       @id @default(autoincrement())
+  scheduleId     Int
+  employeeId     Int
+  schedule       Schedule  @relation(fields: [scheduleId], references: [id])
+  employee       Employee  @relation(fields: [employeeId], references: [id])
+  assignedAt     DateTime
+  actualStartTime DateTime?
+  actualEndTime  DateTime?
+  status         RosterStatus
+  note           String?
+  createdAt      DateTime  @default(now())
+  createdBy      Int
+  updatedAt      DateTime  @updatedAt
+  updatedBy      Int
+
+  leaveRequests  LeaveRequest[]
+  timeLogs       TimeLog[]
+  histories      RosterHistory[]
 }
 
 model LeaveRequest {
   id                   Int       @id @default(autoincrement())
-  scheduleId           Int
+  rosterId             Int
   absenceEmployeeId    Int
   replacementEmployeeId Int
-  reason               String
-  approverId           Int
+  approvedId           Int?
+  reason               String?
+  note                 String?
   status               LeaveStatus
+  approvedAt           DateTime?
   createdAt            DateTime  @default(now())
   createdBy            Int
   updatedAt            DateTime  @updatedAt
   updatedBy            Int
 
-  schedule             Schedule  @relation(fields: [scheduleId], references: [id])
+  roster               Roster    @relation(fields: [rosterId], references: [id])
   absenceEmployee      Employee  @relation("AbsenceEmployee", fields: [absenceEmployeeId], references: [id])
   replacementEmployee  Employee  @relation("ReplacementEmployee", fields: [replacementEmployeeId], references: [id])
 }
 
 model TimeLog {
   id                Int       @id @default(autoincrement())
-  scheduleId        Int
+  rosterId          Int
   employeeId        Int
   actualStartTime   DateTime?
   actualEndTime     DateTime?
@@ -266,7 +315,7 @@ model TimeLog {
   updatedAt         DateTime  @updatedAt
   updatedBy         Int
 
-  schedule          Schedule  @relation(fields: [scheduleId], references: [id])
+  roster            Roster    @relation(fields: [rosterId], references: [id])
   employee          Employee  @relation("EmployeeWorkTimeLogs", fields: [employeeId], references: [id])
   verifier          Employee? @relation("EmployeeVerifiedTimeLogs", fields: [verifiedBy], references: [id])
   payrollEntry      PayrollEntry?
@@ -306,11 +355,11 @@ model PayrollEntry {
   payPeriod   PayPeriod @relation(fields: [payPeriodId], references: [id])
 }
 
-model ScheduleHistory {
+model RosterHistory {
   id             Int      @id @default(autoincrement())
-  shiftScheduleId Int
-  changedById     Int
-  changeDetails   Json
-  changedAt       DateTime
-  schedule        Schedule @relation(fields: [shiftScheduleId], references: [id])
+  rosterId       Int
+  changedById    Int
+  changeDetails  Json
+  changedAt      DateTime
+  roster         Roster   @relation(fields: [rosterId], references: [id])
 }

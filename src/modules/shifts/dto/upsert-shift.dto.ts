@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { ShiftStatus } from '@prisma/client';
 import {
   IsInt,
   IsOptional,
@@ -44,4 +45,7 @@ export class UpsertShiftDto {
   @ApiProperty({ example: '1.0' })
   @IsDecimal()
   multiplier: string;
+
+  @ApiProperty()
+  status: ShiftStatus;
 }
