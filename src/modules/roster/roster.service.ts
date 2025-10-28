@@ -8,6 +8,7 @@ import { CreateRosterDto } from './dto/create-roster.dto';
 import { UpdateRosterDto } from './dto/update-roster.dto';
 import { RosterResponseDto } from './dto/roster-response.dto';
 import { getStartAndEndInWeek } from '@common/helpers/date.helper';
+import { Prisma } from '@prisma/client';
 
 interface PrismaError extends Error {
   code?: string;
@@ -15,25 +16,27 @@ interface PrismaError extends Error {
 
 @Injectable()
 export class RosterService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) {}
 
   async create(
     createRosterDto: CreateRosterDto,
     currentUserId: number,
   ): Promise<RosterResponseDto> {
     try {
+      const newRoster = {
+        scheduleId: createRosterDto.scheduleId,
+        employeeId: createRosterDto.employeeId,
+        actualStartTime: createRosterDto.actualStartTime,
+        actualEndTime: createRosterDto.actualEndTime,
+        note: createRosterDto.note,
+        assignedAt: createRosterDto.assignedAt,
+        status: createRosterDto.status,
+        createdBy: currentUserId,
+        updatedBy: currentUserId,
+      };
+
       const roster = await this.prisma.roster.create({
-        data: {
-          scheduleId: createRosterDto.scheduleId,
-          employeeId: createRosterDto.employeeId,
-          actualStartTime: createRosterDto.actualStartTime,
-          actualEndTime: createRosterDto.actualEndTime,
-          note: createRosterDto.note,
-          assignedAt: createRosterDto.assignedAt,
-          status: createRosterDto.status,
-          createdBy: currentUserId,
-          updatedBy: currentUserId,
-        },
+        data: newRoster,
         include: {
           schedule: {
             include: {
@@ -62,7 +65,7 @@ export class RosterService {
     branchId?: number,
     date?: string,
   ): Promise<RosterResponseDto[]> {
-    const where: any = {};
+    const where: Prisma.RosterWhereInput = {};
 
     // If branchId is provided, filter by branch through schedule
     if (branchId) {
@@ -77,15 +80,16 @@ export class RosterService {
       const { start, end } = getStartAndEndInWeek(targetDate);
 
       where.schedule = {
-        ...where.schedule,
-        workDate: {
-          gte: start,
-          lte: end,
+        is: {
+          workDate: {
+            gte: start,
+            lte: end,
+          },
         },
       };
     }
 
-    const rosters = await this.prismaClient.roster.findMany({
+    const rosters = await this.prisma.roster.findMany({
       where,
       include: {
         schedule: {
@@ -106,7 +110,7 @@ export class RosterService {
   }
 
   async findOne(id: number): Promise<RosterResponseDto> {
-    const roster = await this.prismaClient.roster.findUnique({
+    const roster = await this.prisma.roster.findUnique({
       where: { id },
       include: {
         schedule: {
@@ -132,7 +136,7 @@ export class RosterService {
     currentUserId: number,
   ): Promise<RosterResponseDto> {
     // Check if roster exists
-    const existingRoster = await this.prismaClient.roster.findUnique({
+    const existingRoster = await this.prisma.roster.findUnique({
       where: { id },
     });
 
@@ -141,7 +145,7 @@ export class RosterService {
     }
 
     try {
-      const roster = await this.prismaClient.roster.update({
+      const roster = await this.prisma.roster.update({
         where: { id },
         data: {
           ...updateRosterDto,
@@ -173,7 +177,7 @@ export class RosterService {
 
   async remove(id: number): Promise<void> {
     // Check if roster exists
-    const existingRoster = await this.prismaClient.roster.findUnique({
+    const existingRoster = await this.prisma.roster.findUnique({
       where: { id },
     });
 
@@ -181,7 +185,7 @@ export class RosterService {
       throw new NotFoundException(`Roster with ID ${id} not found`);
     }
 
-    await this.prismaClient.roster.delete({
+    await this.prisma.roster.delete({
       where: { id },
     });
   }
