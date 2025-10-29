@@ -1,17 +1,12 @@
 import {
   Injectable,
   NotFoundException,
-  ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { ScheduleResponseDto } from './dto/schedule-response.dto';
-
-interface PrismaError extends Error {
-  code?: string;
-}
 
 @Injectable()
 export class ScheduleService {
@@ -21,21 +16,6 @@ export class ScheduleService {
     createScheduleDto: CreateScheduleDto,
     currentUserId: number,
   ): Promise<ScheduleResponseDto> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: currentUserId },
-      select: { employeeId: true },
-    });
-
-    if (!user?.employeeId) {
-      throw new ForbiddenException('User must be associated with an employee');
-    }
-
-    if (createScheduleDto.employeeId !== user.employeeId) {
-      throw new ForbiddenException(
-        'Employees can only create schedules for themselves',
-      );
-    }
-
     // Validate that shift and branch exist and are compatible
     const shift = await this.prisma.shift.findUnique({
       where: { id: createScheduleDto.shiftId },
@@ -52,70 +32,25 @@ export class ScheduleService {
       );
     }
 
-    // Validate employee exists and works at the branch
-    const employee = await this.prisma.employee.findUnique({
-      where: { id: createScheduleDto.employeeId },
-      include: {
-        branches: {
-          where: { branchId: createScheduleDto.branchId },
-        },
+    const schedule = await this.prisma.schedule.create({
+      data: {
+        shiftId: createScheduleDto.shiftId,
+        branchId: createScheduleDto.branchId,
+        name: shift.name,
+        abbreviation: shift.abbreviation,
+        maxSlots: shift.maxSlots,
+        workDate: new Date(createScheduleDto.workDate),
+        startTime: new Date(createScheduleDto.startTime),
+        endTime: new Date(createScheduleDto.endTime),
+        status: createScheduleDto.status,
+        note: createScheduleDto.note,
+        createdBy: currentUserId,
+        updatedBy: currentUserId,
       },
+      include: {},
     });
 
-    if (!employee) {
-      throw new BadRequestException('Employee not found');
-    }
-
-    if (employee.branches.length === 0) {
-      throw new BadRequestException(
-        'Employee does not work at the specified branch',
-      );
-    }
-
-    try {
-      const schedule = await this.prisma.schedule.create({
-        data: {
-          shiftId: createScheduleDto.shiftId,
-          employeeId: createScheduleDto.employeeId,
-          branchId: createScheduleDto.branchId,
-          startTime: new Date(createScheduleDto.startTime),
-          endTime: new Date(createScheduleDto.endTime),
-          note: createScheduleDto.note,
-          createdBy: currentUserId,
-          updatedBy: currentUserId,
-        },
-        include: {
-          shift: {
-            select: {
-              name: true,
-              abbreviation: true,
-            },
-          },
-          employee: {
-            select: {
-              fullName: true,
-            },
-          },
-          branch: {
-            select: {
-              name: true,
-              abbreviation: true,
-            },
-          },
-        },
-      });
-
-      return new ScheduleResponseDto(schedule);
-    } catch (error) {
-      const prismaError = error as PrismaError;
-      if (prismaError.code === 'P2002') {
-        throw new BadRequestException('Schedule conflict detected');
-      }
-      if (prismaError.code === 'P2003') {
-        throw new BadRequestException('Invalid reference data');
-      }
-      throw error;
-    }
+    return new ScheduleResponseDto(schedule);
   }
 
   async findAll(
@@ -124,15 +59,6 @@ export class ScheduleService {
     start: Date,
     end: Date,
   ): Promise<ScheduleResponseDto[]> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: currentUserId },
-      select: { employeeId: true },
-    });
-
-    if (!user?.employeeId) {
-      throw new ForbiddenException('User must be associated with an employee');
-    }
-
     const schedules = await this.prisma.schedule.findMany({
       where: {
         startTime: {
@@ -142,27 +68,8 @@ export class ScheduleService {
           lte: end,
         },
         branchId,
-        employeeId: user.employeeId,
       },
-      include: {
-        shift: {
-          select: {
-            name: true,
-            abbreviation: true,
-          },
-        },
-        employee: {
-          select: {
-            fullName: true,
-          },
-        },
-        branch: {
-          select: {
-            name: true,
-            abbreviation: true,
-          },
-        },
-      },
+      include: {},
       orderBy: {
         startTime: 'asc',
       },
@@ -171,41 +78,14 @@ export class ScheduleService {
     return schedules.map((schedule) => new ScheduleResponseDto(schedule));
   }
 
-  async findOne(id: number, userId: number): Promise<ScheduleResponseDto> {
+  async findOne(id: number): Promise<ScheduleResponseDto> {
     const schedule = await this.prisma.schedule.findUnique({
       where: { id },
-      include: {
-        shift: {
-          select: {
-            name: true,
-            abbreviation: true,
-          },
-        },
-        employee: {
-          select: {
-            fullName: true,
-          },
-        },
-        branch: {
-          select: {
-            name: true,
-            abbreviation: true,
-          },
-        },
-      },
+      include: {},
     });
 
     if (!schedule) {
       throw new NotFoundException('Schedule not found');
-    }
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { employeeId: true },
-    });
-
-    if (!user?.employeeId || user.employeeId !== schedule.employeeId) {
-      throw new ForbiddenException('Access denied');
     }
 
     return new ScheduleResponseDto(schedule);
@@ -224,15 +104,6 @@ export class ScheduleService {
       throw new NotFoundException('Schedule not found');
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: currentUserId },
-      select: { employeeId: true },
-    });
-
-    if (!user?.employeeId || user.employeeId !== schedule.employeeId) {
-      throw new ForbiddenException('Access denied');
-    }
-
     const updateData: Record<string, any> = {
       updatedBy: currentUserId,
     };
@@ -243,6 +114,14 @@ export class ScheduleService {
 
     if (updateScheduleDto.endTime) {
       updateData.endTime = new Date(updateScheduleDto.endTime);
+    }
+
+    if (updateScheduleDto.workDate) {
+      updateData.workDate = new Date(updateScheduleDto.workDate);
+    }
+
+    if (updateScheduleDto.status !== undefined) {
+      updateData.status = updateScheduleDto.status;
     }
 
     if (updateScheduleDto.note !== undefined) {
@@ -270,47 +149,22 @@ export class ScheduleService {
 
       updateData.shiftId = shiftId;
       updateData.branchId = branchId;
+      // also update denormalized fields from shift
+      updateData.name = shift.name;
+      updateData.abbreviation = shift.abbreviation;
+      updateData.maxSlots = shift.maxSlots;
     }
 
-    try {
-      const updatedSchedule = await this.prisma.schedule.update({
-        where: { id },
-        data: updateData,
-        include: {
-          shift: {
-            select: {
-              name: true,
-              abbreviation: true,
-            },
-          },
-          employee: {
-            select: {
-              fullName: true,
-            },
-          },
-          branch: {
-            select: {
-              name: true,
-              abbreviation: true,
-            },
-          },
-        },
-      });
+    const updatedSchedule = await this.prisma.schedule.update({
+      where: { id },
+      data: updateData,
+      include: {},
+    });
 
-      return new ScheduleResponseDto(updatedSchedule);
-    } catch (error) {
-      const prismaError = error as PrismaError;
-      if (prismaError.code === 'P2002') {
-        throw new BadRequestException('Schedule conflict detected');
-      }
-      throw error;
-    }
+    return new ScheduleResponseDto(updatedSchedule);
   }
 
-  async remove(
-    id: number,
-    currentUserId: number,
-  ): Promise<{ message: string }> {
+  async remove(id: number): Promise<{ message: string }> {
     const schedule = await this.prisma.schedule.findUnique({
       where: { id },
     });
@@ -319,14 +173,7 @@ export class ScheduleService {
       throw new NotFoundException('Schedule not found');
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: currentUserId },
-      select: { employeeId: true },
-    });
-
-    if (!user?.employeeId || user.employeeId !== schedule.employeeId) {
-      throw new ForbiddenException('Access denied');
-    }
+    // No employee ownership on Schedule after schema change
 
     await this.prisma.schedule.delete({
       where: { id },

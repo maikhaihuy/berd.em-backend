@@ -13,11 +13,12 @@ import { PermissionsModule } from './modules/permissions/permissions.module';
 import { EmployeeHourlyRatesModule } from '@modules/employee-hourly-rates/employee-hourly-rates.module';
 import { AvailabilityModule } from '@modules/availability/availability.module';
 import { ScheduleModule } from '@modules/schedule/schedule.module';
-import { RostersModule } from './rosters/rosters.module';
 import { RosterModule } from './modules/roster/roster.module';
+import { ExceptionModule } from '@common/exception.module';
 
 @Module({
   imports: [
+    ExceptionModule,
     EmployeeHourlyRatesModule,
     ConfigModule.forRoot({
       isGlobal: true,
@@ -35,7 +36,6 @@ import { RosterModule } from './modules/roster/roster.module';
     BranchesModule,
     AvailabilityModule,
     ScheduleModule,
-    RostersModule,
     RosterModule,
   ],
   // providers: [

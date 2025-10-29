@@ -41,5 +41,4 @@ export class CreateScheduleDto {
   @IsOptional()
   @IsString()
   note?: string;
-  employeeId: number;
 }

@@ -1,4 +1,3 @@
-// src/common/filters/global-exception.filter.ts
 import {
   ExceptionFilter,
   Catch,
@@ -7,28 +6,39 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import * as Sentry from '@sentry/node';
+import { Response } from 'express';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
-    const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
+    const res = ctx.getResponse<Response>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let body: any = { message: 'Internal server error' };
+    let message = 'Internal server error';
+    let source = 'Application';
+    let details: unknown;
 
     if (exception instanceof HttpException) {
+      const body = exception.getResponse();
       status = exception.getStatus();
-      const res = exception.getResponse();
-      body = typeof res === 'string' ? { message: res } : res;
+      if (typeof body === 'object' && body !== null) {
+        const payload = body as Record<string, unknown>;
+        const maybeMessage = payload.message;
+        const maybeSource = payload.source;
+        message =
+          typeof maybeMessage === 'string' ? maybeMessage : exception.message;
+        source = typeof maybeSource === 'string' ? maybeSource : source;
+        details = Object.prototype.hasOwnProperty.call(payload, 'details')
+          ? payload.details
+          : details;
+      } else {
+        message = exception.message;
+      }
     }
 
-    // 🧠 chỉ log lỗi thật sự (500+, hoặc non-HttpException)
-    const shouldLogToSentry =
-      !(exception instanceof HttpException) || status >= 500;
-
-    if (shouldLogToSentry) {
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       Sentry.captureException(exception, {
         tags: { layer: 'GlobalException' },
         extra: {
@@ -40,11 +50,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       });
     }
 
-    response.status(status).json({
+    res.status(status).json({
       statusCode: status,
-      path: request.url,
+      message,
+      source,
+      details,
       timestamp: new Date().toISOString(),
-      ...body,
     });
   }
 }

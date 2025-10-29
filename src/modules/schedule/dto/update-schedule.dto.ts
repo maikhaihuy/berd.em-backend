@@ -30,7 +30,7 @@ export class UpdateScheduleDto {
   @ApiProperty({ description: 'Date of the schedule', required: false })
   @IsOptional()
   @IsDateString()
-  workDate: string;
+  workDate?: string;
 
   @ApiProperty({
     description: 'Start time of the schedule',
@@ -50,7 +50,7 @@ export class UpdateScheduleDto {
 
   @ApiProperty({ description: 'Status of the schedule', required: false })
   @IsOptional()
-  status: ScheduleStatus;
+  status?: ScheduleStatus;
 
   @ApiProperty({
     description: 'Optional note for the schedule',

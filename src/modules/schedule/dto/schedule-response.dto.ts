@@ -46,36 +46,6 @@ export class ScheduleResponseDto {
   @ApiProperty({ description: 'Last update timestamp' })
   updatedAt: Date;
 
-  @ApiProperty({
-    description: 'Shift name (optional)',
-    required: false,
-  })
-  shiftName?: string;
-
-  @ApiProperty({
-    description: 'Employee name (optional)',
-    required: false,
-  })
-  employeeName?: string;
-
-  @ApiProperty({
-    description: 'Branch name (optional)',
-    required: false,
-  })
-  branchName?: string;
-
-  @ApiProperty({
-    description: 'Shift abbreviation (optional)',
-    required: false,
-  })
-  shiftAbbreviation?: string;
-
-  @ApiProperty({
-    description: 'Branch abbreviation (optional)',
-    required: false,
-  })
-  branchAbbreviation?: string;
-
   constructor(partial: Partial<Schedule>) {
     Object.assign(this, partial);
   }

@@ -1,18 +1,10 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { CreateRosterDto } from './dto/create-roster.dto';
 import { UpdateRosterDto } from './dto/update-roster.dto';
 import { RosterResponseDto } from './dto/roster-response.dto';
 import { getStartAndEndInWeek } from '@common/helpers/date.helper';
 import { Prisma } from '@prisma/client';
-
-interface PrismaError extends Error {
-  code?: string;
-}
 
 @Injectable()
 export class RosterService {
@@ -22,43 +14,32 @@ export class RosterService {
     createRosterDto: CreateRosterDto,
     currentUserId: number,
   ): Promise<RosterResponseDto> {
-    try {
-      const newRoster = {
-        scheduleId: createRosterDto.scheduleId,
-        employeeId: createRosterDto.employeeId,
-        actualStartTime: createRosterDto.actualStartTime,
-        actualEndTime: createRosterDto.actualEndTime,
-        note: createRosterDto.note,
-        assignedAt: createRosterDto.assignedAt,
-        status: createRosterDto.status,
-        createdBy: currentUserId,
-        updatedBy: currentUserId,
-      };
+    const newRoster = {
+      scheduleId: createRosterDto.scheduleId,
+      employeeId: createRosterDto.employeeId,
+      actualStartTime: createRosterDto.actualStartTime,
+      actualEndTime: createRosterDto.actualEndTime,
+      note: createRosterDto.note,
+      assignedAt: createRosterDto.assignedAt,
+      status: createRosterDto.status,
+      createdBy: currentUserId,
+      updatedBy: currentUserId,
+    };
 
-      const roster = await this.prisma.roster.create({
-        data: newRoster,
-        include: {
-          schedule: {
-            include: {
-              shift: true,
-              branch: true,
-            },
+    const roster = await this.prisma.roster.create({
+      data: newRoster,
+      include: {
+        schedule: {
+          include: {
+            shift: true,
+            branch: true,
           },
-          employee: true,
         },
-      });
+        employee: true,
+      },
+    });
 
-      return roster as RosterResponseDto;
-    } catch (error) {
-      const prismaError = error as PrismaError;
-      if (prismaError.code === 'P2002') {
-        throw new BadRequestException('Schedule conflict detected');
-      }
-      if (prismaError.code === 'P2003') {
-        throw new BadRequestException('Invalid reference data');
-      }
-      throw error;
-    }
+    return roster as RosterResponseDto;
   }
 
   async findAll(
@@ -144,35 +125,24 @@ export class RosterService {
       throw new NotFoundException(`Roster with ID ${id} not found`);
     }
 
-    try {
-      const roster = await this.prisma.roster.update({
-        where: { id },
-        data: {
-          ...updateRosterDto,
-          updatedBy: currentUserId,
-        },
-        include: {
-          schedule: {
-            include: {
-              shift: true,
-              branch: true,
-            },
+    const roster = await this.prisma.roster.update({
+      where: { id },
+      data: {
+        ...updateRosterDto,
+        updatedBy: currentUserId,
+      },
+      include: {
+        schedule: {
+          include: {
+            shift: true,
+            branch: true,
           },
-          employee: true,
         },
-      });
+        employee: true,
+      },
+    });
 
-      return roster as RosterResponseDto;
-    } catch (error) {
-      const prismaError = error as PrismaError;
-      if (prismaError.code === 'P2002') {
-        throw new BadRequestException('Schedule conflict detected');
-      }
-      if (prismaError.code === 'P2003') {
-        throw new BadRequestException('Invalid reference data');
-      }
-      throw error;
-    }
+    return roster as RosterResponseDto;
   }
 
   async remove(id: number): Promise<void> {

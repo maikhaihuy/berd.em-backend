@@ -2,7 +2,7 @@
 import { Module, ValidationPipe } from '@nestjs/common';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import * as Sentry from '@sentry/node';
-import { ProfilingIntegration } from '@sentry/profiling-node';
+import { nodeProfilingIntegration } from '@sentry/profiling-node';
 
 import { PrismaExceptionFilter } from './filters/prisma-exception.filter';
 import { GlobalExceptionFilter } from './filters/global-exception.filter';
@@ -39,22 +39,26 @@ import { LoggerService } from './logger/logger.service';
     // === Global Filter ===
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },
   ],
+  exports: [LoggerService],
 })
 export class ExceptionModule {
-  constructor() {
+  constructor(private readonly logger: LoggerService) {
     // Init Sentry khi module load
     if (!Sentry.isInitialized()) {
       Sentry.init({
         dsn: process.env.SENTRY_DSN,
         environment: process.env.NODE_ENV || 'development',
+        // ✅ Sentry v10 style integrations
         integrations: [
-          new Sentry.Integrations.Http({ tracing: true }),
-          new ProfilingIntegration(),
+          Sentry.httpIntegration(),
+          Sentry.expressIntegration(),
+          nodeProfilingIntegration(),
         ],
+        // ✅ Config sample rates
         tracesSampleRate: 1.0,
         profilesSampleRate: 1.0,
       });
-      console.log('[ExceptionModule] Sentry initialized');
+      this.logger.log('✅ Sentry initialized (v10.x)', 'ExceptionModule');
     }
   }
 }
