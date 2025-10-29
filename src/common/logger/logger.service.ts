@@ -43,7 +43,7 @@ export class LoggerService extends ConsoleLogger {
     }
   }
 
-  private formatMessage(message: any, context?: string) {
+  protected formatMessage(message: any, context?: string) {
     const prefix = context ? `[${context}]` : '';
     if (typeof message === 'object') {
       try {

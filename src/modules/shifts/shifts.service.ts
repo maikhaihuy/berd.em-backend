@@ -8,12 +8,15 @@ import { ShiftResponseDto } from './dto/shift-response.dto';
 export class ShiftsService {
   constructor(private prisma: PrismaService) {}
 
-  async create(createShiftDto: CreateShiftDto): Promise<ShiftResponseDto> {
+  async create(
+    createShiftDto: CreateShiftDto,
+    currentUserId: number,
+  ): Promise<ShiftResponseDto> {
     const shift = await this.prisma.shift.create({
       data: {
         ...createShiftDto,
-        createdBy: 1,
-        updatedBy: 1,
+        createdBy: currentUserId,
+        updatedBy: currentUserId,
       },
     });
     return new ShiftResponseDto(shift);
@@ -37,10 +40,14 @@ export class ShiftsService {
   async update(
     id: number,
     updateShiftDto: UpdateShiftDto,
+    currentUserId: number,
   ): Promise<ShiftResponseDto> {
     const shift = await this.prisma.shift.update({
       where: { id },
-      data: updateShiftDto,
+      data: {
+        ...updateShiftDto,
+        updatedBy: currentUserId,
+      },
     });
     return new ShiftResponseDto(shift);
   }

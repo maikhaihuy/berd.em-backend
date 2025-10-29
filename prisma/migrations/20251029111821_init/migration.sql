@@ -2,13 +2,22 @@
 CREATE TYPE "public"."UserStatus" AS ENUM ('ACTIVE', 'INACTIVE');
 
 -- CreateEnum
-CREATE TYPE "public"."LeaveStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
+CREATE TYPE "public"."LeaveStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED');
 
 -- CreateEnum
 CREATE TYPE "public"."TimeLogStatus" AS ENUM ('PENDING', 'SUBMITTED', 'ADJUSTMENT_REQUESTED', 'REJECT', 'VERIFIED');
 
 -- CreateEnum
 CREATE TYPE "public"."PayPeriodStatus" AS ENUM ('OPEN', 'CLOSED', 'FINALIZED');
+
+-- CreateEnum
+CREATE TYPE "public"."ShiftStatus" AS ENUM ('DRAFT', 'ACTIVE', 'INACTIVE', 'ARCHIVED');
+
+-- CreateEnum
+CREATE TYPE "public"."ScheduleStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'LOCKED', 'CANCELLED', 'COMPLETED');
+
+-- CreateEnum
+CREATE TYPE "public"."RosterStatus" AS ENUM ('ASSIGNED', 'PENDING', 'SCHEDULED', 'COMPLETED', 'ABSENT');
 
 -- CreateTable
 CREATE TABLE "public"."User" (
@@ -101,6 +110,7 @@ CREATE TABLE "public"."Shift" (
     "startTime" TIMESTAMP(3) NOT NULL,
     "endTime" TIMESTAMP(3) NOT NULL,
     "multiplier" DECIMAL(65,30) NOT NULL,
+    "status" "public"."ShiftStatus" NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdBy" INTEGER NOT NULL,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -171,10 +181,14 @@ CREATE TABLE "public"."Availability" (
 CREATE TABLE "public"."Schedule" (
     "id" SERIAL NOT NULL,
     "shiftId" INTEGER NOT NULL,
-    "employeeId" INTEGER NOT NULL,
     "branchId" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "abbreviation" TEXT NOT NULL,
+    "maxSlots" INTEGER NOT NULL,
+    "workDate" TIMESTAMP(3) NOT NULL,
     "startTime" TIMESTAMP(3) NOT NULL,
     "endTime" TIMESTAMP(3) NOT NULL,
+    "status" "public"."ScheduleStatus" NOT NULL,
     "note" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdBy" INTEGER NOT NULL,
@@ -185,14 +199,34 @@ CREATE TABLE "public"."Schedule" (
 );
 
 -- CreateTable
-CREATE TABLE "public"."LeaveRequest" (
+CREATE TABLE "public"."Roster" (
     "id" SERIAL NOT NULL,
     "scheduleId" INTEGER NOT NULL,
+    "employeeId" INTEGER NOT NULL,
+    "assignedAt" TIMESTAMP(3) NOT NULL,
+    "actualStartTime" TIMESTAMP(3),
+    "actualEndTime" TIMESTAMP(3),
+    "status" "public"."RosterStatus" NOT NULL,
+    "note" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdBy" INTEGER NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedBy" INTEGER NOT NULL,
+
+    CONSTRAINT "Roster_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "public"."LeaveRequest" (
+    "id" SERIAL NOT NULL,
+    "rosterId" INTEGER NOT NULL,
     "absenceEmployeeId" INTEGER NOT NULL,
     "replacementEmployeeId" INTEGER NOT NULL,
-    "reason" TEXT NOT NULL,
-    "approverId" INTEGER NOT NULL,
+    "approvedId" INTEGER,
+    "reason" TEXT,
+    "note" TEXT,
     "status" "public"."LeaveStatus" NOT NULL,
+    "approvedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdBy" INTEGER NOT NULL,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -204,7 +238,7 @@ CREATE TABLE "public"."LeaveRequest" (
 -- CreateTable
 CREATE TABLE "public"."TimeLog" (
     "id" SERIAL NOT NULL,
-    "scheduleId" INTEGER NOT NULL,
+    "rosterId" INTEGER NOT NULL,
     "employeeId" INTEGER NOT NULL,
     "actualStartTime" TIMESTAMP(3),
     "actualEndTime" TIMESTAMP(3),
@@ -260,14 +294,14 @@ CREATE TABLE "public"."PayrollEntry" (
 );
 
 -- CreateTable
-CREATE TABLE "public"."ScheduleHistory" (
+CREATE TABLE "public"."RosterHistory" (
     "id" SERIAL NOT NULL,
-    "shiftScheduleId" INTEGER NOT NULL,
+    "rosterId" INTEGER NOT NULL,
     "changedById" INTEGER NOT NULL,
     "changeDetails" JSONB NOT NULL,
     "changedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "ScheduleHistory_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "RosterHistory_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -335,13 +369,16 @@ ALTER TABLE "public"."Availability" ADD CONSTRAINT "Availability_employeeId_fkey
 ALTER TABLE "public"."Schedule" ADD CONSTRAINT "Schedule_shiftId_fkey" FOREIGN KEY ("shiftId") REFERENCES "public"."Shift"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."Schedule" ADD CONSTRAINT "Schedule_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "public"."Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "public"."Schedule" ADD CONSTRAINT "Schedule_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES "public"."Branch"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."LeaveRequest" ADD CONSTRAINT "LeaveRequest_scheduleId_fkey" FOREIGN KEY ("scheduleId") REFERENCES "public"."Schedule"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."Roster" ADD CONSTRAINT "Roster_scheduleId_fkey" FOREIGN KEY ("scheduleId") REFERENCES "public"."Schedule"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."Roster" ADD CONSTRAINT "Roster_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "public"."Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."LeaveRequest" ADD CONSTRAINT "LeaveRequest_rosterId_fkey" FOREIGN KEY ("rosterId") REFERENCES "public"."Roster"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."LeaveRequest" ADD CONSTRAINT "LeaveRequest_absenceEmployeeId_fkey" FOREIGN KEY ("absenceEmployeeId") REFERENCES "public"."Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -350,7 +387,7 @@ ALTER TABLE "public"."LeaveRequest" ADD CONSTRAINT "LeaveRequest_absenceEmployee
 ALTER TABLE "public"."LeaveRequest" ADD CONSTRAINT "LeaveRequest_replacementEmployeeId_fkey" FOREIGN KEY ("replacementEmployeeId") REFERENCES "public"."Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."TimeLog" ADD CONSTRAINT "TimeLog_scheduleId_fkey" FOREIGN KEY ("scheduleId") REFERENCES "public"."Schedule"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."TimeLog" ADD CONSTRAINT "TimeLog_rosterId_fkey" FOREIGN KEY ("rosterId") REFERENCES "public"."Roster"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."TimeLog" ADD CONSTRAINT "TimeLog_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "public"."Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -368,7 +405,7 @@ ALTER TABLE "public"."PayrollEntry" ADD CONSTRAINT "PayrollEntry_employeeId_fkey
 ALTER TABLE "public"."PayrollEntry" ADD CONSTRAINT "PayrollEntry_payPeriodId_fkey" FOREIGN KEY ("payPeriodId") REFERENCES "public"."PayPeriod"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."ScheduleHistory" ADD CONSTRAINT "ScheduleHistory_shiftScheduleId_fkey" FOREIGN KEY ("shiftScheduleId") REFERENCES "public"."Schedule"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."RosterHistory" ADD CONSTRAINT "RosterHistory_rosterId_fkey" FOREIGN KEY ("rosterId") REFERENCES "public"."Roster"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."_UserRoles" ADD CONSTRAINT "_UserRoles_A_fkey" FOREIGN KEY ("A") REFERENCES "public"."Role"("id") ON DELETE CASCADE ON UPDATE CASCADE;

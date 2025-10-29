@@ -16,6 +16,8 @@ import { UpdateShiftDto } from './dto/update-shift.dto';
 import { ShiftResponseDto } from './dto/shift-response.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { JwtAccessGuard } from '../../common/guards/jwt-access.guard';
+import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
+import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 
 @ApiTags('shifts')
 @UseGuards(JwtAccessGuard)
@@ -33,8 +35,9 @@ export class ShiftsController {
   @ApiBody({ type: CreateShiftDto })
   async create(
     @Body() createShiftDto: CreateShiftDto,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ): Promise<ShiftResponseDto> {
-    return await this.shiftsService.create(createShiftDto);
+    return await this.shiftsService.create(createShiftDto, currentUser.id);
   }
 
   @Get()
@@ -72,8 +75,9 @@ export class ShiftsController {
   async update(
     @Param('id') id: string,
     @Body() updateShiftDto: UpdateShiftDto,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ): Promise<ShiftResponseDto> {
-    return await this.shiftsService.update(+id, updateShiftDto);
+    return await this.shiftsService.update(+id, updateShiftDto, currentUser.id);
   }
 
   @Delete(':id')

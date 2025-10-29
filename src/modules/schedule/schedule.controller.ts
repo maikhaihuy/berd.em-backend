@@ -75,11 +75,8 @@ export class ScheduleController {
   })
   @ApiResponse({ status: 404, description: 'Schedule not found' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  findOne(
-    @Param('id', ParseIntPipe) id: number,
-    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
-  ): Promise<ScheduleResponseDto> {
-    return this.scheduleService.findOne(id, currentUser.id);
+  findOne(@Param('id', ParseIntPipe) id: number): Promise<ScheduleResponseDto> {
+    return this.scheduleService.findOne(id);
   }
 
   @Patch(':id')
@@ -107,10 +104,7 @@ export class ScheduleController {
   })
   @ApiResponse({ status: 404, description: 'Schedule not found' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  remove(
-    @Param('id', ParseIntPipe) id: number,
-    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
-  ): Promise<{ message: string }> {
-    return this.scheduleService.remove(id, currentUser.id);
+  remove(@Param('id', ParseIntPipe) id: number): Promise<{ message: string }> {
+    return this.scheduleService.remove(id);
   }
 }
