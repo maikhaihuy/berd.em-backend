@@ -17,7 +17,10 @@ CREATE TYPE "public"."ShiftStatus" AS ENUM ('DRAFT', 'ACTIVE', 'INACTIVE', 'ARCH
 CREATE TYPE "public"."ScheduleStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'LOCKED', 'CANCELLED', 'COMPLETED');
 
 -- CreateEnum
-CREATE TYPE "public"."RosterStatus" AS ENUM ('ASSIGNED', 'PENDING', 'SCHEDULED', 'COMPLETED', 'ABSENT');
+CREATE TYPE "public"."RosterStatus" AS ENUM ('PENDING', 'SCHEDULED', 'REJECTED', 'FINISHED', 'ABSENT');
+
+-- CreateEnum
+CREATE TYPE "public"."RosterMode" AS ENUM ('REQUEST', 'ASSIGNED');
 
 -- CreateTable
 CREATE TABLE "public"."User" (
@@ -203,11 +206,13 @@ CREATE TABLE "public"."Roster" (
     "id" SERIAL NOT NULL,
     "scheduleId" INTEGER NOT NULL,
     "employeeId" INTEGER NOT NULL,
-    "assignedAt" TIMESTAMP(3) NOT NULL,
-    "actualStartTime" TIMESTAMP(3),
-    "actualEndTime" TIMESTAMP(3),
     "status" "public"."RosterStatus" NOT NULL,
+    "mode" "public"."RosterMode" NOT NULL,
+    "actualStartTime" TIMESTAMP(3) NOT NULL,
+    "actualEndTime" TIMESTAMP(3) NOT NULL,
     "note" TEXT,
+    "assignedAt" TIMESTAMP(3),
+    "assignedBy" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdBy" INTEGER NOT NULL,
     "updatedAt" TIMESTAMP(3) NOT NULL,

@@ -9,6 +9,7 @@ import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 import { UsersModule } from '../users/users.module';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
+import { JwtTokenService } from './jwt-token.service';
 
 @Module({
   imports: [
@@ -50,9 +51,10 @@ import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
     AuthService,
     RefreshTokenService,
     LocalStrategy,
+    JwtTokenService,
     JwtAccessStrategy,
     JwtRefreshStrategy,
   ],
-  exports: [AuthService, RefreshTokenService],
+  exports: [AuthService, RefreshTokenService, JwtTokenService],
 })
 export class AuthModule {}

@@ -4,7 +4,7 @@ import { CreateRosterDto } from './dto/create-roster.dto';
 import { UpdateRosterDto } from './dto/update-roster.dto';
 import { RosterResponseDto } from './dto/roster-response.dto';
 import { getStartAndEndInWeek } from '@common/helpers/date.helper';
-import { Prisma } from '@prisma/client';
+import { Prisma, RosterStatus, RosterMode } from '@prisma/client';
 
 @Injectable()
 export class RosterService {
@@ -14,20 +14,29 @@ export class RosterService {
     createRosterDto: CreateRosterDto,
     currentUserId: number,
   ): Promise<RosterResponseDto> {
-    const newRoster = {
-      scheduleId: createRosterDto.scheduleId,
-      employeeId: createRosterDto.employeeId,
-      actualStartTime: createRosterDto.actualStartTime,
-      actualEndTime: createRosterDto.actualEndTime,
-      note: createRosterDto.note,
-      assignedAt: createRosterDto.assignedAt,
-      status: createRosterDto.status,
-      createdBy: currentUserId,
-      updatedBy: currentUserId,
-    };
+    // Determine mode/status based on whether the current user is the same employee
+    const currentUser = await this.prisma.user.findUnique({
+      where: { id: currentUserId },
+      select: { employeeId: true },
+    });
+
+    const isSelfRequest =
+      currentUser?.employeeId != null &&
+      currentUser.employeeId === createRosterDto.employeeId;
+
+    const mode = isSelfRequest ? RosterMode.REQUEST : RosterMode.ASSIGNED;
+    const status = isSelfRequest
+      ? RosterStatus.PENDING
+      : RosterStatus.SCHEDULED;
 
     const roster = await this.prisma.roster.create({
-      data: newRoster,
+      data: {
+        ...createRosterDto,
+        mode,
+        status,
+        createdBy: currentUserId,
+        updatedBy: currentUserId,
+      },
       include: {
         schedule: {
           include: {
@@ -158,5 +167,41 @@ export class RosterService {
     await this.prisma.roster.delete({
       where: { id },
     });
+  }
+
+  async schedule(
+    id: number,
+    currentUserId: number,
+  ): Promise<RosterResponseDto> {
+    const roster = await this.prisma.roster.update({
+      where: { id },
+      data: { status: RosterStatus.SCHEDULED, updatedBy: currentUserId },
+      include: {
+        schedule: {
+          include: { shift: true, branch: true },
+        },
+        employee: true,
+      },
+    });
+
+    return roster as RosterResponseDto;
+  }
+
+  async unschedule(
+    id: number,
+    currentUserId: number,
+  ): Promise<RosterResponseDto> {
+    const roster = await this.prisma.roster.update({
+      where: { id },
+      data: { status: RosterStatus.PENDING, updatedBy: currentUserId },
+      include: {
+        schedule: {
+          include: { shift: true, branch: true },
+        },
+        employee: true,
+      },
+    });
+
+    return roster as RosterResponseDto;
   }
 }

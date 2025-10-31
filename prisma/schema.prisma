@@ -53,11 +53,16 @@ enum ScheduleStatus {
 }
 
 enum RosterStatus {
-  ASSIGNED
   PENDING
   SCHEDULED
-  COMPLETED
+  REJECTED
+  FINISHED
   ABSENT
+}
+
+enum RosterMode {
+  REQUEST
+  ASSIGNED
 }
 
 // --- MODELS ---
@@ -260,11 +265,13 @@ model Roster {
   employeeId     Int
   schedule       Schedule  @relation(fields: [scheduleId], references: [id])
   employee       Employee  @relation(fields: [employeeId], references: [id])
-  assignedAt     DateTime
-  actualStartTime DateTime?
-  actualEndTime  DateTime?
   status         RosterStatus
+  mode           RosterMode
+  actualStartTime DateTime
+  actualEndTime  DateTime
   note           String?
+  assignedAt     DateTime?
+  assignedBy     Int?
   createdAt      DateTime  @default(now())
   createdBy      Int
   updatedAt      DateTime  @updatedAt

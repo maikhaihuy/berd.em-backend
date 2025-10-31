@@ -8,11 +8,15 @@ import {
   Delete,
   Query,
   ParseIntPipe,
+  Put,
 } from '@nestjs/common';
 import { RosterService } from './roster.service';
 import { CreateRosterDto } from './dto/create-roster.dto';
 import { UpdateRosterDto } from './dto/update-roster.dto';
 import { RosterResponseDto } from './dto/roster-response.dto';
+import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
+import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
+import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 
 @Controller('rosters')
 export class RosterController {
@@ -21,12 +25,9 @@ export class RosterController {
   @Post()
   async create(
     @Body() createRosterDto: CreateRosterDto,
-    // TODO: Add authentication decorator to get current user
-    // @AuthenticatedUser() user: AuthenticatedUserDto,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ): Promise<RosterResponseDto> {
-    // TODO: Replace with actual user ID from authentication
-    const currentUserId = 1;
-    return this.rosterService.create(createRosterDto, currentUserId);
+    return this.rosterService.create(createRosterDto, currentUser.id);
   }
 
   @Get()
@@ -48,16 +49,45 @@ export class RosterController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateRosterDto: UpdateRosterDto,
-    // TODO: Add authentication decorator to get current user
-    // @AuthenticatedUser() user: AuthenticatedUserDto,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ): Promise<RosterResponseDto> {
-    // TODO: Replace with actual user ID from authentication
-    const currentUserId = 1;
-    return this.rosterService.update(id, updateRosterDto, currentUserId);
+    return this.rosterService.update(id, updateRosterDto, currentUser.id);
   }
 
   @Delete(':id')
   async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
     return this.rosterService.remove(id);
+  }
+
+  @Put(':id/schedule')
+  @ApiOperation({ summary: 'Schedule a roster' })
+  @ApiResponse({
+    status: 200,
+    description: 'Roster updated successfully',
+    type: RosterResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Roster not found' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  schedule(
+    @Param('id', ParseIntPipe) id: number,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
+  ): Promise<RosterResponseDto> {
+    return this.rosterService.schedule(id, currentUser.id);
+  }
+
+  @Put(':id/unschedule')
+  @ApiOperation({ summary: 'Unschedule a roster' })
+  @ApiResponse({
+    status: 200,
+    description: 'Roster updated successfully',
+    type: RosterResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Roster not found' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  unpublish(
+    @Param('id', ParseIntPipe) id: number,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
+  ): Promise<RosterResponseDto> {
+    return this.rosterService.unschedule(id, currentUser.id);
   }
 }

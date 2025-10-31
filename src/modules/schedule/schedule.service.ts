@@ -7,6 +7,8 @@ import { PrismaService } from '@modules/prisma/prisma.service';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { ScheduleResponseDto } from './dto/schedule-response.dto';
+import { RosterStatus, ScheduleStatus } from '@prisma/client';
+import { SchduleWithRostersResponseDto } from './dto/schedule-with-rosters-response.dto';
 
 @Injectable()
 export class ScheduleService {
@@ -180,5 +182,62 @@ export class ScheduleService {
     });
 
     return { message: 'Schedule deleted successfully' };
+  }
+
+  private async updatePublishState(
+    id: number,
+    currentUserId: number,
+    publish: boolean,
+  ): Promise<SchduleWithRostersResponseDto> {
+    const targetScheduleStatus = publish
+      ? ScheduleStatus.PUBLISHED
+      : ScheduleStatus.DRAFT;
+    const fromRosterStatus = publish
+      ? RosterStatus.PENDING
+      : RosterStatus.REJECTED;
+    const toRosterStatus = publish
+      ? RosterStatus.REJECTED
+      : RosterStatus.PENDING;
+
+    const updatedSchedule = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.schedule.findUnique({ where: { id } });
+      if (!existing) {
+        throw new NotFoundException('Schedule not found');
+      }
+
+      const schedule = await tx.schedule.update({
+        where: { id },
+        data: {
+          status: targetScheduleStatus,
+          updatedBy: currentUserId,
+        },
+        include: {
+          rosters: true, // becareful
+        },
+      });
+
+      await tx.roster.updateMany({
+        where: { scheduleId: id, status: fromRosterStatus },
+        data: { status: toRosterStatus, updatedBy: currentUserId },
+      });
+
+      return schedule;
+    });
+
+    return new SchduleWithRostersResponseDto(updatedSchedule);
+  }
+
+  async publish(
+    id: number,
+    currentUserId: number,
+  ): Promise<SchduleWithRostersResponseDto> {
+    return this.updatePublishState(id, currentUserId, true);
+  }
+
+  async unpublish(
+    id: number,
+    currentUserId: number,
+  ): Promise<SchduleWithRostersResponseDto> {
+    return this.updatePublishState(id, currentUserId, false);
   }
 }

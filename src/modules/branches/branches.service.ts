@@ -7,9 +7,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateBranchDto } from './dto/create-branch.dto';
 import { UpdateBranchDto } from './dto/update-branch.dto';
 import { BranchResponseDto } from './dto/branch-response.dto';
-import { Prisma } from '@prisma/client';
+import { Prisma, Schedule, ShiftStatus } from '@prisma/client';
 import { ShiftResponseDto } from '@modules/shifts/dto/shift-response.dto';
 import { UpsertShiftDto } from '@modules/shifts/dto/upsert-shift.dto';
+import { ScheduleResponseDto } from '@modules/schedule/dto/schedule-response.dto';
+import { getDateInWeek } from '@common/helpers/date.helper';
 
 @Injectable()
 export class BranchesService {
@@ -86,6 +88,57 @@ export class BranchesService {
       }
       throw error;
     }
+  }
+
+  async generateSchedules(
+    branchId: number,
+    date?: Date,
+  ): Promise<ScheduleResponseDto[]> {
+    const targetDate = date ?? new Date();
+
+    const shifts = await this.prisma.shift.findMany({
+      where: { branchId, status: ShiftStatus.ACTIVE },
+    });
+    if (!shifts.length) return [];
+
+    const days = getDateInWeek(targetDate);
+
+    const existingSchedules = await this.prisma.schedule.findMany({
+      where: {
+        branchId,
+        workDate: { in: days },
+      },
+    });
+    const existingKey = new Set(
+      existingSchedules.map(
+        (s) => `${s.shiftId}|${new Date(s.workDate).getTime()}`,
+      ),
+    );
+    const schedules = days.flatMap((day) =>
+      shifts.map(
+        (shift) =>
+          ({
+            branchId,
+            shiftId: shift.id,
+            name: shift.name,
+            abbreviation: shift.abbreviation,
+            maxSlots: shift.maxSlots,
+            startTime: shift.startTime,
+            endTime: shift.endTime,
+            workDate: day,
+          }) as Schedule,
+      ),
+    );
+
+    const schedulesToCreate = schedules.filter(
+      (s) => !existingKey.has(`${s.shiftId}|${new Date(s.workDate).getTime()}`),
+    );
+
+    await this.prisma.schedule.createMany({
+      data: schedulesToCreate,
+    });
+
+    return schedules as ScheduleResponseDto[];
   }
 
   async syncShifts(

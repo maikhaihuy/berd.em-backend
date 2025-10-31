@@ -10,6 +10,7 @@ import {
   HttpStatus,
   UseGuards,
   Put,
+  Query,
 } from '@nestjs/common';
 import { BranchesService } from './branches.service';
 import { CreateBranchDto } from './dto/create-branch.dto';
@@ -19,6 +20,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { JwtAccessGuard } from '../../common/guards/jwt-access.guard';
 import { ShiftResponseDto } from '@modules/shifts/dto/shift-response.dto';
 import { UpsertShiftDto } from '@modules/shifts/dto/upsert-shift.dto';
+import { ScheduleResponseDto } from '@modules/schedule/dto/schedule-response.dto';
 
 @ApiTags('branches')
 @UseGuards(JwtAccessGuard)
@@ -115,6 +117,22 @@ export class BranchesController {
   @ApiResponse({ status: 404, description: 'Branch not found.' })
   async remove(@Param('id') id: string): Promise<void> {
     await this.branchesService.remove(+id);
+  }
+
+  @Post(':id/schedule-generation')
+  @ApiOperation({
+    summary: 'Generate schedules for a specified branch',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Schedules have been successfully generated.',
+    type: [ScheduleResponseDto],
+  })
+  async generateSchedules(
+    @Param('id') branchId: number,
+    @Query('date') date?: Date,
+  ): Promise<ScheduleResponseDto[]> {
+    return await this.branchesService.generateSchedules(branchId, date);
   }
 
   @Put(':id/shifts')

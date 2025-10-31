@@ -3,12 +3,10 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { TokenDto } from './dto/token.dto';
-import { ConfigService } from '@nestjs/config';
 import { RegisterDto } from './dto/register.dto';
 import { Prisma } from '@prisma/client';
 import { RefreshTokenService } from './refresh-token.service';
@@ -22,9 +20,7 @@ import { RefreshTokenPayloadDto } from './dto/refresh-token-payload.dto';
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly jwtService: JwtService,
     private readonly jwtTokenService: JwtTokenService,
-    private readonly configService: ConfigService,
     private readonly refreshTokenService: RefreshTokenService,
   ) {}
 

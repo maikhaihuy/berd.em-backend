@@ -15,7 +15,7 @@ export class CreateRosterDto {
   employeeId: number;
 
   @IsDateString()
-  assignedAt: Date;
+  assignedAt?: Date;
 
   @IsDateString()
   actualStartTime: Date;

@@ -10,6 +10,7 @@ import {
   Request,
   Query,
   ParseIntPipe,
+  Put,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -25,6 +26,7 @@ import { JwtAccessGuard } from '@common/guards/jwt-access.guard';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
 import { getStartAndEndInWeek } from '@common/helpers/date.helper';
+import { SchduleWithRostersResponseDto } from './dto/schedule-with-rosters-response.dto';
 
 @ApiTags('schedules')
 @Controller('schedules')
@@ -106,5 +108,37 @@ export class ScheduleController {
   @ApiResponse({ status: 403, description: 'Forbidden' })
   remove(@Param('id', ParseIntPipe) id: number): Promise<{ message: string }> {
     return this.scheduleService.remove(id);
+  }
+
+  @Put(':id/publish')
+  @ApiOperation({ summary: 'Publish a schedule' })
+  @ApiResponse({
+    status: 200,
+    description: 'Schedule updated successfully',
+    type: SchduleWithRostersResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Schedule not found' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  publish(
+    @Param('id', ParseIntPipe) id: number,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
+  ): Promise<SchduleWithRostersResponseDto> {
+    return this.scheduleService.publish(id, currentUser.id);
+  }
+
+  @Put(':id/unpublish')
+  @ApiOperation({ summary: 'Unpublish a schedule' })
+  @ApiResponse({
+    status: 200,
+    description: 'Schedule updated successfully',
+    type: SchduleWithRostersResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Schedule not found' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  unpublish(
+    @Param('id', ParseIntPipe) id: number,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
+  ): Promise<SchduleWithRostersResponseDto> {
+    return this.scheduleService.unpublish(id, currentUser.id);
   }
 }
