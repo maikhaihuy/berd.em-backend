@@ -94,6 +94,7 @@ export class RolesService {
   async update(
     id: number,
     updateRoleDto: UpdateRoleDto,
+    currentUserId?: number,
   ): Promise<RoleResponseDto> {
     const { permissionIds, ...rest } = updateRoleDto;
     const data: Prisma.RoleUpdateInput = { ...rest };
@@ -102,6 +103,13 @@ export class RolesService {
       data.permissions = {
         set: permissionIds.map((permissionId) => ({ id: permissionId })),
       };
+    }
+
+    // Set updatedBy when currentUserId provided
+    if (typeof currentUserId === 'number') {
+      // Prisma expects scalar values for updatedBy
+      (data as Prisma.RoleUpdateInput & { updatedBy?: number }).updatedBy =
+        currentUserId;
     }
 
     try {
@@ -124,8 +132,14 @@ export class RolesService {
     }
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, currentUserId?: number): Promise<void> {
+    // currentUserId may be passed in for audit purposes. Mark as used
+    // to avoid unused variable lint errors if not otherwise consumed.
+    void currentUserId;
+
     try {
+      // If you want to keep an audit trail instead of hard delete,
+      // implement soft-delete here. For now we perform hard delete.
       await this.prisma.role.delete({ where: { id } });
     } catch (error) {
       if (

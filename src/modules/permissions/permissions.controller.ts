@@ -14,6 +14,8 @@ import { CreatePermissionDto } from './dto/create-permission.dto';
 import { UpdatePermissionDto } from './dto/update-permission.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { PermissionResponseDto } from './dto/permission-response.dto';
+import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
+import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 
 @ApiTags('permissions')
 @Controller('permissions')
@@ -28,8 +30,14 @@ export class PermissionsController {
     type: PermissionResponseDto,
   })
   @ApiBody({ type: CreatePermissionDto })
-  async create(@Body() createPermissionDto: CreatePermissionDto) {
-    return await this.permissionsService.create(createPermissionDto);
+  async create(
+    @Body() createPermissionDto: CreatePermissionDto,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
+  ) {
+    return await this.permissionsService.create(
+      createPermissionDto,
+      currentUser.id,
+    );
   }
 
   @Get()
@@ -67,8 +75,13 @@ export class PermissionsController {
   async update(
     @Param('id') id: string,
     @Body() updatePermissionDto: UpdatePermissionDto,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ) {
-    return await this.permissionsService.update(+id, updatePermissionDto);
+    return await this.permissionsService.update(
+      +id,
+      updatePermissionDto,
+      currentUser.id,
+    );
   }
 
   @Delete(':id')
@@ -79,7 +92,10 @@ export class PermissionsController {
     description: 'The permission has been successfully deleted.',
   })
   @ApiResponse({ status: 404, description: 'Permission not found.' })
-  async remove(@Param('id') id: string) {
-    await this.permissionsService.remove(+id);
+  async remove(
+    @Param('id') id: string,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
+  ) {
+    await this.permissionsService.remove(+id, currentUser.id);
   }
 }

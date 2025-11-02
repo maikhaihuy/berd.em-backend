@@ -17,13 +17,16 @@ import { getDateInWeek } from '@common/helpers/date.helper';
 export class BranchesService {
   constructor(private prisma: PrismaService) {}
 
-  async create(createBranchDto: CreateBranchDto): Promise<BranchResponseDto> {
+  async create(
+    createBranchDto: CreateBranchDto,
+    currentUserId?: number,
+  ): Promise<BranchResponseDto> {
     try {
       const branch = await this.prisma.branch.create({
         data: {
           ...createBranchDto,
-          createdBy: 1,
-          updatedBy: 1,
+          createdBy: currentUserId ?? 1,
+          updatedBy: currentUserId ?? 1,
         },
       });
       return new BranchResponseDto(branch);
@@ -58,11 +61,15 @@ export class BranchesService {
   async update(
     id: number,
     updateBranchDto: UpdateBranchDto,
+    currentUserId?: number,
   ): Promise<BranchResponseDto> {
     try {
       const branch = await this.prisma.branch.update({
         where: { id },
-        data: updateBranchDto,
+        data: {
+          ...updateBranchDto,
+          updatedBy: currentUserId ?? 1,
+        },
       });
       return new BranchResponseDto(branch);
     } catch (error) {
@@ -76,7 +83,9 @@ export class BranchesService {
     }
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, currentUserId?: number): Promise<void> {
+    // currentUserId available for audit/soft-delete if desired
+    void currentUserId;
     try {
       await this.prisma.branch.delete({ where: { id } });
     } catch (error) {
@@ -93,6 +102,7 @@ export class BranchesService {
   async generateSchedules(
     branchId: number,
     date?: Date,
+    currentUserId?: number,
   ): Promise<ScheduleResponseDto[]> {
     const targetDate = date ?? new Date();
 
@@ -135,7 +145,11 @@ export class BranchesService {
     );
 
     await this.prisma.schedule.createMany({
-      data: schedulesToCreate,
+      data: schedulesToCreate.map((s) => ({
+        ...s,
+        createdBy: currentUserId ?? 1,
+        updatedBy: currentUserId ?? 1,
+      })),
     });
 
     return schedules as ScheduleResponseDto[];
@@ -144,6 +158,7 @@ export class BranchesService {
   async syncShifts(
     branchId: number,
     shiftsDto: UpsertShiftDto[],
+    currentUserId?: number,
   ): Promise<ShiftResponseDto[]> {
     // 1. Kiểm tra Branch có tồn tại không
     const branchExists = await this.prisma.branch.findUnique({
@@ -190,8 +205,8 @@ export class BranchesService {
               endTime: new Date(shift.endTime),
               multiplier: new Prisma.Decimal(shift.multiplier),
               // status: shift.status,
-              createdBy: 1, // Placeholder
-              updatedBy: 1, // Placeholder
+              createdBy: currentUserId ?? 1,
+              updatedBy: currentUserId ?? 1,
             })),
           });
         }
@@ -207,7 +222,7 @@ export class BranchesService {
                   startTime: new Date(shift.startTime),
                   endTime: new Date(shift.endTime),
                   multiplier: new Prisma.Decimal(shift.multiplier),
-                  updatedBy: 1, // Placeholder
+                  updatedBy: currentUserId ?? 1,
                 },
               }),
             ),
