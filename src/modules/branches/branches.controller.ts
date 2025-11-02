@@ -10,6 +10,7 @@ import {
   HttpStatus,
   UseGuards,
   Put,
+  Query,
 } from '@nestjs/common';
 import { BranchesService } from './branches.service';
 import { CreateBranchDto } from './dto/create-branch.dto';
@@ -19,6 +20,9 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { JwtAccessGuard } from '../../common/guards/jwt-access.guard';
 import { ShiftResponseDto } from '@modules/shifts/dto/shift-response.dto';
 import { UpsertShiftDto } from '@modules/shifts/dto/upsert-shift.dto';
+import { ScheduleResponseDto } from '@modules/schedule/dto/schedule-response.dto';
+import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
+import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 
 @ApiTags('branches')
 @UseGuards(JwtAccessGuard)
@@ -36,8 +40,9 @@ export class BranchesController {
   @ApiBody({ type: CreateBranchDto })
   async create(
     @Body() createBranchDto: CreateBranchDto,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ): Promise<BranchResponseDto> {
-    return await this.branchesService.create(createBranchDto);
+    return await this.branchesService.create(createBranchDto, currentUser.id);
   }
 
   @Get()
@@ -63,6 +68,32 @@ export class BranchesController {
     return await this.branchesService.findOne(+id);
   }
 
+  @Get(':id/shifts')
+  @ApiOperation({ summary: 'Retrieve list of shifts by branchId' })
+  @ApiResponse({
+    status: 200,
+    description: 'The shifts found by branchId.',
+    type: [ShiftResponseDto],
+  })
+  @ApiResponse({ status: 404, description: 'Branch not found.' })
+  async findShifts(@Param('id') id: string): Promise<ShiftResponseDto[]> {
+    return await this.branchesService.findShifts(+id);
+  }
+
+  @Get(':id/shifts')
+  @ApiOperation({
+    summary: 'Retrieve list of schedules by branchId and week of the date',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The shifts found by branchId.',
+    type: [ShiftResponseDto],
+  })
+  @ApiResponse({ status: 404, description: 'Branch not found.' })
+  async findSchedules(@Param('id') id: string): Promise<ShiftResponseDto[]> {
+    return await this.branchesService.findShifts(+id);
+  }
+
   @Patch(':id')
   @ApiOperation({ summary: 'Update a branch by ID' })
   @ApiResponse({
@@ -75,8 +106,13 @@ export class BranchesController {
   async update(
     @Param('id') id: string,
     @Body() updateBranchDto: UpdateBranchDto,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ): Promise<BranchResponseDto> {
-    return await this.branchesService.update(+id, updateBranchDto);
+    return await this.branchesService.update(
+      +id,
+      updateBranchDto,
+      currentUser.id,
+    );
   }
 
   @Delete(':id')
@@ -87,8 +123,32 @@ export class BranchesController {
     description: 'The branch has been successfully deleted.',
   })
   @ApiResponse({ status: 404, description: 'Branch not found.' })
-  async remove(@Param('id') id: string): Promise<void> {
-    await this.branchesService.remove(+id);
+  async remove(
+    @Param('id') id: string,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
+  ): Promise<void> {
+    await this.branchesService.remove(+id, currentUser.id);
+  }
+
+  @Post(':id/schedule-generation')
+  @ApiOperation({
+    summary: 'Generate schedules for a specified branch',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Schedules have been successfully generated.',
+    type: [ScheduleResponseDto],
+  })
+  async generateSchedules(
+    @Param('id') branchId: number,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
+    @Query('date') date?: Date,
+  ): Promise<ScheduleResponseDto[]> {
+    return await this.branchesService.generateSchedules(
+      branchId,
+      date,
+      currentUser.id,
+    );
   }
 
   @Put(':id/shifts')
@@ -104,8 +164,13 @@ export class BranchesController {
   @ApiBody({ type: [UpsertShiftDto] })
   async syncShifts(
     @Param('id') branchId: string,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
     @Body() shiftsDto: UpsertShiftDto[],
   ): Promise<ShiftResponseDto[]> {
-    return await this.branchesService.syncShifts(+branchId, shiftsDto);
+    return await this.branchesService.syncShifts(
+      +branchId,
+      shiftsDto,
+      currentUser.id,
+    );
   }
 }

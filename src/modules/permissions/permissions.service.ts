@@ -15,13 +15,14 @@ export class PermissionsService {
 
   async create(
     createPermissionDto: CreatePermissionDto,
+    currentUserId?: number,
   ): Promise<PermissionResponseDto> {
     try {
       const permission = await this.prisma.permission.create({
         data: {
           ...createPermissionDto,
-          createdBy: 1, // Placeholder
-          updatedBy: 1, // Placeholder
+          createdBy: currentUserId ?? 1,
+          updatedBy: currentUserId ?? 1,
         },
       });
       return new PermissionResponseDto(permission);
@@ -58,11 +59,15 @@ export class PermissionsService {
   async update(
     id: number,
     updatePermissionDto: UpdatePermissionDto,
+    currentUserId?: number,
   ): Promise<PermissionResponseDto> {
     try {
       const permission = await this.prisma.permission.update({
         where: { id },
-        data: updatePermissionDto,
+        data: {
+          ...updatePermissionDto,
+          updatedBy: currentUserId ?? undefined,
+        },
       });
       return new PermissionResponseDto(permission);
     } catch (error) {
@@ -76,7 +81,9 @@ export class PermissionsService {
     }
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, currentUserId?: number): Promise<void> {
+    // currentUserId available for audit/soft-delete if desired
+    void currentUserId;
     try {
       await this.prisma.permission.delete({ where: { id } });
     } catch (error) {

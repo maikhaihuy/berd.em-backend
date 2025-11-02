@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { ScheduleStatus } from '@prisma/client';
 import {
   IsInt,
   IsPositive,
@@ -26,6 +27,11 @@ export class UpdateScheduleDto {
   @IsPositive()
   branchId?: number;
 
+  @ApiProperty({ description: 'Date of the schedule', required: false })
+  @IsOptional()
+  @IsDateString()
+  workDate?: string;
+
   @ApiProperty({
     description: 'Start time of the schedule',
     required: false,
@@ -41,6 +47,10 @@ export class UpdateScheduleDto {
   @IsOptional()
   @IsDateString()
   endTime?: string;
+
+  @ApiProperty({ description: 'Status of the schedule', required: false })
+  @IsOptional()
+  status?: ScheduleStatus;
 
   @ApiProperty({
     description: 'Optional note for the schedule',

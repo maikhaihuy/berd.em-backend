@@ -18,6 +18,8 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { JwtAccessGuard } from '../../common/guards/jwt-access.guard';
 import { EmployeeHourlyRateResponseDto } from '@modules/employee-hourly-rates/dto/employee-hourly-rate-response.dto';
 import { UpsertEmployeeHourlyRateDto } from '@modules/employee-hourly-rates/dto/upsert-employee-hourly-rate.dto';
+import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
+import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 
 @ApiTags('employees')
 @UseGuards(JwtAccessGuard)
@@ -38,8 +40,12 @@ export class EmployeesController {
   @ApiBody({ type: CreateEmployeeDto })
   async create(
     @Body() createEmployeeDto: CreateEmployeeDto,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ): Promise<EmployeeResponseDto> {
-    return await this.employeesService.create(createEmployeeDto);
+    return await this.employeesService.create(
+      createEmployeeDto,
+      currentUser.id,
+    );
   }
 
   @Get()
@@ -77,8 +83,13 @@ export class EmployeesController {
   async update(
     @Param('id') id: string,
     @Body() updateEmployeeDto: UpdateEmployeeDto,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ): Promise<EmployeeResponseDto> {
-    return await this.employeesService.update(+id, updateEmployeeDto);
+    return await this.employeesService.update(
+      +id,
+      updateEmployeeDto,
+      currentUser.id,
+    );
   }
 
   @Delete(':id')
@@ -89,8 +100,11 @@ export class EmployeesController {
     description: 'The employee has been successfully deleted.',
   })
   @ApiResponse({ status: 404, description: 'Employee not found.' })
-  async remove(@Param('id') id: string): Promise<void> {
-    await this.employeesService.remove(+id);
+  async remove(
+    @Param('id') id: string,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
+  ): Promise<void> {
+    await this.employeesService.remove(+id, currentUser.id);
   }
 
   @Post(':id/hourly-rates')
@@ -103,8 +117,13 @@ export class EmployeesController {
   @ApiBody({ type: [UpsertEmployeeHourlyRateDto] })
   async syncHourlyRates(
     @Param('id') employeeId: string,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
     @Body() ratesDto: UpsertEmployeeHourlyRateDto[],
   ): Promise<EmployeeHourlyRateResponseDto[]> {
-    return await this.employeesService.syncHourlyRates(+employeeId, ratesDto);
+    return await this.employeesService.syncHourlyRates(
+      +employeeId,
+      ratesDto,
+      currentUser.id,
+    );
   }
 }

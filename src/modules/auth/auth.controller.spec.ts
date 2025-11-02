@@ -1,15 +1,20 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { LocalAuthGuard } from './local-auth.guard';
-import { JwtAuthGuard } from './jwt-auth.guard';
-import { RefreshTokenGuard } from './refresh-token.guard';
-import { ExecutionContext } from '@nestjs/common';
-import { User } from '@prisma/client';
+import { RefreshTokenService } from './refresh-token.service';
+import { LocalAuthGuard } from '@common/guards/local-auth.guard';
+import { JwtAccessGuard } from '@common/guards/jwt-access.guard';
+import { JwtRefreshGuard } from '@common/guards/jwt-refresh.guard';
+import { User, UserStatus } from '@prisma/client';
+import { TokenDto } from './dto/token.dto';
+import { AuthenticatedUserDto } from './dto/authenticated-user.dto';
+import { LoginDto } from './dto/login.dto';
+import { RefreshSessionDto } from './dto/refresh-session.dto';
 
 describe('AuthController', () => {
   let controller: AuthController;
   let authService: AuthService;
+  let refreshTokenService: RefreshTokenService;
   let testUser: User;
 
   // Mock guards
@@ -17,11 +22,11 @@ describe('AuthController', () => {
     canActivate: jest.fn(() => true),
   };
 
-  const mockJwtAuthGuard = {
+  const mockJwtAccessGuard = {
     canActivate: jest.fn(() => true),
   };
 
-  const mockRefreshTokenGuard = {
+  const mockJwtRefreshGuard = {
     canActivate: jest.fn(() => true),
   };
 
@@ -32,26 +37,37 @@ describe('AuthController', () => {
         {
           provide: AuthService,
           useValue: {
+            register: jest.fn(),
             login: jest.fn(),
-            refreshTokens: jest.fn(),
+            refreshToken: jest.fn(),
             logout: jest.fn(),
-            logoutFromAllDevices: jest.fn(),
-            getUserActiveSessions: jest.fn(),
-            cleanupExpiredTokens: jest.fn(),
+            forgotPassword: jest.fn(),
+            resetPassword: jest.fn(),
+          },
+        },
+        {
+          provide: RefreshTokenService,
+          useValue: {
+            createRefreshToken: jest.fn(),
+            revokeRefreshToken: jest.fn(),
+            revokeAllUserTokens: jest.fn(),
+            getUserActiveTokens: jest.fn(),
+            rotateRefreshToken: jest.fn(),
           },
         },
       ],
     })
       .overrideGuard(LocalAuthGuard)
       .useValue(mockLocalAuthGuard)
-      .overrideGuard(JwtAuthGuard)
-      .useValue(mockJwtAuthGuard)
-      .overrideGuard(RefreshTokenGuard)
-      .useValue(mockRefreshTokenGuard)
+      .overrideGuard(JwtAccessGuard)
+      .useValue(mockJwtAccessGuard)
+      .overrideGuard(JwtRefreshGuard)
+      .useValue(mockJwtRefreshGuard)
       .compile();
 
     controller = module.get<AuthController>(AuthController);
     authService = module.get<AuthService>(AuthService);
+    refreshTokenService = module.get<RefreshTokenService>(RefreshTokenService);
 
     // Mock test user
     testUser = {
@@ -59,13 +75,9 @@ describe('AuthController', () => {
       username: 'testuser',
       password: 'hashedpassword',
       employeeId: null,
-      hashedRefreshToken: null,
-      passwordResetToken: null,
-      passwordResetExpires: null,
       createdAt: new Date(),
-      createdBy: 1,
       updatedAt: new Date(),
-      updatedBy: 1,
+      status: UserStatus.ACTIVE,
     };
   });
 
@@ -79,26 +91,26 @@ describe('AuthController', () => {
 
   describe('login', () => {
     it('should login user successfully', async () => {
-      const mockLoginResult = {
-        access_token: 'mock-access-token',
-        refresh_token: 'mock-refresh-token',
-        user: {
-          id: testUser.id,
-          username: testUser.username,
-          employeeId: testUser.employeeId,
-        },
+      const mockLoginResult: TokenDto = {
+        accessToken: 'mock-access-token',
+        refreshToken: 'mock-refresh-token',
       };
 
       const mockRequest = {
         user: testUser,
       };
 
-      (authService.login as jest.Mock).mockResolvedValue(mockLoginResult);
+      const loginSpy = jest
+        .spyOn(authService, 'login')
+        .mockResolvedValue(mockLoginResult);
 
-      const result = await controller.login(mockRequest);
+      const result = await controller.login(
+        {} as LoginDto,
+        mockRequest.user as unknown as AuthenticatedUserDto,
+      );
 
       expect(result).toEqual(mockLoginResult);
-      expect(authService.login).toHaveBeenCalledWith(testUser);
+      expect(loginSpy).toHaveBeenCalledWith(testUser);
     });
 
     it('should handle login with missing user in request', async () => {
@@ -106,79 +118,78 @@ describe('AuthController', () => {
         user: undefined,
       };
 
-      const mockLoginResult = {
-        access_token: 'mock-access-token',
-        refresh_token: 'mock-refresh-token',
-        user: {
-          id: testUser.id,
-          username: testUser.username,
-          employeeId: testUser.employeeId,
-        },
+      const mockLoginResult: TokenDto = {
+        accessToken: 'mock-access-token',
+        refreshToken: 'mock-refresh-token',
       };
 
-      (authService.login as jest.Mock).mockResolvedValue(mockLoginResult);
+      const loginSpy = jest
+        .spyOn(authService, 'login')
+        .mockResolvedValue(mockLoginResult);
 
-      const result = await controller.login(mockRequest);
+      const result = await controller.login(
+        {} as LoginDto,
+        mockRequest.user as unknown as AuthenticatedUserDto,
+      );
 
       expect(result).toEqual(mockLoginResult);
-      expect(authService.login).toHaveBeenCalledWith(undefined);
+      expect(loginSpy).toHaveBeenCalledWith(undefined);
     });
   });
 
   describe('refresh', () => {
     it('should refresh tokens successfully', async () => {
       const mockRefreshResult = {
-        access_token: 'new-access-token',
-        refresh_token: 'new-refresh-token',
-        user: {
-          id: testUser.id,
-          username: testUser.username,
-          employeeId: testUser.employeeId,
-        },
+        accessToken: 'new-access-token',
+        refreshToken: 'new-refresh-token',
       };
 
       const mockRequest = {
         user: {
-          userId: testUser.id,
+          ...testUser,
+          roles: [],
+          tokenId: 'token-id-123',
           refreshToken: 'old-refresh-token',
         },
       };
 
-      (authService.refreshTokens as jest.Mock).mockResolvedValue(mockRefreshResult);
+      const refreshTokenSpy = jest
+        .spyOn(authService, 'refreshToken')
+        .mockResolvedValue(mockRefreshResult);
 
-      const result = await controller.refresh(mockRequest);
+      const result = await controller.refreshToken(
+        mockRequest.user as RefreshSessionDto,
+      );
 
       expect(result).toEqual(mockRefreshResult);
-      expect(authService.refreshTokens).toHaveBeenCalledWith(
-        'old-refresh-token',
-        testUser.id
-      );
+      expect(refreshTokenSpy).toHaveBeenCalledWith(mockRequest.user);
     });
 
     it('should handle refresh with missing user data', async () => {
       const mockRequest = {
         user: {
-          userId: undefined,
+          ...testUser,
+          roles: [],
+          tokenId: 'token-id-123',
           refreshToken: undefined,
         },
       };
 
       const mockRefreshResult = {
-        access_token: 'new-access-token',
-        refresh_token: 'new-refresh-token',
-        user: {
-          id: testUser.id,
-          username: testUser.username,
-          employeeId: testUser.employeeId,
-        },
+        accessToken: 'new-access-token',
+        refreshToken: 'new-refresh-token',
       };
 
-      (authService.refreshTokens as jest.Mock).mockResolvedValue(mockRefreshResult);
+      const refreshTokenSpy = jest
+        .spyOn(authService, 'refreshToken')
+        .mockResolvedValue(mockRefreshResult);
 
-      const result = await controller.refresh(mockRequest);
+      const result = await controller.refreshToken(
+        mockRequest.user as RefreshSessionDto,
+      );
 
       expect(result).toEqual(mockRefreshResult);
-      expect(authService.refreshTokens).toHaveBeenCalledWith(undefined, undefined);
+      expect(refreshTokenSpy).toHaveBeenCalledWith(mockRequest.user);
     });
   });
 
@@ -186,36 +197,49 @@ describe('AuthController', () => {
     it('should logout user successfully', async () => {
       const mockRequest = {
         user: {
-          userId: testUser.id,
-          refreshToken: 'refresh-token-to-revoke',
+          ...testUser,
+          roles: [],
+          tokenId: 'token-id-123',
         },
       };
 
-      (authService.logout as jest.Mock).mockResolvedValue(undefined);
+      const logoutSpy = jest
+        .spyOn(authService, 'logout')
+        .mockResolvedValue(undefined);
 
-      const result = await controller.logout(mockRequest);
+      const result = await controller.logout(
+        mockRequest.user as RefreshSessionDto,
+      );
 
-      expect(result).toEqual({ message: 'Logged out successfully' });
-      expect(authService.logout).toHaveBeenCalledWith(
-        'refresh-token-to-revoke',
-        testUser.id
+      expect(result).toEqual({ message: 'Logout successful' });
+      expect(logoutSpy).toHaveBeenCalledWith(
+        'refresh-token',
+        mockRequest.user.id,
       );
     });
 
     it('should handle logout with missing user data', async () => {
       const mockRequest = {
         user: {
-          userId: undefined,
-          refreshToken: undefined,
+          ...testUser,
+          roles: [],
+          tokenId: 'token-id-123',
         },
       };
 
-      (authService.logout as jest.Mock).mockResolvedValue(undefined);
+      const logoutSpy = jest
+        .spyOn(authService, 'logout')
+        .mockResolvedValue(undefined);
 
-      const result = await controller.logout(mockRequest);
+      const result = await controller.logout(
+        mockRequest.user as RefreshSessionDto,
+      );
 
-      expect(result).toEqual({ message: 'Logged out successfully' });
-      expect(authService.logout).toHaveBeenCalledWith(undefined, undefined);
+      expect(result).toEqual({ message: 'Logout successful' });
+      expect(logoutSpy).toHaveBeenCalledWith(
+        'refresh-token',
+        mockRequest.user.id,
+      );
     });
   });
 
@@ -223,19 +247,24 @@ describe('AuthController', () => {
     it('should logout from specific device successfully', async () => {
       const mockRequest = {
         user: {
-          userId: testUser.id,
-          refreshToken: 'device-refresh-token',
+          ...testUser,
+          roles: [],
+          tokenId: 'device-refresh-token',
         },
       };
 
-      (authService.logout as jest.Mock).mockResolvedValue(undefined);
+      const logoutSpy = jest
+        .spyOn(authService, 'logout')
+        .mockResolvedValue(undefined);
 
-      const result = await controller.logoutDevice(mockRequest);
+      const result = await controller.logoutDevice(
+        mockRequest.user as RefreshSessionDto,
+      );
 
-      expect(result).toEqual({ message: 'Logged out from device successfully' });
-      expect(authService.logout).toHaveBeenCalledWith(
+      expect(result).toEqual({ message: 'Logged out successfully' });
+      expect(logoutSpy).toHaveBeenCalledWith(
         'device-refresh-token',
-        testUser.id
+        testUser.id,
       );
     });
   });
@@ -244,16 +273,21 @@ describe('AuthController', () => {
     it('should logout from all devices successfully', async () => {
       const mockRequest = {
         user: {
-          userId: testUser.id,
+          id: testUser.id,
+          username: testUser.username,
         },
       };
 
-      (authService.logoutFromAllDevices as jest.Mock).mockResolvedValue(undefined);
+      const logoutAllSpy = jest
+        .spyOn(refreshTokenService, 'revokeAllUserTokens')
+        .mockResolvedValue(undefined);
 
-      const result = await controller.logoutAll(mockRequest);
+      const result = await controller.logoutAll(
+        mockRequest.user as AuthenticatedUserDto,
+      );
 
-      expect(result).toEqual({ message: 'Logged out from all devices successfully' });
-      expect(authService.logoutFromAllDevices).toHaveBeenCalledWith(testUser.id);
+      expect(result).toEqual({ message: 'Logged out from all devices' });
+      expect(logoutAllSpy).toHaveBeenCalledWith(testUser.id);
     });
 
     it('should handle logout all with missing user data', async () => {
@@ -263,12 +297,18 @@ describe('AuthController', () => {
         },
       };
 
-      (authService.logoutFromAllDevices as jest.Mock).mockResolvedValue(undefined);
+      const logoutAllSpy = jest
+        .spyOn(refreshTokenService, 'revokeAllUserTokens')
+        .mockResolvedValue(undefined);
 
-      const result = await controller.logoutAll(mockRequest);
+      (refreshTokenService.revokeAllUserTokens as jest.Mock).mockResolvedValue(
+        undefined,
+      );
 
-      expect(result).toEqual({ message: 'Logged out from all devices successfully' });
-      expect(authService.logoutFromAllDevices).toHaveBeenCalledWith(undefined);
+      const result = await controller.logoutAll(mockRequest as any);
+
+      expect(result).toEqual({ message: 'Logged out from all devices' });
+      expect(logoutAllSpy).toHaveBeenCalledWith(undefined);
     });
   });
 
@@ -277,11 +317,19 @@ describe('AuthController', () => {
       const mockActiveSessions = [
         {
           id: 'session-1',
+          userId: testUser.id,
+          hashedToken: 'hashed-token-2',
+          device: 'device-1',
+          ipAddress: '127.0.0.1',
           createdAt: new Date('2024-01-01T10:00:00Z'),
           expiresAt: new Date('2024-01-08T10:00:00Z'),
         },
         {
           id: 'session-2',
+          userId: testUser.id,
+          hashedToken: 'hashed-token-2',
+          device: 'device-2',
+          ipAddress: '127.0.0.1',
           createdAt: new Date('2024-01-02T10:00:00Z'),
           expiresAt: new Date('2024-01-09T10:00:00Z'),
         },
@@ -289,19 +337,23 @@ describe('AuthController', () => {
 
       const mockRequest = {
         user: {
-          userId: testUser.id,
+          ...testUser,
+          roles: [],
         },
       };
 
-      (authService.getUserActiveSessions as jest.Mock).mockResolvedValue(mockActiveSessions);
+      const getActiveTokensSpy = jest
+        .spyOn(refreshTokenService, 'getUserActiveTokens')
+        .mockResolvedValue(mockActiveSessions);
 
-      const result = await controller.getActiveSessions(mockRequest);
+      const result = await controller.getActiveSessions(
+        mockRequest as unknown as AuthenticatedUserDto,
+      );
 
       expect(result).toEqual({
-        sessions: mockActiveSessions,
-        count: mockActiveSessions.length,
+        activeSessions: mockActiveSessions,
       });
-      expect(authService.getUserActiveSessions).toHaveBeenCalledWith(testUser.id);
+      expect(getActiveTokensSpy).toHaveBeenCalledWith(testUser.id);
     });
 
     it('should return empty sessions when user has no active sessions', async () => {
@@ -311,13 +363,14 @@ describe('AuthController', () => {
         },
       };
 
-      (authService.getUserActiveSessions as jest.Mock).mockResolvedValue([]);
+      (refreshTokenService.getUserActiveTokens as jest.Mock).mockResolvedValue(
+        [],
+      );
 
-      const result = await controller.getActiveSessions(mockRequest);
+      const result = await controller.getActiveSessions(mockRequest as any);
 
       expect(result).toEqual({
-        sessions: [],
-        count: 0,
+        activeSessions: [],
       });
     });
 
@@ -328,93 +381,78 @@ describe('AuthController', () => {
         },
       };
 
-      (authService.getUserActiveSessions as jest.Mock).mockResolvedValue([]);
+      const getActiveTokensSpy = jest
+        .spyOn(refreshTokenService, 'getUserActiveTokens')
+        .mockResolvedValue([]);
 
-      const result = await controller.getActiveSessions(mockRequest);
-
-      expect(result).toEqual({
-        sessions: [],
-        count: 0,
-      });
-      expect(authService.getUserActiveSessions).toHaveBeenCalledWith(undefined);
-    });
-  });
-
-  describe('getProfile', () => {
-    it('should return user profile successfully', async () => {
-      const mockRequest = {
-        user: testUser,
-      };
-
-      const result = await controller.getProfile(mockRequest);
+      const result = await controller.getActiveSessions(mockRequest as any);
 
       expect(result).toEqual({
-        id: testUser.id,
-        username: testUser.username,
-        employeeId: testUser.employeeId,
-        createdAt: testUser.createdAt,
-        updatedAt: testUser.updatedAt,
+        activeSessions: [],
       });
-    });
-
-    it('should handle missing user in request', async () => {
-      const mockRequest = {
-        user: undefined,
-      };
-
-      const result = await controller.getProfile(mockRequest);
-
-      expect(result).toEqual({
-        id: undefined,
-        username: undefined,
-        employeeId: undefined,
-        createdAt: undefined,
-        updatedAt: undefined,
-      });
+      expect(getActiveTokensSpy).toHaveBeenCalledWith(undefined);
     });
   });
 
   describe('guard integration', () => {
     it('should use LocalAuthGuard for login endpoint', () => {
-      const guards = Reflect.getMetadata('__guards__', controller.login);
+      const loginMethod = controller.login;
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        loginMethod,
+      ) as unknown[];
       expect(guards).toBeDefined();
       expect(guards).toContain(LocalAuthGuard);
     });
 
-    it('should use RefreshTokenGuard for refresh endpoint', () => {
-      const guards = Reflect.getMetadata('__guards__', controller.refresh);
+    it('should use JwtRefreshGuard for refreshToken endpoint', () => {
+      const refreshTokenMethod = controller.refreshToken;
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        refreshTokenMethod,
+      ) as unknown[];
       expect(guards).toBeDefined();
-      expect(guards).toContain(RefreshTokenGuard);
+      expect(guards).toContain(JwtRefreshGuard);
     });
 
-    it('should use RefreshTokenGuard for logout endpoint', () => {
-      const guards = Reflect.getMetadata('__guards__', controller.logout);
+    it('should use JwtAccessGuard for logout endpoint', () => {
+      const logoutMethod = controller.logout;
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        logoutMethod,
+      ) as unknown[];
       expect(guards).toBeDefined();
-      expect(guards).toContain(RefreshTokenGuard);
+      expect(guards).toContain(JwtAccessGuard);
     });
 
-    it('should use RefreshTokenGuard for logoutDevice endpoint', () => {
-      const guards = Reflect.getMetadata('__guards__', controller.logoutDevice);
+    it('should use JwtRefreshGuard for logoutDevice endpoint', () => {
+      const logoutDeviceMethod = controller.logoutDevice;
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        logoutDeviceMethod,
+      ) as unknown[];
       expect(guards).toBeDefined();
-      expect(guards).toContain(RefreshTokenGuard);
+      expect(guards).toContain(JwtRefreshGuard);
     });
 
-    it('should use JwtAuthGuard for logoutAll endpoint', () => {
-      const guards = Reflect.getMetadata('__guards__', controller.logoutAll);
+    it('should use JwtAccessGuard for logoutAll endpoint', () => {
+      const logoutAllMethod = controller.logoutAll;
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        logoutAllMethod,
+      ) as unknown[];
       expect(guards).toBeDefined();
-      expect(guards).toContain(JwtAuthGuard);
+      expect(guards).toContain(JwtAccessGuard);
     });
 
-    it('should use JwtAuthGuard for getActiveSessions endpoint', () => {
-      const guards = Reflect.getMetadata('__guards__', controller.getActiveSessions);
+    it('should use JwtAccessGuard for getActiveSessions endpoint', () => {
+      const getActiveSessionsMethod = controller.getActiveSessions;
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        getActiveSessionsMethod,
+      ) as unknown[];
       expect(guards).toBeDefined();
-      expect(guards).toContain(JwtAuthGuard);
-    });
-
-    it('should use JwtAuthGuard for getProfile endpoint', () => {
-      const guards = Reflect.getMetadata('__guards__', controller.getProfile);
-      expect(guards).toBeDefined();
-      expect(guards).toContain(JwtAuthGuard);
+      expect(guards).toContain(JwtAccessGuard);
     });
   });
 
@@ -425,9 +463,12 @@ describe('AuthController', () => {
       };
 
       const error = new Error('Login service error');
-      (authService.login as jest.Mock).mockRejectedValue(error);
+      const loginSpy = jest.spyOn(authService, 'login');
+      loginSpy.mockRejectedValue(error);
 
-      await expect(controller.login(mockRequest)).rejects.toThrow('Login service error');
+      await expect(
+        controller.login({} as any, mockRequest.user as any),
+      ).rejects.toThrow('Login service error');
     });
 
     it('should handle service errors in refresh', async () => {
@@ -439,9 +480,11 @@ describe('AuthController', () => {
       };
 
       const error = new Error('Refresh service error');
-      (authService.refreshTokens as jest.Mock).mockRejectedValue(error);
+      (authService.refreshToken as jest.Mock).mockRejectedValue(error);
 
-      await expect(controller.refresh(mockRequest)).rejects.toThrow('Refresh service error');
+      await expect(controller.refreshToken(mockRequest as any)).rejects.toThrow(
+        'Refresh service error',
+      );
     });
 
     it('should handle service errors in logout', async () => {
@@ -455,7 +498,9 @@ describe('AuthController', () => {
       const error = new Error('Logout service error');
       (authService.logout as jest.Mock).mockRejectedValue(error);
 
-      await expect(controller.logout(mockRequest)).rejects.toThrow('Logout service error');
+      await expect(controller.logout(mockRequest as any)).rejects.toThrow(
+        'Logout service error',
+      );
     });
 
     it('should handle service errors in logoutAll', async () => {
@@ -466,9 +511,13 @@ describe('AuthController', () => {
       };
 
       const error = new Error('Logout all service error');
-      (authService.logoutFromAllDevices as jest.Mock).mockRejectedValue(error);
+      (refreshTokenService.revokeAllUserTokens as jest.Mock).mockRejectedValue(
+        error,
+      );
 
-      await expect(controller.logoutAll(mockRequest)).rejects.toThrow('Logout all service error');
+      await expect(controller.logoutAll(mockRequest as any)).rejects.toThrow(
+        'Logout all service error',
+      );
     });
 
     it('should handle service errors in getActiveSessions', async () => {
@@ -479,9 +528,13 @@ describe('AuthController', () => {
       };
 
       const error = new Error('Get sessions service error');
-      (authService.getUserActiveSessions as jest.Mock).mockRejectedValue(error);
+      (refreshTokenService.getUserActiveTokens as jest.Mock).mockRejectedValue(
+        error,
+      );
 
-      await expect(controller.getActiveSessions(mockRequest)).rejects.toThrow('Get sessions service error');
+      await expect(
+        controller.getActiveSessions(mockRequest as any),
+      ).rejects.toThrow('Get sessions service error');
     });
   });
 });

@@ -9,15 +9,6 @@ export class UserResponseDto {
   username: string;
 
   @ApiProperty()
-  hashedRefreshToken?: string | null;
-
-  @ApiProperty()
-  passwordResetToken?: string | null;
-
-  @ApiProperty()
-  passwordResetExpires?: Date | null;
-
-  @ApiProperty()
   createdAt: Date;
 
   @ApiProperty()

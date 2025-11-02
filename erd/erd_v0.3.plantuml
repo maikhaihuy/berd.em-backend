@@ -1,0 +1,336 @@
+@startuml
+skinparam linetype ortho
+skinparam packageStyle rectangle
+left to right direction
+
+' ===================== AUTH & USER =====================
+package "Authentication & Authorization" as AUTH #cfe2ff {
+  left to right direction
+
+  entity User {
+    *id : (PK, Int)
+    --
+    username(String)
+    password (String) (Hashed)
+    status (enum)
+    employeeId (FK, Int?) (Unique)
+    --
+    createdAt : (DateTime)
+    updatedAt : (DateTime)
+  }
+
+  entity RefreshToken {
+    *id (PK, Int)
+    userId (PK, Int)
+    --
+    hashedToken (String)
+    device (String?)
+    ipAddress (String?)
+    expiresAt (DateTime)
+    createdAt (DateTime)
+  }
+
+  entity PasswordResetToken {
+    *id (PK, Int)
+    userId (String)
+    --
+    hashToken (String)
+    expiresAt (DateTime)
+    createdAt (DateTime)
+  }
+
+  entity Role {
+    *id (PK, Int)
+    --
+    name (String)
+    description : (String)
+    --
+    createdAt (DateTime)
+    createdBy (Int)
+    updatedAt (DateTime)
+    updatedBy (Int)
+  }
+
+  entity Permission {
+    *id (PK, Int)
+    --
+    action (String)
+    subject (String)
+    condition (Json?)
+    description (String?)
+    --
+    createdAt (DateTime)
+    createdBy (Int)
+    updatedAt (DateTime)
+    updatedBy (Int)
+  }
+
+  entity RolePermission {
+    *roleId (PK, FK, Int)
+    *permissionId (PK, FK, Int)
+  }
+
+  entity UserRoleBranch {
+    *userId (PK, FK)
+    *roleId (PK, FK)
+    *branchId (PK, FK)
+  }
+}
+
+' ===================== CORE ENTITIES =====================
+package "Core Entities" as CORE #d1e7dd {
+  left to right direction
+
+  entity Branch {
+    *id (PK, Int)
+    --
+    name (String)
+    abbreviation (String)
+    address (String)
+    email (String?)
+    phone (String?)
+    --
+    createdAt (DateTime)
+    createdBy (Int)
+    updatedAt (DateTime)
+    updatedBy (Int)
+  }
+
+  entity Employee {
+    + id (PK, Int)
+    --
+    fullName (String)
+    phoneNumber (String)
+    dateOfBirth (Date?)
+    avatar (String?)
+    email (String?)
+    address (String?)
+    probationStartDate (Date?)
+    officialStartDate (Date?)
+    --
+    createdAt (DateTime)
+    createdBy (Int)
+    updatedAt (DateTime)
+    updatedBy (Int)
+  }
+
+  entity EmployeeHourlyRate {
+    *id (PK, Int)
+    --
+    employeeId (FK, Int)
+    rate (Decimal)
+    effectiveDate (Date)
+    endDate (Date?)
+    note (String?)
+    --
+    createdAt (DateTime)
+    createdBy (Int)
+    updatedAt (DateTime)
+    updatedBy (Int)
+  }
+
+  entity EmployeeBranch {
+    *employeeId (PK, FK, Int)
+    *branchId (PK, FK, Int)
+    IsPrimary (boolean)
+  }
+
+  entity Availability {
+    *id (PK, Int)
+    --
+    employeeId (FK, Int)
+    startTime (DateTimeOffset)
+    endTime (DateTimeOffset)
+    --
+    createdAt (DateTime)
+    createdBy (Int)
+    updatedAt (DateTime)
+    updatedBy (Int)
+  }
+}
+
+' ===================== SHIFT MANAGEMENT =====================
+package "Shift Management" as SHIFT #fff3cd {
+  left to right direction
+
+  entity Shift {
+    *id (PK, Int)
+    branchId (FK, Int)
+    --
+    name (String)
+    abbreviation (String)
+    maxSlots (Int)
+    startTime : (Time)
+    endTime : (Time)
+    multiplier : (Decimal)
+    status: (Enum: Draft, Active, Inactive, Archived)
+    --
+    createdAt (DateTime)
+    createdBy (Int)
+    updatedAt (DateTime)
+    updatedBy (Int)
+  }
+
+  entity Schedule {
+    *id (PK, Int)
+    branchId (FK, Int)
+    shiftId (FK, Int)
+    --
+    name (String)
+    abbreviation (String)
+    maxSlots (Int)
+    workDate: (Date)
+    startTime : (Time)
+    endTime : (Time)
+    status: (Enum: Draft, Published, Locked, Cancelled, Completed)
+    note: (String?)
+    --
+    createdAt (DateTime)
+    createdBy (Int)
+    updatedAt (DateTime)
+    updatedBy (Int)
+  }
+
+  entity Roster {
+    *id (PK, Int)
+    scheduleId (FK, Int)
+    employeeId (FK, Int)
+    --
+    assignedAt (DateTime)
+    actualStartTime (DateTime?)
+    actualEndTime (DateTime?)
+    status (Enum: Assigned, Pending, Scheduled, Completed, Absent)
+    note (String?)
+    --
+    createdAt (DateTime)
+    createdBy (Int)
+    updatedAt (DateTime)
+    updatedBy (Int)
+  }
+
+  entity LeaveRequest {
+    *id (PK, Int)
+    rosterId (FK, Int)
+    replacementEmployeeId (FK, Int)
+    absenceEmployeeId (FK, Int)
+    approvedId (FK, Int?)
+    --
+    reason (String?)
+    note (String?)
+    status (Enum: Pending, Approved, Rejected, Cancelled)
+    approvedAt (DateTime?)
+    --
+    createdAt (DateTime)
+    createdBy (Int)
+    updatedAt (DateTime)
+    updatedBy (Int)
+  }
+
+  entity RosterHistory {
+    *id (PK, Int)
+    rosterId (FK, Int)
+    changedById (FK, Int)
+    --
+    changeDetails (Json)
+    changedAt (DateTime)
+  }
+}
+
+' ===================== PAYMENT MANAGEMENT =====================
+package "Payment Management" as PAY #f8d7da {
+  left to right direction
+
+  entity TimeLog {
+    *id (PK, Int)
+    --
+    rosterId (FK, Int)
+    employeeId (FK, Int)
+    actualStartTime (DateTimeOffset?)
+    actualEndTime (DateTimeOffset?)
+    requestStartTime (DateTimeOffset?)
+    requestEndTime (DateTimeOffset?)
+    overtimeMinutes (Int?)
+    requestDate (DateTimeOffset?)
+    requestReason (String?)
+    status (Enum: Pending, Submitted, Verified, Rejected)
+    verifiedBy (FK, Int?)
+    verifiedAt (DateTimeOffset?)
+    note (String?)
+    --
+    createdAt (DateTime)
+    createdBy (Int)
+    updatedAt (DateTime)
+    updatedBy (Int)
+  }
+
+  entity PayPeriod {
+    *id (PK, Int)
+    --
+    startDate (Date)
+    endDate (Date)
+    status (Enum: Open, Closed, Finalized)
+    notes (String?)
+    --
+    createdAt (DateTime)
+    createdBy (Int)
+    updatedAt (DateTime)
+    updatedBy (Int)
+  }
+
+  entity PayrollEntry {
+    *id (PK, Int)
+    --
+    timeLogId (FK, Int)
+    employeeId (FK, Int)
+    payPeriodId (FK, Int)
+    payDate (Date)
+    workDate (Date)
+    calculatedAt (DateTime)
+    calculatedBy (FK, Int)
+    totalPay (Decimal)
+    --
+    createdAt (DateTime)
+    createdBy (Int)
+    updatedAt (DateTime)
+    updatedBy (Int)
+  }
+}
+
+' ===================== RELATIONSHIPS =====================
+UserRoleBranch }o--|| User : "userId"
+UserRoleBranch }o--|| Role : "roleId"
+UserRoleBranch }o--|| Branch: "branchId"
+
+RolePermission }o--|| Role : "roleId"
+RolePermission }o--|| Permission : "permissionId"
+
+RefreshToken }o--|| User : "userId"
+PasswordResetToken }o--|| User : "userId"
+
+EmployeeBranch }o--|| Employee : "employeeId"
+EmployeeBranch }o--|| Branch : "branchId"
+EmployeeHourlyRate }o--|| Employee : "employeeId"
+User |o--o| Employee : "employeeId"
+
+Shift }o--|| Branch : "branchId"
+Schedule }o--|| Shift : "shiftId"
+Schedule }o--|| Branch : "branchId"
+
+Roster }o--|| Schedule : "scheduleId"
+Roster }o--|| Employee : "employeeId"
+
+Availability }o--|| Employee : "employeeId"
+
+LeaveRequest }o--|| Employee : "absenceEmployeeId"
+LeaveRequest }o--|| Employee : "replacementEmployeeId"
+LeaveRequest }o--|| Roster : "rosterId"
+
+TimeLog }o--|| Employee : "employeeId"
+TimeLog }o--|| Roster : "rosterId"
+
+PayrollEntry }o--|| Employee : "employeeId"
+PayrollEntry }o--|| PayPeriod : "payPeriodId"
+PayrollEntry ||--o| TimeLog : "timeLogId"
+
+RosterHistory }o--|| Roster : "rosterId"
+@enduml

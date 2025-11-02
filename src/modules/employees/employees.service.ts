@@ -17,6 +17,7 @@ export class EmployeesService {
 
   async create(
     createEmployeeDto: CreateEmployeeDto,
+    currentUserId?: number,
   ): Promise<EmployeeResponseDto> {
     const { branchIds, ...rest } = createEmployeeDto;
 
@@ -31,8 +32,8 @@ export class EmployeesService {
         } = rest;
         const employeeData: Prisma.EmployeeCreateInput = {
           ...otherFields,
-          createdBy: 1, // Placeholder
-          updatedBy: 1, // Placeholder
+          createdBy: currentUserId ?? 1,
+          updatedBy: currentUserId ?? 1,
         };
 
         // Convert date strings to Date objects if provided
@@ -115,6 +116,7 @@ export class EmployeesService {
   async update(
     id: number,
     updateEmployeeDto: UpdateEmployeeDto,
+    currentUserId?: number,
   ): Promise<EmployeeResponseDto> {
     const { branchIds, ...rest } = updateEmployeeDto;
 
@@ -129,7 +131,7 @@ export class EmployeesService {
         } = rest;
         const updateData: Prisma.EmployeeUpdateInput = {
           ...otherFields,
-          updatedBy: 1, // Placeholder
+          updatedBy: currentUserId ?? 1,
         };
 
         // Convert date strings to Date objects if provided
@@ -202,8 +204,10 @@ export class EmployeesService {
     }
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, currentUserId?: number): Promise<void> {
     try {
+      // currentUserId available for audit if needed (soft-delete)
+      void currentUserId;
       await this.prisma.employee.delete({ where: { id } }); // TODO: xóa bao gồm luôn Employee hourly rate records
     } catch (error) {
       if (
@@ -219,6 +223,7 @@ export class EmployeesService {
   async syncHourlyRates(
     employeeId: number,
     ratesDto: UpsertEmployeeHourlyRateDto[],
+    currentUserId?: number,
   ): Promise<EmployeeHourlyRateResponseDto[]> {
     // 1. Kiểm tra Employee có tồn tại không
     const employeeExists = await this.prisma.employee.findUnique({
@@ -262,8 +267,8 @@ export class EmployeesService {
               ...rate,
               employeeId,
               rate: new Prisma.Decimal(rate.rate),
-              createdBy: 1, // Placeholder
-              updatedBy: 1, // Placeholder
+              createdBy: currentUserId ?? 1,
+              updatedBy: currentUserId ?? 1,
             })),
           });
         }
@@ -277,7 +282,7 @@ export class EmployeesService {
                 data: {
                   ...rate,
                   rate: new Prisma.Decimal(rate.rate),
-                  updatedBy: 1, // Placeholder
+                  updatedBy: currentUserId ?? 1,
                 },
               }),
             ),

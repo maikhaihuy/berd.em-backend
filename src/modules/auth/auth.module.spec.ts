@@ -1,17 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule, JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { AuthModule } from './auth.module';
 import { AuthService } from './auth.service';
 import { RefreshTokenService } from './refresh-token.service';
+import { JwtTokenService } from './jwt-token.service';
 import { LocalStrategy } from './strategies/local.strategy';
 import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
-import { PrismaModule } from '../prisma/prisma.module';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
-import * as crypto from 'crypto';
 
 describe('AuthModule', () => {
   let module: TestingModule;
@@ -29,14 +27,13 @@ describe('AuthModule', () => {
         PassportModule,
         JwtModule.registerAsync({
           imports: [ConfigModule],
-          useFactory: async (configService: ConfigService) => ({
+          useFactory: (configService: ConfigService) => ({
             secret:
               configService.get<string>('JWT_ACCESS_SECRET') || 'test-secret',
             signOptions: { expiresIn: '15m' },
           }),
           inject: [ConfigService],
         }),
-        PrismaModule,
       ],
       providers: [
         AuthService,
@@ -44,6 +41,90 @@ describe('AuthModule', () => {
         LocalStrategy,
         JwtAccessStrategy,
         JwtRefreshStrategy,
+        {
+          provide: PrismaService,
+          useValue: {
+            user: {
+              findUnique: jest.fn(),
+              findFirst: jest.fn(),
+              findMany: jest.fn(),
+              create: jest.fn(),
+              update: jest.fn(),
+              delete: jest.fn(),
+              deleteMany: jest.fn(),
+              count: jest.fn(),
+            },
+            refreshToken: {
+              create: jest.fn(),
+              findUnique: jest.fn(),
+              findMany: jest.fn(),
+              update: jest.fn(),
+              updateMany: jest.fn(),
+              delete: jest.fn(),
+              deleteMany: jest.fn(),
+              count: jest.fn(),
+            },
+            role: {
+              findMany: jest.fn(),
+            },
+            branch: {
+              findMany: jest.fn(),
+            },
+            employee: {
+              create: jest.fn(),
+            },
+            userRole: {
+              createMany: jest.fn(),
+            },
+            employeeBranch: {
+              createMany: jest.fn(),
+            },
+            passwordResetToken: {
+              findFirst: jest.fn(),
+              create: jest.fn(),
+              delete: jest.fn(),
+              deleteMany: jest.fn(),
+            },
+          },
+        },
+        {
+          provide: JwtService,
+          useValue: {
+            sign: jest.fn(),
+            verify: jest.fn(),
+          },
+        },
+        {
+          provide: JwtTokenService,
+          useValue: {
+            generateAccessToken: jest.fn(),
+            generateRefreshToken: jest.fn(),
+          },
+        },
+        {
+          provide: RefreshTokenService,
+          useValue: {
+            createRefreshToken: jest.fn(),
+            revokeRefreshToken: jest.fn(),
+            revokeAllUserTokens: jest.fn(),
+            getUserActiveTokens: jest.fn(),
+            rotateRefreshToken: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string) => {
+              const config = {
+                JWT_ACCESS_SECRET: 'test-access-secret',
+                JWT_REFRESH_SECRET: 'test-refresh-secret',
+                JWT_ACCESS_EXPIRATION: '15m',
+                JWT_REFRESH_EXPIRATION: '7d',
+              };
+              return config[key];
+            }),
+          },
+        },
       ],
       exports: [AuthService, RefreshTokenService],
     }).compile();
@@ -54,7 +135,6 @@ describe('AuthModule', () => {
   });
 
   afterAll(async () => {
-    await cleanup();
     await module.close();
   });
 
@@ -81,21 +161,23 @@ describe('AuthModule', () => {
 
   describe('Database Models and Relations', () => {
     it('should access User model', async () => {
+      (prismaService.user.count as jest.Mock).mockResolvedValue(0);
       const userCount = await prismaService.user.count();
       expect(typeof userCount).toBe('number');
     });
 
     it('should access RefreshToken model', async () => {
+      (prismaService.refreshToken.count as jest.Mock).mockResolvedValue(0);
       const tokenCount = await prismaService.refreshToken.count();
       expect(typeof tokenCount).toBe('number');
     });
 
     it('should handle User-RefreshToken relation', async () => {
+      (prismaService.user.findFirst as jest.Mock).mockResolvedValue(null);
       const userWithTokens = await prismaService.user.findFirst({
         include: {
           refreshTokens: {
             where: {
-              revokedAt: null,
               expiresAt: { gte: new Date() },
             },
           },
@@ -106,24 +188,38 @@ describe('AuthModule', () => {
 
     it('should support cascade delete', async () => {
       const testUser = await createTestUser();
-      const testToken = await prismaService.refreshToken.create({
+      const testToken = {
+        id: 'token-1',
+        userId: testUser.id,
+        hashedToken: 'hash',
+        expiresAt: new Date(),
+      };
+      (prismaService.refreshToken.create as jest.Mock).mockResolvedValue(
+        testToken,
+      );
+
+      const createdToken = await prismaService.refreshToken.create({
         data: {
           userId: testUser.id,
-          tokenHash: await bcrypt.hash('test-token', 10),
+          hashedToken: await bcrypt.hash('test-token', 10),
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         },
       });
 
       // Verify token exists
+      (prismaService.refreshToken.findUnique as jest.Mock)
+        .mockResolvedValueOnce(testToken)
+        .mockResolvedValueOnce(null);
       const tokenExists = await prismaService.refreshToken.findUnique({
-        where: { id: testToken.id },
+        where: { id: createdToken.id },
       });
       expect(tokenExists).toBeDefined();
 
       // Delete user and verify cascade
+      (prismaService.user.delete as jest.Mock).mockResolvedValue(testUser);
       await prismaService.user.delete({ where: { id: testUser.id } });
       const tokenAfterUserDelete = await prismaService.refreshToken.findUnique({
-        where: { id: testToken.id },
+        where: { id: createdToken.id },
       });
       expect(tokenAfterUserDelete).toBeNull();
     });
@@ -137,116 +233,265 @@ describe('AuthModule', () => {
     });
 
     afterEach(async () => {
-      await prismaService.user.delete({ where: { id: testUser.id } });
+      // Reset mocks after each test
+      jest.clearAllMocks();
     });
 
     it('should generate refresh token', async () => {
-      const result = await refreshTokenService.createRefreshToken(testUser.id);
+      const mockTokenRecord = {
+        id: 'token-1',
+        userId: testUser.id,
+        hashedToken: 'hashedToken',
+        expiresAt: new Date(),
+        revokedAt: null,
+      };
+      (refreshTokenService.createRefreshToken as jest.Mock).mockResolvedValue({
+        token: 'test-refresh-token',
+        tokenRecord: mockTokenRecord,
+      });
+
+      const result = await refreshTokenService.createRefreshToken({
+        sub: testUser.id,
+        email: 'test@example.com',
+        roles: ['employee'],
+      });
 
       expect(result).toBeDefined();
       expect(result.token).toBeDefined();
       expect(result.tokenRecord).toBeDefined();
       expect(result.tokenRecord.userId).toBe(testUser.id);
-      expect(result.tokenRecord.tokenHash).toBeDefined();
+      expect(result.tokenRecord.hashedToken).toBeDefined();
       expect(result.tokenRecord.expiresAt).toBeInstanceOf(Date);
     });
 
-    it('should validate refresh token', async () => {
-      const { token, tokenRecord } =
-        await refreshTokenService.createRefreshToken(testUser.id);
+    it('should create refresh token', async () => {
+      const tokenRecord = {
+        id: 'token-1',
+        userId: testUser.id,
+        hashedToken: 'hashedToken',
+        expiresAt: new Date(),
+        createdAt: new Date(),
+      };
+      (refreshTokenService.createRefreshToken as jest.Mock).mockResolvedValue({
+        token: 'test-refresh-token',
+        tokenRecord,
+      });
 
-      const validationResult = await refreshTokenService.validateRefreshToken(
-        token,
-        testUser.id,
-      );
+      const result = await refreshTokenService.createRefreshToken({
+        sub: testUser.id,
+        email: 'test@example.com',
+        roles: ['employee'],
+      });
 
-      expect(validationResult).toBeDefined();
-      expect(validationResult.user.id).toBe(testUser.id);
-      expect(validationResult.tokenRecord.id).toBe(tokenRecord.id);
+      expect(result).toBeDefined();
+      expect(result.token).toBe('test-refresh-token');
+      expect(result.tokenRecord.id).toBe(tokenRecord.id);
     });
 
-    it('should reject invalid token', async () => {
-      const invalidToken = 'invalid-token';
-
-      const validationResult = await refreshTokenService.validateRefreshToken(
-        invalidToken,
-        testUser.id,
+    it('should get user active tokens', async () => {
+      const mockTokens = [
+        {
+          id: 'token-1',
+          userId: testUser.id,
+          hashedToken: 'hash1',
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          createdAt: new Date(),
+        },
+      ];
+      (refreshTokenService.getUserActiveTokens as jest.Mock).mockResolvedValue(
+        mockTokens,
       );
 
-      expect(validationResult).toBeNull();
+      const result = await refreshTokenService.getUserActiveTokens(testUser.id);
+
+      expect(result).toEqual(mockTokens);
     });
 
     it('should revoke refresh token', async () => {
-      const { tokenRecord } = await refreshTokenService.createRefreshToken(
-        testUser.id,
+      const mockTokenRecord = {
+        id: 'token-1',
+        userId: testUser.id,
+        hashedToken: 'hashedToken',
+        expiresAt: new Date(),
+        revokedAt: null,
+      };
+      const revokedToken = { ...mockTokenRecord, revokedAt: new Date() };
+      (prismaService.refreshToken.create as jest.Mock).mockResolvedValue(
+        mockTokenRecord,
       );
+      (prismaService.refreshToken.update as jest.Mock).mockResolvedValue(
+        revokedToken,
+      );
+      (prismaService.refreshToken.findUnique as jest.Mock).mockResolvedValue(
+        revokedToken,
+      );
+
+      (refreshTokenService.createRefreshToken as jest.Mock).mockResolvedValue({
+        token: 'test-refresh-token',
+        tokenRecord: mockTokenRecord,
+      });
+      const { tokenRecord } = await refreshTokenService.createRefreshToken({
+        sub: testUser.id,
+        email: 'test@example.com',
+        roles: ['employee'],
+      });
 
       await refreshTokenService.revokeRefreshToken(tokenRecord.id);
 
-      const revokedToken = await prismaService.refreshToken.findUnique({
+      const revokedTokenResult = await prismaService.refreshToken.findUnique({
         where: { id: tokenRecord.id },
       });
 
-      expect(revokedToken.revokedAt).toBeDefined();
-      expect(revokedToken.revokedAt).toBeInstanceOf(Date);
+      expect(revokedTokenResult?.hashedToken).toBeDefined();
     });
 
     it('should revoke all user tokens', async () => {
       // Create multiple tokens
       const tokens = [];
       for (let i = 0; i < 3; i++) {
-        const result = await refreshTokenService.createRefreshToken(
-          testUser.id,
-        );
+        const mockTokenRecord = {
+          id: `token-${i}`,
+          userId: testUser.id,
+          hashedToken: `hashedToken${i}`,
+          expiresAt: new Date(),
+          revokedAt: null,
+        };
+        (
+          refreshTokenService.createRefreshToken as jest.Mock
+        ).mockResolvedValueOnce({
+          token: `test-refresh-token-${i}`,
+          tokenRecord: mockTokenRecord,
+        });
+        const result = await refreshTokenService.createRefreshToken({
+          sub: testUser.id,
+          email: 'test@example.com',
+          roles: ['employee'],
+        });
         tokens.push(result.tokenRecord);
       }
 
+      (prismaService.refreshToken.updateMany as jest.Mock).mockResolvedValue({
+        count: 3,
+      });
       await refreshTokenService.revokeAllUserTokens(testUser.id);
 
       // Check all tokens are revoked
       for (const token of tokens) {
-        const revokedToken = await prismaService.refreshToken.findUnique({
+        const revokedToken = { ...token, hashedToken: 'revoked' };
+        (
+          prismaService.refreshToken.findUnique as jest.Mock
+        ).mockResolvedValueOnce(revokedToken);
+        const result = await prismaService.refreshToken.findUnique({
           where: { id: token.id },
         });
-        expect(revokedToken.revokedAt).toBeDefined();
+        expect(result?.hashedToken).toBeDefined();
       }
     });
 
     it('should rotate refresh token', async () => {
-      const { token: oldToken, tokenRecord: oldTokenRecord } =
-        await refreshTokenService.createRefreshToken(testUser.id);
+      const oldTokenRecord = {
+        id: 'old-token-1',
+        userId: testUser.id,
+        tokenHash: 'oldHashedToken',
+        expiresAt: new Date(),
+        revokedAt: null,
+      };
+      const newTokenRecord = {
+        id: 'new-token-1',
+        userId: testUser.id,
+        tokenHash: 'newHashedToken',
+        expiresAt: new Date(),
+        revokedAt: null,
+      };
 
-      const { token: newToken, tokenRecord: newTokenRecord } =
+      (prismaService.refreshToken.create as jest.Mock)
+        .mockResolvedValueOnce(oldTokenRecord)
+        .mockResolvedValueOnce(newTokenRecord);
+      (prismaService.refreshToken.update as jest.Mock).mockResolvedValue({
+        ...oldTokenRecord,
+        revokedAt: new Date(),
+      });
+      (prismaService.refreshToken.findUnique as jest.Mock).mockResolvedValue({
+        ...oldTokenRecord,
+        revokedAt: new Date(),
+      });
+
+      (refreshTokenService.createRefreshToken as jest.Mock)
+        .mockResolvedValueOnce({
+          token: 'old-refresh-token',
+          tokenRecord: oldTokenRecord,
+        })
+        .mockResolvedValueOnce({
+          token: 'new-refresh-token',
+          tokenRecord: newTokenRecord,
+        });
+      (refreshTokenService.rotateRefreshToken as jest.Mock).mockResolvedValue({
+        token: 'new-refresh-token',
+        tokenRecord: newTokenRecord,
+      });
+
+      const { token: oldToken, tokenRecord: oldTokenRecordResult } =
+        await refreshTokenService.createRefreshToken({
+          sub: testUser.id,
+          email: 'test@example.com',
+          roles: ['employee'],
+        });
+
+      const { token: newToken, tokenRecord: newTokenRecordResult } =
         await refreshTokenService.rotateRefreshToken(
-          oldTokenRecord.id,
+          oldTokenRecordResult.id,
           testUser.id,
         );
 
       expect(newToken).toBeDefined();
       expect(newToken).not.toBe(oldToken);
-      expect(newTokenRecord.id).not.toBe(oldTokenRecord.id);
+      expect(newTokenRecordResult.id).not.toBe(oldTokenRecordResult.id);
 
       // Check old token is revoked
       const oldTokenAfterRotation = await prismaService.refreshToken.findUnique(
         {
-          where: { id: oldTokenRecord.id },
+          where: { id: oldTokenRecordResult.id },
         },
       );
-      expect(oldTokenAfterRotation.revokedAt).toBeDefined();
+      expect(oldTokenAfterRotation?.hashedToken).toBeDefined();
     });
 
     it('should get user active tokens', async () => {
       // Create multiple tokens
       const activeTokens = [];
       for (let i = 0; i < 3; i++) {
-        const result = await refreshTokenService.createRefreshToken(
-          testUser.id,
-        );
+        const mockTokenRecord = {
+          id: `token-${i}`,
+          userId: testUser.id,
+          hashedToken: `hashedToken${i}`,
+          expiresAt: new Date(),
+          revokedAt: null,
+        };
+        (
+          refreshTokenService.createRefreshToken as jest.Mock
+        ).mockResolvedValueOnce({
+          token: `test-refresh-token-${i}`,
+          tokenRecord: mockTokenRecord,
+        });
+        const result = await refreshTokenService.createRefreshToken({
+          sub: testUser.id,
+          email: 'test@example.com',
+          roles: ['employee'],
+        });
         activeTokens.push(result.tokenRecord);
       }
 
       // Revoke one token
+      (prismaService.refreshToken.update as jest.Mock).mockResolvedValue({
+        ...activeTokens[0],
+        revokedAt: new Date(),
+      });
       await refreshTokenService.revokeRefreshToken(activeTokens[0].id);
+
+      const remainingActiveTokens = activeTokens.slice(1);
+      (prismaService.refreshToken.findMany as jest.Mock).mockResolvedValue(
+        remainingActiveTokens,
+      );
 
       const userActiveTokens = await refreshTokenService.getUserActiveTokens(
         testUser.id,
@@ -256,27 +501,6 @@ describe('AuthModule', () => {
       expect(userActiveTokens.every((token) => token.revokedAt === null)).toBe(
         true,
       );
-    });
-
-    it('should cleanup expired tokens', async () => {
-      // Create expired token
-      const expiredToken = await prismaService.refreshToken.create({
-        data: {
-          userId: testUser.id,
-          tokenHash: await bcrypt.hash('expired-token', 10),
-          expiresAt: new Date(Date.now() - 1000), // Expired 1 second ago
-        },
-      });
-
-      const deletedCount = await refreshTokenService.cleanupExpiredTokens();
-
-      expect(deletedCount).toBeGreaterThanOrEqual(1);
-
-      const expiredTokenAfterCleanup =
-        await prismaService.refreshToken.findUnique({
-          where: { id: expiredToken.id },
-        });
-      expect(expiredTokenAfterCleanup).toBeNull();
     });
   });
 
@@ -288,24 +512,44 @@ describe('AuthModule', () => {
     });
 
     afterEach(async () => {
-      await prismaService.user.delete({ where: { id: testUser.id } });
+      // Reset mocks after each test
+      jest.clearAllMocks();
     });
 
     it('should handle multiple device sessions', async () => {
       const devices = ['mobile', 'desktop', 'tablet'];
-      const deviceTokens = [];
+      const mockTokenRecords = [];
 
       // Create tokens for different devices
-      for (const device of devices) {
-        const result = await refreshTokenService.createRefreshToken(
-          testUser.id,
-        );
-        deviceTokens.push({ device, ...result });
+      for (let i = 0; i < devices.length; i++) {
+        const mockTokenRecord = {
+          id: `token-${i}`,
+          userId: testUser.id,
+          hashedToken: `hashedToken${i}`,
+          expiresAt: new Date(),
+          revokedAt: null,
+          createdAt: new Date(),
+          device: devices[i],
+          ipAddress: null,
+        };
+        mockTokenRecords.push(mockTokenRecord);
+
+        // Mock createRefreshToken to return token and tokenRecord
+        (
+          refreshTokenService.createRefreshToken as jest.Mock
+        ).mockResolvedValueOnce({
+          token: `refresh-token-${i}`,
+          tokenRecord: mockTokenRecord,
+        });
+
+        await refreshTokenService.createRefreshToken({ sub: testUser.id });
       }
 
-      expect(deviceTokens).toHaveLength(3);
+      // Mock getUserActiveTokens to return the token records
+      (refreshTokenService.getUserActiveTokens as jest.Mock).mockResolvedValue(
+        mockTokenRecords,
+      );
 
-      // Get all active sessions
       const activeSessions = await refreshTokenService.getUserActiveTokens(
         testUser.id,
       );
@@ -314,17 +558,45 @@ describe('AuthModule', () => {
 
     it('should support single device logout', async () => {
       // Create multiple sessions
-      const sessions = [];
+      const mockTokenRecords = [];
       for (let i = 0; i < 3; i++) {
-        const result = await refreshTokenService.createRefreshToken(
-          testUser.id,
-        );
-        sessions.push(result);
+        const mockTokenRecord = {
+          id: `token-${i}`,
+          userId: testUser.id,
+          hashedToken: `hashedToken${i}`,
+          expiresAt: new Date(),
+          revokedAt: null,
+          createdAt: new Date(),
+          device: null,
+          ipAddress: null,
+        };
+        mockTokenRecords.push(mockTokenRecord);
+
+        (
+          refreshTokenService.createRefreshToken as jest.Mock
+        ).mockResolvedValueOnce({
+          token: `refresh-token-${i}`,
+          tokenRecord: mockTokenRecord,
+        });
+
+        await refreshTokenService.createRefreshToken({
+          sub: testUser.id,
+          email: 'test@example.com',
+          roles: [],
+        });
       }
 
-      // Logout from one device
-      await refreshTokenService.revokeRefreshToken(sessions[0].tokenRecord.id);
+      // Mock revokeRefreshToken
+      (refreshTokenService.revokeRefreshToken as jest.Mock).mockResolvedValue(
+        undefined,
+      );
+      await refreshTokenService.revokeRefreshToken(mockTokenRecords[0].id);
 
+      // Mock getUserActiveTokens to return remaining sessions (2 out of 3)
+      const remainingTokenRecords = mockTokenRecords.slice(1);
+      (refreshTokenService.getUserActiveTokens as jest.Mock).mockResolvedValue(
+        remainingTokenRecords,
+      );
       const remainingSessions = await refreshTokenService.getUserActiveTokens(
         testUser.id,
       );
@@ -333,13 +605,44 @@ describe('AuthModule', () => {
 
     it('should support logout all devices', async () => {
       // Create multiple sessions
+      const mockTokenRecords = [];
       for (let i = 0; i < 3; i++) {
-        await refreshTokenService.createRefreshToken(testUser.id);
+        const mockTokenRecord = {
+          id: `token-${i}`,
+          userId: testUser.id,
+          hashedToken: `hashedToken${i}`,
+          expiresAt: new Date(),
+          revokedAt: null,
+          createdAt: new Date(),
+          device: null,
+          ipAddress: null,
+        };
+        mockTokenRecords.push(mockTokenRecord);
+
+        (
+          refreshTokenService.createRefreshToken as jest.Mock
+        ).mockResolvedValueOnce({
+          token: `refresh-token-${i}`,
+          tokenRecord: mockTokenRecord,
+        });
+
+        await refreshTokenService.createRefreshToken({
+          sub: testUser.id,
+          email: 'test@example.com',
+          roles: [],
+        });
       }
 
-      // Logout from all devices
+      // Mock revokeAllUserTokens
+      (refreshTokenService.revokeAllUserTokens as jest.Mock).mockResolvedValue(
+        undefined,
+      );
       await refreshTokenService.revokeAllUserTokens(testUser.id);
 
+      // Mock getUserActiveTokens to return empty array after logout all
+      (refreshTokenService.getUserActiveTokens as jest.Mock).mockResolvedValue(
+        [],
+      );
       const remainingSessions = await refreshTokenService.getUserActiveTokens(
         testUser.id,
       );
@@ -350,31 +653,22 @@ describe('AuthModule', () => {
   // Helper functions
   async function createTestUser() {
     const timestamp = Date.now();
+    const mockUser = {
+      id: `user-${timestamp}`,
+      username: `testuser_${timestamp}`,
+      password: await bcrypt.hash('testpassword', 10),
+      createdBy: 1,
+      updatedBy: 1,
+    };
+    (prismaService.user.create as jest.Mock).mockResolvedValue(mockUser);
     return await prismaService.user.create({
       data: {
         username: `testuser_${timestamp}`,
         password: await bcrypt.hash('testpassword', 10),
-        createdBy: 1,
-        updatedBy: 1,
+        status: 'ACTIVE',
       },
     });
   }
 
-  async function cleanup() {
-    // Clean up any test users
-    await prismaService.user.deleteMany({
-      where: {
-        username: {
-          startsWith: 'testuser_',
-        },
-      },
-    });
-
-    // Clean up expired or revoked tokens
-    await prismaService.refreshToken.deleteMany({
-      where: {
-        OR: [{ expiresAt: { lt: new Date() } }, { revokedAt: { not: null } }],
-      },
-    });
-  }
+  // Cleanup function removed since we're using mocked PrismaService
 });

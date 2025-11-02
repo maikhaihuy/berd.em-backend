@@ -7,6 +7,7 @@ import {
   IsDecimal,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { ShiftStatus } from '@prisma/client';
 
 export class CreateShiftDto {
   @ApiProperty()
@@ -25,6 +26,11 @@ export class CreateShiftDto {
   maxSlots: number;
 
   @ApiProperty()
+  @IsInt()
+  @IsPositive()
+  branchId: number;
+
+  @ApiProperty()
   @IsDateString()
   startTime: string;
 
@@ -37,7 +43,5 @@ export class CreateShiftDto {
   multiplier: string;
 
   @ApiProperty()
-  @IsInt()
-  @IsPositive()
-  branchId: number;
+  status: ShiftStatus;
 }

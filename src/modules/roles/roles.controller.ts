@@ -6,9 +6,6 @@ import {
   Patch,
   Param,
   Delete,
-  // UsePipes,
-  // ValidationPipe,
-  // Query,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -17,6 +14,8 @@ import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { RoleResponseDto } from './dto/role-response.dto';
+import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
+import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 
 @Controller('roles')
 export class RolesController {
@@ -30,15 +29,16 @@ export class RolesController {
     type: RoleResponseDto,
   })
   @ApiBody({ type: CreateRoleDto })
-  async create(@Body() createRoleDto: CreateRoleDto) {
-    const currentUserId = 1;
-    return await this.rolesService.create(createRoleDto, currentUserId);
+  async create(
+    @Body() createRoleDto: CreateRoleDto,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
+  ) {
+    return await this.rolesService.create(createRoleDto, currentUser.id);
   }
 
   @Get()
   @ApiOperation({ summary: 'Retrieve a list of all roles with pagination' })
   @ApiResponse({ status: 200, description: 'A list of roles.' })
-  // @UsePipes(new ValidationPipe({ transform: true }))
   async findAll() {
     // const { page, limit } = paginationDto;
     return await this.rolesService.findAll();
@@ -65,8 +65,12 @@ export class RolesController {
   })
   @ApiResponse({ status: 404, description: 'Role not found.' })
   @ApiBody({ type: UpdateRoleDto })
-  async update(@Param('id') id: string, @Body() updateRoleDto: UpdateRoleDto) {
-    return await this.rolesService.update(+id, updateRoleDto);
+  async update(
+    @Param('id') id: string,
+    @Body() updateRoleDto: UpdateRoleDto,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
+  ) {
+    return await this.rolesService.update(+id, updateRoleDto, currentUser.id);
   }
 
   @Delete(':id')
@@ -77,7 +81,10 @@ export class RolesController {
     description: 'The role has been successfully deleted.',
   })
   @ApiResponse({ status: 404, description: 'Role not found.' })
-  async remove(@Param('id') id: string) {
-    await this.rolesService.remove(+id);
+  async remove(
+    @Param('id') id: string,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
+  ) {
+    await this.rolesService.remove(+id, currentUser.id);
   }
 }

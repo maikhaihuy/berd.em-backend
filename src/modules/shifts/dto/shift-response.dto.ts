@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Shift } from '@prisma/client';
+import { Shift, ShiftStatus } from '@prisma/client';
 
 export class ShiftResponseDto {
   @ApiProperty()
@@ -16,6 +16,18 @@ export class ShiftResponseDto {
 
   @ApiProperty()
   branchId: number;
+
+  @ApiProperty()
+  startTime: Date; // Time field
+
+  @ApiProperty()
+  endTime: Date; // Time field
+
+  @ApiProperty()
+  multiplier: number;
+
+  @ApiProperty()
+  status: ShiftStatus;
 
   @ApiProperty()
   createdAt: Date;

@@ -22,13 +22,14 @@ export class JwtTokenService {
   generateRefreshToken(payload: RefreshTokenPayloadDto) {
     if (!payload.jti) throw new Error('JTI is required');
     const secret = this.configService.get<string>('JWT_REFRESH_SECRET');
-    const expiresIn = this.configService.get<string>(
+    const expiresInStr = this.configService.get<string>(
       'JWT_REFRESH_EXPIRES_IN',
       '7d',
     );
+    const expiresIn = this.parseExpirationSeconds(expiresInStr);
     // Sign the refresh token
     return this.jwtService.sign(payload, {
-      secret: secret,
+      secret,
       expiresIn,
     });
   }
@@ -54,5 +55,11 @@ export class JwtTokenService {
       default:
         return 24 * 60 * 60 * 1000; // Default to 1 day
     }
+  }
+
+  private parseExpirationSeconds(expiresIn: string): number {
+    // Convert a shorthand like 7d/24h/15m/30s to seconds
+    const ms = this.parseExpirationTime(expiresIn);
+    return Math.floor(ms / 1000);
   }
 }
