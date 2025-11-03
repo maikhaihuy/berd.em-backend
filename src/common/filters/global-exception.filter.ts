@@ -1,15 +1,21 @@
+import { LoggerService } from '@common/logger/logger.service';
 import {
   ExceptionFilter,
   Catch,
   ArgumentsHost,
   HttpException,
   HttpStatus,
+  Inject,
 } from '@nestjs/common';
 import * as Sentry from '@sentry/node';
 import { Response } from 'express';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
+  constructor(
+    @Inject(LoggerService) private readonly logService: LoggerService,
+  ) {}
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const request = ctx.getRequest<Request>();
@@ -39,6 +45,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+      if (process.env.NODE_ENV !== 'production') {
+        // 💻 Log locally in dev/test
+        this.logService.error(`[${status}] ${message}`, exception as Error);
+      }
       Sentry.captureException(exception, {
         tags: { layer: 'GlobalException' },
         extra: {

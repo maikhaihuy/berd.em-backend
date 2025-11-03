@@ -6,8 +6,6 @@ import {
   Request,
   HttpCode,
   HttpStatus,
-  UsePipes,
-  ValidationPipe,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
@@ -34,7 +32,6 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  @UsePipes(ValidationPipe)
   async register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
   }
@@ -43,7 +40,6 @@ export class AuthController {
   @Post('login')
   @ApiOperation({ summary: 'Login user' })
   @HttpCode(HttpStatus.OK)
-  @UsePipes(ValidationPipe)
   login(
     @Body() login: LoginDto,
     @AuthenticatedUser() user: AuthenticatedUserDto,
@@ -106,7 +102,6 @@ export class AuthController {
   @Post('forgot-password')
   @ApiOperation({ summary: 'Request password reset' })
   @HttpCode(HttpStatus.OK)
-  @UsePipes(ValidationPipe)
   async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
     return this.authService.forgotPassword(forgotPasswordDto.username);
   }
@@ -114,7 +109,6 @@ export class AuthController {
   @Post('reset-password')
   @ApiOperation({ summary: 'Reset password using token' })
   @HttpCode(HttpStatus.OK)
-  @UsePipes(ValidationPipe)
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(
       resetPasswordDto.token,
