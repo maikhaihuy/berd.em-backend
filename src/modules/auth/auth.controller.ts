@@ -6,6 +6,7 @@ import {
   Request,
   HttpCode,
   HttpStatus,
+  Get,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
@@ -85,7 +86,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAccessGuard)
-  @Post('active-sessions')
+  @Get('active-sessions')
   @ApiOperation({ summary: 'Get active sessions for current user' })
   @HttpCode(HttpStatus.OK)
   async getActiveSessions(@AuthenticatedUser() user: AuthenticatedUserDto) {

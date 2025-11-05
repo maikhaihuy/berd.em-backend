@@ -5,7 +5,6 @@ import { Request } from 'express';
 export const AuthenticatedUser = createParamDecorator(
   (data: unknown, ctx: ExecutionContext): AuthenticatedUserDto => {
     const request = ctx.switchToHttp().getRequest<Request>();
-    console.log('request.user: ', request.user);
     return request.user as AuthenticatedUserDto;
   },
 );

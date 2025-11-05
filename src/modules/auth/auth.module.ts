@@ -17,31 +17,17 @@ import { JwtTokenService } from './jwt-token.service';
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_ACCESS_SECRET'),
-        signOptions: {
-          expiresIn: (() => {
-            const val = configService.get<string>(
-              'JWT_ACCESS_EXPIRATION',
-              '7d',
-            );
-            const unit = val.slice(-1);
-            const amount = parseInt(val.slice(0, -1));
-            switch (unit) {
-              case 's':
-                return amount;
-              case 'm':
-                return amount * 60;
-              case 'h':
-                return amount * 60 * 60;
-              case 'd':
-                return amount * 24 * 60 * 60;
-              default:
-                return 7 * 24 * 60 * 60; // 7 days fallback
-            }
-          })(),
-        },
-      }),
+      // @ts-expect-error - ConfigService.get returns string | undefined, but JwtModuleOptions expects StringValue
+      useFactory: (configService: ConfigService) => {
+        const expiresIn =
+          configService.get<string>('JWT_ACCESS_EXPIRATION') || '15m';
+        return {
+          secret: configService.get<string>('JWT_ACCESS_SECRET'),
+          signOptions: {
+            expiresIn,
+          },
+        };
+      },
       inject: [ConfigService],
     }),
     ConfigModule,

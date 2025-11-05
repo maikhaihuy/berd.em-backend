@@ -13,17 +13,15 @@ export class JwtTokenService {
   ) {}
 
   generateAccessToken(payload: AccessTokenPayloadDto) {
-    return this.jwtService.sign(payload, {
-      secret: this.configService.get('JWT_ACCESS_SECRET'),
-      expiresIn: this.configService.get('JWT_ACCESS_EXPIRATION_TIME'),
-    });
+    // Use the default secret and expiration from JwtModule configuration
+    return this.jwtService.sign(payload);
   }
 
   generateRefreshToken(payload: RefreshTokenPayloadDto) {
     if (!payload.jti) throw new Error('JTI is required');
     const secret = this.configService.get<string>('JWT_REFRESH_SECRET');
     const expiresInStr = this.configService.get<string>(
-      'JWT_REFRESH_EXPIRES_IN',
+      'JWT_REFRESH_EXPIRATION',
       '7d',
     );
     const expiresIn = this.parseExpirationSeconds(expiresInStr);

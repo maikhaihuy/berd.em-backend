@@ -44,6 +44,9 @@ importers:
       '@sentry/profiling-node':
         specifier: ^10.22.0
         version: 10.22.0
+      '@types/jsonwebtoken':
+        specifier: ^9.0.10
+        version: 9.0.10
       bcrypt:
         specifier: ^6.0.0
         version: 6.0.0
@@ -53,6 +56,9 @@ importers:
       class-validator:
         specifier: ^0.14.2
         version: 0.14.2
+      jsonwebtoken:
+        specifier: ^9.0.2
+        version: 9.0.2
       passport:
         specifier: ^0.7.0
         version: 0.7.0
