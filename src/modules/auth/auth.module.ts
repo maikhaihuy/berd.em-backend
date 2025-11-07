@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { RefreshTokenService } from './refresh-token.service';
@@ -12,26 +12,7 @@ import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { JwtTokenService } from './jwt-token.service';
 
 @Module({
-  imports: [
-    UsersModule,
-    PassportModule,
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      // @ts-expect-error - ConfigService.get returns string | undefined, but JwtModuleOptions expects StringValue
-      useFactory: (configService: ConfigService) => {
-        const expiresIn =
-          configService.get<string>('JWT_ACCESS_EXPIRATION') || '15m';
-        return {
-          secret: configService.get<string>('JWT_ACCESS_SECRET'),
-          signOptions: {
-            expiresIn,
-          },
-        };
-      },
-      inject: [ConfigService],
-    }),
-    ConfigModule,
-  ],
+  imports: [UsersModule, PassportModule, JwtModule.register({}), ConfigModule],
   controllers: [AuthController],
   providers: [
     AuthService,

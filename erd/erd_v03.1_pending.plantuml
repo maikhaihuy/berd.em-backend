@@ -1,0 +1,105 @@
+@startuml
+'=============================
+'   Workforce Scheduling ERD
+'=============================
+!theme plain
+hide circle
+skinparam entity {
+  BackgroundColor White
+  BorderColor Navy
+  FontColor Black
+  FontSize 13
+}
+
+entity "Branch" as Branch {
+  *id : UUID
+  --
+  name : string
+  address : string
+  manager_id : UUID
+}
+
+entity "Employee" as Employee {
+  *id : UUID
+  --
+  branch_id : UUID
+  full_name : string
+  role : enum('admin','manager','staff')
+  base_salary : decimal
+  hourly_rate : decimal
+  is_active : boolean
+}
+
+entity "Week" as Week {
+  *id : UUID
+  --
+  branch_id : UUID
+  parent_week_id : UUID?
+  start_date : date
+  end_date : date
+  status : enum('draft','open','active','closed')
+  generated_by : UUID
+}
+
+entity "DaySlot" as DaySlot {
+  *id : UUID
+  --
+  week_id : UUID
+  day_of_week : int
+  date : date
+  tick_index : int
+}
+
+entity "Shift" as Shift {
+  *id : UUID
+  --
+  day_slot_id : UUID
+  name : string
+  start_time : time
+  end_time : time
+  max_employees : int
+  salary_rate : decimal
+  color : string
+}
+
+entity "ShiftAssignment" as ShiftAssignment {
+  *id : UUID
+  --
+  shift_id : UUID
+  employee_id : UUID
+  status : enum('assigned','pending','completed','absent','canceled')
+  registration_type : enum('auto','manual','self')
+  check_in_time : datetime?
+  check_out_time : datetime?
+  total_hours : decimal?
+  wage_amount : decimal?
+}
+
+entity "Payroll" as Payroll {
+  *id : UUID
+  --
+  employee_id : UUID
+  month : int
+  year : int
+  total_hours : decimal
+  total_wage : decimal
+  bonus : decimal?
+  deductions : decimal?
+  net_salary : decimal
+  status : enum('draft','confirmed','paid')
+}
+
+'=============================
+'   Relationships
+'=============================
+Branch ||--o{ Employee : "has staff"
+Branch ||--o{ Week : "has weeks"
+Employee ||--o{ Payroll : "gets payroll"
+
+Week ||--o{ DaySlot : "has day slots"
+DaySlot ||--o{ Shift : "has shifts"
+Shift ||--o{ ShiftAssignment : "has assignments"
+
+Employee ||--o{ ShiftAssignment : "assigned to"
+Week }o--|| Week : "parent (template)"
+@enduml
