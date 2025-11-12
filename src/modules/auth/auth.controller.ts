@@ -22,6 +22,7 @@ import { RefreshSession } from './decorators/refresh-session.decorator';
 import { AuthenticatedUser } from './decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from './dto/authenticated-user.dto';
 import { RefreshSessionDto } from './dto/refresh-session.dto';
+import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -37,6 +38,7 @@ export class AuthController {
     return this.authService.register(registerDto);
   }
 
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 attempts per minute
   @UseGuards(LocalAuthGuard)
   @Post('login')
   @ApiOperation({ summary: 'Login user' })
@@ -100,6 +102,7 @@ export class AuthController {
     };
   }
 
+  @Throttle({ default: { limit: 3, ttl: 300000 } }) // 3 attempts per 5 minutes
   @Post('forgot-password')
   @ApiOperation({ summary: 'Request password reset' })
   @HttpCode(HttpStatus.OK)

@@ -15,6 +15,7 @@ import { AccessTokenPayloadDto } from './dto/access-token-payload.dto';
 import { RefreshSessionDto } from './dto/refresh-session.dto';
 import { JwtTokenService } from './jwt-token.service';
 import { RefreshTokenPayloadDto } from './dto/refresh-token-payload.dto';
+import { PasswordService } from './password.service';
 
 @Injectable()
 export class AuthService {
@@ -22,6 +23,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtTokenService: JwtTokenService,
     private readonly refreshTokenService: RefreshTokenService,
+    private readonly passwordService: PasswordService,
   ) {}
 
   async register(registerDto: RegisterDto): Promise<AuthenticatedUserDto> {
@@ -66,7 +68,7 @@ export class AuthService {
     }
 
     // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await this.passwordService.hash(password);
 
     try {
       // Use transaction to create both User and Employee
@@ -254,7 +256,7 @@ export class AuthService {
       throw new ForbiddenException('Token không hợp lệ hoặc đã hết hạn.');
     }
 
-    const password = await bcrypt.hash(newPass, 10);
+    const password = await this.passwordService.hash(newPass);
 
     // Update user password and delete reset token
     await this.prisma.$transaction(async (tx) => {

@@ -10,9 +10,17 @@ import { LocalStrategy } from './strategies/local.strategy';
 import { UsersModule } from '../users/users.module';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { JwtTokenService } from './jwt-token.service';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { PasswordService } from './password.service';
 
 @Module({
-  imports: [UsersModule, PassportModule, JwtModule.register({}), ConfigModule],
+  imports: [
+    UsersModule,
+    PassportModule,
+    JwtModule.register({}),
+    ConfigModule,
+    ThrottlerModule,
+  ],
   controllers: [AuthController],
   providers: [
     AuthService,
@@ -22,6 +30,6 @@ import { JwtTokenService } from './jwt-token.service';
     JwtAccessStrategy,
     JwtRefreshStrategy,
   ],
-  exports: [AuthService, RefreshTokenService, JwtTokenService],
+  exports: [AuthService, RefreshTokenService, JwtTokenService, PasswordService],
 })
 export class AuthModule {}
