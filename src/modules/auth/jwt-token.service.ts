@@ -4,28 +4,21 @@ import { JwtService } from '@nestjs/jwt';
 import { AccessTokenPayloadDto } from './dto/access-token-payload.dto';
 import { RefreshTokenPayloadDto } from './dto/refresh-token-payload.dto';
 import * as bcrypt from 'bcrypt';
-import {
-  JWT_ACCESS_EXPIRATION,
-  JWT_ACCESS_SECRET,
-  JWT_REFRESH_EXPIRATION,
-  JWT_REFRESH_SECRET,
-} from '@common/constants/jwt.constant';
+import { EnvVariables } from '@common/env.validation';
 
 @Injectable()
 export class JwtTokenService {
   constructor(
     private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
+    private readonly configService: ConfigService<EnvVariables>,
   ) {}
 
   generateAccessToken(payload: AccessTokenPayloadDto) {
-    const secret = this.configService.get<string>(
-      'JWT_ACCESS_SECRET',
-      JWT_ACCESS_SECRET,
-    );
-    const expiresInStr = this.configService.get<string>(
+    const secret = this.configService.getOrThrow('JWT_ACCESS_SECRET', {
+      infer: true,
+    });
+    const expiresInStr = this.configService.getOrThrow<string>(
       'JWT_ACCESS_EXPIRATION',
-      JWT_ACCESS_EXPIRATION,
     );
     const expiresIn = this.parseExpirationSeconds(expiresInStr);
     return this.jwtService.sign(payload, {
@@ -36,13 +29,9 @@ export class JwtTokenService {
 
   generateRefreshToken(payload: RefreshTokenPayloadDto) {
     if (!payload.jti) throw new Error('JTI is required');
-    const secret = this.configService.get<string>(
-      'JWT_REFRESH_SECRET',
-      JWT_REFRESH_SECRET,
-    );
-    const expiresInStr = this.configService.get<string>(
+    const secret = this.configService.getOrThrow<string>('JWT_REFRESH_SECRET');
+    const expiresInStr = this.configService.getOrThrow<string>(
       'JWT_REFRESH_EXPIRATION',
-      JWT_REFRESH_EXPIRATION,
     );
     const expiresIn = this.parseExpirationSeconds(expiresInStr);
     // Sign the refresh token

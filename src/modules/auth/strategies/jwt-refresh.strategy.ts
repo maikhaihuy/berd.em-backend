@@ -7,7 +7,6 @@ import { RefreshSessionDto } from '../dto/refresh-session.dto';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { RefreshTokenPayloadDto } from '../dto/refresh-token-payload.dto';
-import { JWT_REFRESH_SECRET } from '@common/constants/jwt.constant';
 interface RefreshTokenRequest {
   refresh_token: string;
 }
@@ -23,8 +22,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromBodyField('refresh_token'),
-      secretOrKey:
-        configService.get<string>('JWT_REFRESH_SECRET') || JWT_REFRESH_SECRET,
+      secretOrKey: configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
       passReqToCallback: true,
       ignoreExpiration: true, // We'll handle expiration manually
     } as StrategyOptionsWithRequest);

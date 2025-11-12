@@ -5,7 +5,6 @@ import { RefreshToken } from '@prisma/client';
 import { JwtTokenService } from './jwt-token.service';
 import { ConfigService } from '@nestjs/config';
 import { RefreshTokenPayloadDto } from './dto/refresh-token-payload.dto';
-import { JWT_REFRESH_EXPIRATION } from '@common/constants/jwt.constant';
 
 @Injectable()
 export class RefreshTokenService {
@@ -24,10 +23,7 @@ export class RefreshTokenService {
     const uuid = uuidv4();
     payload.jti = uuid;
     const userId = payload.sub;
-    const expiresIn = this.config.get<string>(
-      'JWT_REFRESH_EXPIRATION',
-      JWT_REFRESH_EXPIRATION,
-    );
+    const expiresIn = this.config.getOrThrow<string>('JWT_REFRESH_EXPIRATION');
     const expiresAt = new Date(
       Date.now() + this.jwtTokenService.parseExpirationTime(expiresIn),
     );
