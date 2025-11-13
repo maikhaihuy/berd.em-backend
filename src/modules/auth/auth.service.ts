@@ -248,7 +248,7 @@ export class AuthService {
     }
 
     // Verify the token
-    const isValidToken = await bcrypt.compare(
+    const isValidToken = await this.passwordService.compare(
       token,
       resetTokenRecord.hashToken,
     );
