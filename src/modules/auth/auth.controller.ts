@@ -6,8 +6,7 @@ import {
   Request,
   HttpCode,
   HttpStatus,
-  UsePipes,
-  ValidationPipe,
+  Get,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
@@ -23,6 +22,7 @@ import { RefreshSession } from './decorators/refresh-session.decorator';
 import { AuthenticatedUser } from './decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from './dto/authenticated-user.dto';
 import { RefreshSessionDto } from './dto/refresh-session.dto';
+import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -34,16 +34,15 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  @UsePipes(ValidationPipe)
   async register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
   }
 
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 attempts per minute
   @UseGuards(LocalAuthGuard)
   @Post('login')
   @ApiOperation({ summary: 'Login user' })
   @HttpCode(HttpStatus.OK)
-  @UsePipes(ValidationPipe)
   login(
     @Body() login: LoginDto,
     @AuthenticatedUser() user: AuthenticatedUserDto,
@@ -89,7 +88,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAccessGuard)
-  @Post('active-sessions')
+  @Get('active-sessions')
   @ApiOperation({ summary: 'Get active sessions for current user' })
   @HttpCode(HttpStatus.OK)
   async getActiveSessions(@AuthenticatedUser() user: AuthenticatedUserDto) {
@@ -103,10 +102,10 @@ export class AuthController {
     };
   }
 
+  @Throttle({ default: { limit: 3, ttl: 300000 } }) // 3 attempts per 5 minutes
   @Post('forgot-password')
   @ApiOperation({ summary: 'Request password reset' })
   @HttpCode(HttpStatus.OK)
-  @UsePipes(ValidationPipe)
   async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
     return this.authService.forgotPassword(forgotPasswordDto.username);
   }
@@ -114,7 +113,6 @@ export class AuthController {
   @Post('reset-password')
   @ApiOperation({ summary: 'Reset password using token' })
   @HttpCode(HttpStatus.OK)
-  @UsePipes(ValidationPipe)
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(
       resetPasswordDto.token,

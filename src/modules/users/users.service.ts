@@ -8,12 +8,15 @@ import { Prisma } from '@prisma/client';
 import { UserResponseDto } from './dto/user-response.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 
-import * as bcrypt from 'bcrypt';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { PasswordService } from '../auth/password.service';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly passwordService: PasswordService,
+  ) {}
 
   async create(createUserDto: CreateUserDto): Promise<UserResponseDto> {
     const { username, password, roleIds, ...rest } = createUserDto;
@@ -36,7 +39,7 @@ export class UsersService {
     }
 
     // hash the password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await this.passwordService.hash(password);
 
     try {
       const user = await this.prisma.user.create({
@@ -96,7 +99,7 @@ export class UsersService {
 
     const data: Prisma.UserUpdateInput = { ...rest };
     if (password) {
-      data.password = await bcrypt.hash(password, 10);
+      data.password = await this.passwordService.hash(password);
     }
 
     try {

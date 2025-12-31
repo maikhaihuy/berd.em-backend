@@ -5,14 +5,16 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-
-import * as bcrypt from 'bcrypt';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { AuthenticatedUserDto } from '../dto/authenticated-user.dto';
+import { PasswordService } from '../password.service';
 
 @Injectable()
 export class LocalStrategy extends PassportStrategy(Strategy) {
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly passwordService: PasswordService,
+  ) {
     super({ usernameField: 'username', passwordField: 'password' });
   }
 
@@ -36,10 +38,11 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
     //   throw new UnauthorizedException('User account is not active.');
     // }
 
-    if (!(await bcrypt.compare(password, user.password))) {
+    if (!(await this.passwordService.compare(password, user.password))) {
       throw new UnauthorizedException('Username or password are not match.');
     }
 
+    console.log('user: ', user);
     return new AuthenticatedUserDto({
       id: user.id,
       username: user.username,

@@ -11,7 +11,7 @@ async function main() {
   // 0) Ensure SETTINGS user exists first (idempotent)
   // We intentionally set id: 1 so createdBy/updatedBy=1 in services remain valid.
   // Self-reference on createdBy/updatedBy is acceptable because the row exists at insert time.
-  const hashed = await bcrypt.hash(SETTINGS_PASSWORD, 10);
+  const hashed = await bcrypt.hash(SETTINGS_PASSWORD, 12);
 
   const settingsUser = await prisma.user.upsert({
     where: { username: SETTINGS_USERNAME },

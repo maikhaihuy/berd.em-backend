@@ -15,6 +15,7 @@ import { AvailabilityModule } from '@modules/availability/availability.module';
 import { ScheduleModule } from '@modules/schedule/schedule.module';
 import { RosterModule } from './modules/roster/roster.module';
 import { ExceptionModule } from '@common/exception.module';
+import { validate } from '@common/env.validation';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { ExceptionModule } from '@common/exception.module';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+      validate,
     }),
     PrismaModule,
     // CaslModule,

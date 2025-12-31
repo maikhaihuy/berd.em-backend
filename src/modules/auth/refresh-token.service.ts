@@ -23,7 +23,7 @@ export class RefreshTokenService {
     const uuid = uuidv4();
     payload.jti = uuid;
     const userId = payload.sub;
-    const expiresIn = this.config.get<string>('JWT_REFRESH_EXPIRATION', '7d');
+    const expiresIn = this.config.getOrThrow<string>('JWT_REFRESH_EXPIRATION');
     const expiresAt = new Date(
       Date.now() + this.jwtTokenService.parseExpirationTime(expiresIn),
     );
