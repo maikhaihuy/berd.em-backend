@@ -29,6 +29,7 @@ import { PasswordService } from './password.service';
     JwtTokenService,
     JwtAccessStrategy,
     JwtRefreshStrategy,
+    PasswordService,
   ],
   exports: [AuthService, RefreshTokenService, JwtTokenService, PasswordService],
 })
