@@ -1,12 +1,11 @@
-import { RoleDto } from '@modules/roles/dto/role.dto';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class PermissionDto {
   @ApiProperty()
-  id: number;
+  id!: number;
 
   @ApiProperty()
-  action: string;
+  action!: string;
 
   @ApiProperty()
   subject?: string | null;
@@ -15,17 +14,25 @@ export class PermissionDto {
   description?: string | null;
 
   @ApiProperty()
-  createdAt: Date;
+  createdAt!: Date;
 
   @ApiProperty()
-  createdBy: number;
+  createdBy!: number;
 
   @ApiProperty()
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @ApiProperty()
-  updatedBy: number;
+  updatedBy!: number;
+}
 
-  // Relations
-  roles?: RoleDto[];
+export class PermissionLiteDto {
+  @ApiProperty()
+  id!: number;
+
+  @ApiProperty()
+  action!: string;
+
+  @ApiProperty()
+  subject?: string | null;
 }

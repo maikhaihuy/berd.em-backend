@@ -8,21 +8,22 @@ import {
   HttpStatus,
   Get,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags, ApiBody } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RefreshTokenService } from './refresh-token.service';
-import { LocalAuthGuard } from '@common/guards/local-auth.guard';
 import { JwtAccessGuard } from '@common/guards/jwt-access.guard';
 import { JwtRefreshGuard } from '@common/guards/jwt-refresh.guard';
-import { LoginDto } from './dto/login.dto';
-import { RegisterDto } from './dto/register.dto';
-import { ForgotPasswordDto } from './dto/forgot-password.dto';
-import { ResetPasswordDto } from './dto/reset-password.dto';
+// Deprecated imports removed: LoginDto, RegisterDto, ForgotPasswordDto, ResetPasswordDto
+// These are no longer used since Zalo authentication is now the primary method
 import { RefreshSession } from './decorators/refresh-session.decorator';
 import { AuthenticatedUser } from './decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from './dto/authenticated-user.dto';
 import { RefreshSessionDto } from './dto/refresh-session.dto';
 import { Throttle } from '@nestjs/throttler';
+import { RefreshDto } from './dto/refresh.dto';
+import { ZaloLoginDto } from './dto/zalo-login.dto';
+import { LoginDto } from './dto/login.dto';
+import { LocalAuthGuard } from '@common/guards/local-auth.guard';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -32,10 +33,17 @@ export class AuthController {
     private readonly refreshTokenService: RefreshTokenService,
   ) {}
 
-  @Post('register')
-  @HttpCode(HttpStatus.CREATED)
-  async register(@Body() registerDto: RegisterDto) {
-    return this.authService.register(registerDto);
+  @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 attempts per minute for Zalo
+  @Post('login/zalo')
+  @ApiOperation({
+    summary: 'Login with Zalo phone number authentication',
+    description:
+      'Authenticate user using Zalo access token and phone token. Only pre-registered users can log in.',
+  })
+  @ApiBody({ type: ZaloLoginDto })
+  @HttpCode(HttpStatus.OK)
+  async loginWithZalo(@Body() zaloLoginDto: ZaloLoginDto) {
+    return this.authService.loginWithZalo(zaloLoginDto);
   }
 
   @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 attempts per minute
@@ -102,21 +110,6 @@ export class AuthController {
     };
   }
 
-  @Throttle({ default: { limit: 3, ttl: 300000 } }) // 3 attempts per 5 minutes
-  @Post('forgot-password')
-  @ApiOperation({ summary: 'Request password reset' })
-  @HttpCode(HttpStatus.OK)
-  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
-    return this.authService.forgotPassword(forgotPasswordDto.username);
-  }
-
-  @Post('reset-password')
-  @ApiOperation({ summary: 'Reset password using token' })
-  @HttpCode(HttpStatus.OK)
-  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
-    return this.authService.resetPassword(
-      resetPasswordDto.token,
-      resetPasswordDto.newPassword,
-    );
-  }
+  // DEPRECATED: Password reset endpoints removed
+  // No longer needed with Zalo phone number authentication
 }

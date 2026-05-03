@@ -3,16 +3,19 @@ import { ApiProperty } from '@nestjs/swagger';
 // this response dto is used for jwt strategy
 export class AuthenticatedUserDto {
   @ApiProperty()
-  id: number;
+  id!: number;
 
   @ApiProperty()
-  username: string;
+  phone!: string;
 
   @ApiProperty()
-  employeeId?: number | null;
+  employeeId?: number;
 
   @ApiProperty()
-  roles: string[];
+  role!: string;
+
+  @ApiProperty()
+  branches!: number[]; // Danh sách ID chi nhánh được phép quản lý/làm việc
 
   constructor(partial: Partial<AuthenticatedUserDto>) {
     Object.assign(this, partial);

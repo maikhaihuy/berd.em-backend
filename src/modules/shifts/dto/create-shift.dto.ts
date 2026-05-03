@@ -13,35 +13,35 @@ export class CreateShiftDto {
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name!: string;
 
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
-  abbreviation: string;
+  abbreviation!: string;
 
   @ApiProperty()
   @IsInt()
   @IsPositive()
-  maxSlots: number;
+  maxSlots!: number;
 
   @ApiProperty()
   @IsInt()
   @IsPositive()
-  branchId: number;
+  branchId!: number;
 
   @ApiProperty()
   @IsDateString()
-  startTime: string;
+  startTime!: string;
 
   @ApiProperty()
   @IsDateString()
-  endTime: string;
+  endTime!: string;
 
   @ApiProperty()
   @IsDecimal()
-  multiplier: string;
+  multiplier!: number;
 
   @ApiProperty()
-  status: ShiftStatus;
+  status!: ShiftStatus;
 }

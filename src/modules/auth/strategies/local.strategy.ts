@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { AuthenticatedUserDto } from '../dto/authenticated-user.dto';
-import { PasswordService } from '../password.service';
+import { PasswordService } from '../../../common/services/password.service';
 
 @Injectable()
 export class LocalStrategy extends PassportStrategy(Strategy) {

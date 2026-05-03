@@ -1,31 +1,39 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { UserStatus } from '@prisma/client';
 
 export class UserDto {
-  @ApiProperty()
-  id: number;
+  @ApiProperty({ description: 'User ID' })
+  id!: number;
 
-  @ApiProperty()
-  username: string;
+  @ApiProperty({ description: 'Zalo unique identifier' })
+  zaloId!: string;
 
-  @ApiProperty()
-  employeeId?: number | null;
+  @ApiProperty({ description: 'Phone number' })
+  phoneNumber!: string;
 
-  @ApiProperty()
-  password: string;
+  @ApiProperty({ description: 'Full name' })
+  fullName!: string;
 
-  @ApiProperty()
-  createdAt: Date;
+  @ApiProperty({ description: 'Avatar URL', required: false })
+  avatarUrl?: string | null;
 
-  @ApiProperty()
-  createdBy: number;
+  @ApiProperty({ description: 'User status', enum: UserStatus })
+  status!: UserStatus;
 
-  @ApiProperty()
-  updatedAt: Date;
+  @ApiProperty({ description: 'Created timestamp' })
+  createdAt!: Date;
 
-  @ApiProperty()
-  updatedBy: number;
+  @ApiProperty({ description: 'Updated timestamp' })
+  updatedAt!: Date;
+}
 
-  constructor(partial: Partial<UserDto>) {
-    Object.assign(this, partial);
-  }
+export class UserLiteDto {
+  @ApiProperty({ description: 'User ID' })
+  id!: number;
+
+  @ApiProperty({ description: 'Full name' })
+  fullName!: string;
+
+  @ApiProperty({ description: 'Avatar URL', required: false })
+  avatarUrl?: string | null;
 }

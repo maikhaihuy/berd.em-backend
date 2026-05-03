@@ -1,15 +1,46 @@
-import { IsString, IsOptional, MinLength } from 'class-validator';
+import { IsString, IsOptional, IsInt, IsUrl, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { UserStatus } from '@prisma/client';
 
 export class UpdateUserDto {
-  @ApiProperty({ required: false })
-  @IsString()
+  @ApiProperty({
+    description: 'User phone number',
+    example: '+84901234567',
+    required: false,
+  })
   @IsOptional()
-  username?: string;
+  @IsString()
+  phoneNumber?: string;
 
-  @ApiProperty({ required: false })
-  @IsString()
+  @ApiProperty({
+    description: 'User full name',
+    example: 'Nguyễn Văn A',
+    required: false,
+  })
   @IsOptional()
-  @MinLength(6, { message: 'Password must be at least 6 characters long.' })
-  password?: string;
+  @IsString()
+  fullName?: string;
+
+  @ApiProperty({
+    description: 'User avatar URL',
+    example: 'https://example.com/avatar.jpg',
+    required: false,
+  })
+  @IsOptional()
+  @IsUrl()
+  avatarUrl?: string;
+
+  @ApiProperty({
+    description: 'User status',
+    enum: UserStatus,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(UserStatus)
+  status?: UserStatus;
+
+  @ApiProperty({ description: 'Role ID', example: 1, required: false })
+  @IsOptional()
+  @IsInt()
+  roleId?: number;
 }

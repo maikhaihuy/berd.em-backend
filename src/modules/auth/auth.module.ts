@@ -6,12 +6,12 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { RefreshTokenService } from './refresh-token.service';
 import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
-import { LocalStrategy } from './strategies/local.strategy';
 import { UsersModule } from '../users/users.module';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { JwtTokenService } from './jwt-token.service';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { PasswordService } from './password.service';
+import { PasswordService } from '../../common/services/password.service';
+import { ZaloAuthService } from './zalo-auth.service';
 
 @Module({
   imports: [
@@ -24,13 +24,19 @@ import { PasswordService } from './password.service';
   controllers: [AuthController],
   providers: [
     AuthService,
+    PasswordService,
     RefreshTokenService,
-    LocalStrategy,
     JwtTokenService,
     JwtAccessStrategy,
     JwtRefreshStrategy,
-    PasswordService,
+    ZaloAuthService,
   ],
-  exports: [AuthService, RefreshTokenService, JwtTokenService, PasswordService],
+  exports: [
+    AuthService,
+    RefreshTokenService,
+    JwtTokenService,
+    PasswordService,
+    ZaloAuthService,
+  ],
 })
 export class AuthModule {}

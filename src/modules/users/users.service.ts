@@ -7,63 +7,94 @@ import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { UserResponseDto } from './dto/user-response.dto';
 import { CreateUserDto } from './dto/create-user.dto';
-
 import { UpdateUserDto } from './dto/update-user.dto';
-import { PasswordService } from '../auth/password.service';
+import { userWithBranchesInclude, userWithRoleInclude } from './user.types';
+import { UserMapper } from './user.mapper';
 
 @Injectable()
 export class UsersService {
-  constructor(
-    private prisma: PrismaService,
-    private readonly passwordService: PasswordService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
-  async create(createUserDto: CreateUserDto): Promise<UserResponseDto> {
-    const { username, password, roleIds, ...rest } = createUserDto;
+  async create(
+    createUserDto: CreateUserDto,
+    currentUserId: number,
+  ): Promise<UserResponseDto> {
+    const { branchIds, primaryBranchId, ...userData } = createUserDto;
 
-    // check if the username already exists
+    // Check if zaloId already exists
     const existingUser = await this.prisma.user.findUnique({
-      where: { username },
+      where: { zaloId: userData.zaloId },
     });
     if (existingUser) {
-      throw new BadRequestException('Username already exists');
-    }
-    // check if roleIds are not existing in the database
-    const roles = await this.prisma.role.findMany({
-      where: {
-        id: { in: roleIds },
-      },
-    });
-    if (roles.length !== roleIds.length) {
-      throw new BadRequestException('One or more roles do not exist');
+      throw new BadRequestException('User with this Zalo ID already exists');
     }
 
-    // hash the password
-    const hashedPassword = await this.passwordService.hash(password);
+    // Check if phone number already exists
+    const existingPhone = await this.prisma.user.findUnique({
+      where: { phoneNumber: userData.phoneNumber },
+    });
+    if (existingPhone) {
+      throw new BadRequestException(
+        'User with this phone number already exists',
+      );
+    }
+
+    // Verify role exists
+    const role = await this.prisma.role.findUnique({
+      where: { id: userData.roleId },
+    });
+    if (!role) {
+      throw new BadRequestException('Role does not exist');
+    }
+
+    // Verify branches if provided
+    if (branchIds && branchIds.length > 0) {
+      const branches = await this.prisma.branch.findMany({
+        where: { id: { in: branchIds } },
+      });
+      if (branches.length !== branchIds.length) {
+        throw new BadRequestException('One or more branches do not exist');
+      }
+
+      // Validate primaryBranchId is in branchIds if provided
+      if (primaryBranchId && !branchIds.includes(primaryBranchId)) {
+        throw new BadRequestException(
+          'Primary branch must be in the list of assigned branches',
+        );
+      }
+    }
 
     try {
       const user = await this.prisma.user.create({
         data: {
-          ...rest,
-          username,
-          password: hashedPassword,
-          roles: {
-            connect: roleIds.map((id) => ({ id })),
-          },
-          status: 'ACTIVE',
+          ...userData,
+          createdBy: currentUserId,
+          updatedBy: currentUserId,
+          userBranches:
+            branchIds && branchIds.length > 0
+              ? {
+                  create: branchIds.map((branchId) => ({
+                    branchId,
+                    isPrimary: branchId === primaryBranchId,
+                  })),
+                }
+              : undefined,
         },
         include: {
-          roles: true,
+          ...userWithRoleInclude,
+          ...userWithBranchesInclude,
         },
       });
-      return new UserResponseDto(user);
+
+      return UserMapper.toDto(user);
     } catch (error) {
-      // TODO: Handle specific Prisma errors
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        throw new BadRequestException('Username already exists');
+        throw new BadRequestException(
+          'User with these credentials already exists',
+        );
       }
       throw error;
     }
@@ -72,87 +103,93 @@ export class UsersService {
   async findAll(): Promise<UserResponseDto[]> {
     const users = await this.prisma.user.findMany({
       include: {
-        roles: true,
+        ...userWithRoleInclude,
+        ...userWithBranchesInclude,
       },
     });
-    return users.map((user) => new UserResponseDto(user));
+    return users.map((user) => UserMapper.toDto(user));
   }
 
   async findOne(id: number): Promise<UserResponseDto> {
     const user = await this.prisma.user.findUnique({
       where: { id },
       include: {
-        roles: true,
+        ...userWithRoleInclude,
+        ...userWithBranchesInclude,
       },
     });
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found.`);
     }
-    return new UserResponseDto(user);
+    return UserMapper.toDto(user);
+  }
+
+  async findByZaloId(zaloId: string): Promise<UserResponseDto | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { zaloId },
+      include: {
+        ...userWithRoleInclude,
+        ...userWithBranchesInclude,
+      },
+    });
+    return user ? UserMapper.toDto(user) : null;
   }
 
   async update(
     id: number,
     updateUserDto: UpdateUserDto,
+    currentUserId: number,
   ): Promise<UserResponseDto> {
-    const { password, ...rest } = updateUserDto;
+    // Verify user exists
+    const existingUser = await this.prisma.user.findUnique({
+      where: { id },
+    });
+    if (!existingUser) {
+      throw new NotFoundException(`User with ID ${id} not found.`);
+    }
 
-    const data: Prisma.UserUpdateInput = { ...rest };
-    if (password) {
-      data.password = await this.passwordService.hash(password);
+    // If updating phone number, check it's not already taken
+    if (
+      updateUserDto.phoneNumber &&
+      updateUserDto.phoneNumber !== existingUser.phoneNumber
+    ) {
+      const phoneExists = await this.prisma.user.findUnique({
+        where: { phoneNumber: updateUserDto.phoneNumber },
+      });
+      if (phoneExists) {
+        throw new BadRequestException('Phone number already in use');
+      }
+    }
+
+    // If updating role, verify it exists
+    if (updateUserDto.roleId) {
+      const role = await this.prisma.role.findUnique({
+        where: { id: updateUserDto.roleId },
+      });
+      if (!role) {
+        throw new BadRequestException('Role does not exist');
+      }
     }
 
     try {
       const user = await this.prisma.user.update({
         where: { id },
-        data,
+        data: {
+          ...updateUserDto,
+          updatedBy: currentUserId,
+        },
         include: {
-          roles: true,
+          ...userWithRoleInclude,
+          ...userWithBranchesInclude,
         },
       });
-      return new UserResponseDto(user);
+      return UserMapper.toDto(user);
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2025'
       ) {
         throw new NotFoundException(`User with ID ${id} not found.`);
-      }
-      throw error;
-    }
-  }
-
-  async updateRoles(userId: number, roleIds: number[]) {
-    // Check if the user exists
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
-    if (!user) {
-      throw new NotFoundException(`User with ID ${userId} not found.`);
-    }
-
-    try {
-      const updatedUser = await this.prisma.user.update({
-        where: { id: userId },
-        data: {
-          roles: {
-            set: roleIds.map((id) => ({ id })), // Use 'set' to replace all existing roles
-          },
-        },
-        include: {
-          roles: true,
-        },
-      });
-      return new UserResponseDto(updatedUser);
-    } catch (error) {
-      // Handle cases where a provided roleId does not exist
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2025'
-      ) {
-        throw new BadRequestException(
-          'One or more of the provided role IDs do not exist.',
-        );
       }
       throw error;
     }
@@ -171,20 +208,4 @@ export class UsersService {
       throw error;
     }
   }
-
-  // async assignDefaultRole(userId: number) {
-  //   // Find the default employee role
-  //   const employeeRole = await this.prisma.role.findFirst({
-  //     where: { name: 'employee' },
-  //   });
-
-  //   if (employeeRole) {
-  //     await this.prisma.userRole.create({
-  //       data: {
-  //         userId,
-  //         roleId: employeeRole.id,
-  //       },
-  //     });
-  //   }
-  // }
 }

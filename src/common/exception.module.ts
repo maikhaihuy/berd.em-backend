@@ -50,13 +50,13 @@ export class ExceptionModule {
         environment: process.env.NODE_ENV || 'development',
         // ✅ Sentry v10 style integrations
         integrations: [
-          Sentry.httpIntegration(),
-          Sentry.expressIntegration(),
-          nodeProfilingIntegration(),
+          // Sentry.httpIntegration(),
+          // Sentry.expressIntegration(),
+          // nodeProfilingIntegration(),
         ],
         // ✅ Config sample rates
         tracesSampleRate: 1.0,
-        profilesSampleRate: 1.0,
+        profilesSampleRate: 0,
       });
       this.logger.log('✅ Sentry initialized (v10.x)', 'ExceptionModule');
     }

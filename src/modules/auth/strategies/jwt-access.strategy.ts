@@ -32,7 +32,7 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy) {
         },
       },
     });
-    console.log('jtw-access', user);
+
     if (!user) {
       throw new UnauthorizedException();
     }

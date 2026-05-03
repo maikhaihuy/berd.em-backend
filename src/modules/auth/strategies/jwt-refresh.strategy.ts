@@ -3,7 +3,6 @@ import { ExtractJwt, Strategy, StrategyOptionsWithRequest } from 'passport-jwt';
 import { TokenExpiredError } from 'jsonwebtoken';
 import { Request } from 'express';
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { RefreshSessionDto } from '../dto/refresh-session.dto';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
@@ -12,9 +11,7 @@ import {
   TokenExpiredException,
   InvalidTokenException,
 } from '../exceptions/auth.exceptions';
-interface RefreshTokenRequest {
-  refresh_token: string;
-}
+import { RefreshDto } from '../dto/refresh.dto';
 
 @Injectable()
 export class JwtRefreshStrategy extends PassportStrategy(
@@ -23,15 +20,12 @@ export class JwtRefreshStrategy extends PassportStrategy(
 ) {
   private readonly logger = new Logger(JwtRefreshStrategy.name);
 
-  constructor(
-    private readonly configService: ConfigService,
-    private readonly prisma: PrismaService,
-  ) {
+  constructor(private readonly prisma: PrismaService) {
     super({
-      jwtFromRequest: ExtractJwt.fromBodyField('refresh_token'),
-      secretOrKey: configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
+      jwtFromRequest: ExtractJwt.fromBodyField('refreshToken'),
+      secretOrKey: process.env.JWT_REFRESH_SECRET,
       passReqToCallback: true,
-      ignoreExpiration: false, // Let passport-jwt handle expiration
+      ignoreExpiration: true, // Let passport-jwt handle expiration
     } as StrategyOptionsWithRequest);
   }
 
@@ -41,7 +35,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
     done: (error: Error | null, user?: any, info?: any) => void,
   ): Promise<RefreshSessionDto | void> {
     try {
-      const refreshToken = (req.body as RefreshTokenRequest)?.refresh_token;
+      const refreshToken = (req.body as RefreshDto)?.refreshToken;
 
       if (!refreshToken || typeof refreshToken !== 'string') {
         this.logger.warn('Refresh token missing from request body');

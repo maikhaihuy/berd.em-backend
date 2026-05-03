@@ -5,17 +5,17 @@ export class CreateBranchDto {
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name!: string;
 
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
-  abbreviation: string;
+  abbreviation!: string;
 
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
-  address: string;
+  address!: string;
 
   @ApiProperty({ required: false })
   @IsEmail()

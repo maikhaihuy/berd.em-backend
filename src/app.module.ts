@@ -2,53 +2,56 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from '@modules/auth/auth.module';
 import { UsersModule } from '@modules/users/users.module';
-import { EmployeesModule } from '@modules/employees/employees.module';
+import { EmployeesModule } from '@modules/employees/employee.module';
 import { ShiftsModule } from '@modules/shifts/shifts.module';
-// import { TimeTrackingModule } from '@modules/time-tracking/time-tracking.module';
-import { BranchesModule } from '@modules/branches/branches.module';
+import { BranchesModule } from '@modules/branches/branch.module';
 import { PrismaModule } from '@modules/prisma/prisma.module';
-// import { CaslModule } from '@modules/casl/casl.module';
-import { RolesModule } from './modules/roles/roles.module';
-import { PermissionsModule } from './modules/permissions/permissions.module';
+import { RolesModule } from './modules/roles/role.module';
+import { PermissionsModule } from './modules/permissions/permission.module';
+import { RolePermissionsModule } from './modules/role-permissions/role-permissions.module';
+import { UserBranchesModule } from './modules/user-branches/user-branches.module';
 import { EmployeeHourlyRatesModule } from '@modules/employee-hourly-rates/employee-hourly-rates.module';
 import { AvailabilityModule } from '@modules/availability/availability.module';
-import { ScheduleModule } from '@modules/schedule/schedule.module';
-import { RosterModule } from './modules/roster/roster.module';
+// NOTE: ScheduleModule and RosterModule have been REMOVED (deprecated in ERD v0.3.1)
+// These are fully replaced by WorkSlotModule - modules deleted from codebase
 import { ExceptionModule } from '@common/exception.module';
 import { validate } from '@common/env.validation';
+import { WorkSlotsModule } from './modules/work-slots/work-slots.module';
+import { AttendanceHistoryModule } from './modules/attendance-history/attendance-history.module';
+import { LeaveRequestsModule } from './modules/leave-requests/leave-requests.module';
+import { TimeTrackingModule } from './modules/time-tracking/time-tracking.module';
 
 @Module({
   imports: [
     ExceptionModule,
-    EmployeeHourlyRatesModule,
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
       validate,
     }),
     PrismaModule,
-    // CaslModule,
+    // Authentication & Authorization
     AuthModule,
     UsersModule,
-    EmployeesModule,
     RolesModule,
     PermissionsModule,
-    ShiftsModule,
-    //TimeTrackingModule,
+    RolePermissionsModule,
+    UserBranchesModule,
+    // Core Entities
+    EmployeesModule,
+    EmployeeHourlyRatesModule,
     BranchesModule,
+    ShiftsModule,
     AvailabilityModule,
-    ScheduleModule,
-    RosterModule,
+    WorkSlotsModule,
+    // Shift Management (WorkSlot replaces Schedule + Roster)
+    // ✅ WorkSlotModule created and registered
+    AttendanceHistoryModule,
+    LeaveRequestsModule,
+    // Payment Management
+    TimeTrackingModule,
+    // TODO: Add PayPeriodsModule when created
+    // TODO: Add PayrollEntriesModule when created
   ],
-  // providers: [
-  //   {
-  //     provide: APP_FILTER,
-  //     useClass: HttpExceptionFilter,
-  //   },
-  //   {
-  //     provide: APP_INTERCEPTOR,
-  //     useClass: TransformInterceptor,
-  //   },
-  // ],
 })
 export class AppModule {}

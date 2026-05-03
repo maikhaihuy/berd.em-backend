@@ -1,23 +1,21 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { RoleDto } from '@modules/roles/dto/role.dto';
+import { UserDto } from './user.dto';
 
-export class UserResponseDto {
-  @ApiProperty()
-  id: number;
+export class UserResponseDto extends UserDto {
+  @ApiProperty({ description: 'Role ID' })
+  roleId!: number;
 
-  @ApiProperty()
-  username: string;
+  @ApiProperty({ description: 'Role name', required: false })
+  roleName?: string;
 
-  @ApiProperty()
-  createdAt: Date;
-
-  @ApiProperty()
-  updatedAt: Date;
-
-  @ApiProperty({ type: [Object] }) // You might want to create a separate RoleResponseDto
-  roles: RoleDto[];
-
-  constructor(partial: Partial<UserResponseDto>) {
-    Object.assign(this, partial);
-  }
+  @ApiProperty({
+    description: 'Assigned branches',
+    required: false,
+    type: 'array',
+  })
+  branches?: Array<{
+    branchId: number;
+    branchName: string;
+    isPrimary: boolean;
+  }>;
 }

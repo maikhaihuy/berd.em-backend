@@ -19,8 +19,9 @@ import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserRolesDto } from './dto/update-user-roles.dto';
 import { JwtAccessGuard } from '@common/guards/jwt-access.guard';
+import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
+import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 
 @ApiTags('users')
 @Controller('users')
@@ -36,8 +37,11 @@ export class UsersController {
     type: UserResponseDto,
   })
   @ApiBody({ type: CreateUserDto })
-  async create(@Body() createUserDto: CreateUserDto) {
-    return await this.usersService.create(createUserDto);
+  async create(
+    @Body() createUserDto: CreateUserDto,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
+  ) {
+    return await this.usersService.create(createUserDto, currentUser.id);
   }
 
   @Get()
@@ -73,26 +77,16 @@ export class UsersController {
   })
   @ApiResponse({ status: 404, description: 'User not found.' })
   @ApiBody({ type: UpdateUserDto })
-  async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return await this.usersService.update(+id, updateUserDto);
+  async update(
+    @Param('id') id: string,
+    @Body() updateUserDto: UpdateUserDto,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
+  ) {
+    return await this.usersService.update(+id, updateUserDto, currentUser.id);
   }
 
-  @Put(':id/roles')
-  // @CheckAbilities({ action: 'manage', subject: 'all' })
-  @ApiOperation({ summary: "Update a user's roles" })
-  @ApiResponse({
-    status: 200,
-    description: 'The user roles have been successfully updated.',
-    type: UserResponseDto,
-  })
-  @ApiResponse({ status: 404, description: 'User or role not found.' })
-  @ApiBody({ type: UpdateUserRolesDto })
-  async updateRoles(
-    @Param('id') id: string,
-    @Body() updateUserRolesDto: UpdateUserRolesDto,
-  ): Promise<UserResponseDto> {
-    return await this.usersService.updateRoles(+id, updateUserRolesDto.roleIds);
-  }
+  // Note: Role update is now handled via PUT /users/:id with roleId field
+  // since User now has single roleId instead of many-to-many relationship
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)

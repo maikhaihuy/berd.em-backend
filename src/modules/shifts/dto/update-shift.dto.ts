@@ -39,7 +39,7 @@ export class UpdateShiftDto {
   @ApiProperty()
   @IsDecimal()
   @IsOptional()
-  multiplier?: string;
+  multiplier?: number;
 
   @ApiProperty()
   @IsOptional()
