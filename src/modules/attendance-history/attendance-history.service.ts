@@ -127,9 +127,7 @@ export class AttendanceHistoryService {
     });
 
     if (!history) {
-      throw new NotFoundException(
-        `Attendance history with ID ${id} not found`,
-      );
+      throw new NotFoundException(`Attendance history with ID ${id} not found`);
     }
 
     return new AttendanceHistoryResponseDto(history);

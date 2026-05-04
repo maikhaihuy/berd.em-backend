@@ -95,7 +95,12 @@ export class WorkSlotsService {
    */
   async findAll(
     filter: WorkSlotFilterDto,
-  ): Promise<{ data: WorkSlotResponseDto[]; total: number; page: number; limit: number }> {
+  ): Promise<{
+    data: WorkSlotResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     const page = filter.page || 1;
     const limit = filter.limit || 50;
     const skip = (page - 1) * limit;
@@ -563,7 +568,10 @@ export class WorkSlotsService {
         },
         {
           // New slot completely contains existing slot
-          AND: [{ startTime: { gte: startTime } }, { endTime: { lte: endTime } }],
+          AND: [
+            { startTime: { gte: startTime } },
+            { endTime: { lte: endTime } },
+          ],
         },
       ],
     };

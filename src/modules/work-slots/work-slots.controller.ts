@@ -20,7 +20,10 @@ import { BulkCreateWorkSlotDto } from './dto/bulk-create-work-slot.dto';
 import { CheckInDto } from './dto/check-in.dto';
 import { CheckOutDto } from './dto/check-out.dto';
 import { WorkSlotFilterDto } from './dto/work-slot-filter.dto';
-import { ConflictCheckDto, ConflictResponseDto } from './dto/conflict-check.dto';
+import {
+  ConflictCheckDto,
+  ConflictResponseDto,
+} from './dto/conflict-check.dto';
 
 @ApiTags('work-slots')
 @Controller('work-slots')
@@ -111,16 +114,28 @@ export class WorkSlotsController {
   @ApiQuery({ name: 'employeeId', required: false, type: Number })
   @ApiQuery({ name: 'startDate', required: false, type: String })
   @ApiQuery({ name: 'endDate', required: false, type: String })
-  @ApiQuery({ name: 'status', required: false, enum: ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'ABSENT'] })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 50)' })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'ABSENT'],
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 50)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Work slots retrieved successfully',
   })
-  findAll(
-    @Query() filter: WorkSlotFilterDto,
-  ): Promise<{
+  findAll(@Query() filter: WorkSlotFilterDto): Promise<{
     data: WorkSlotResponseDto[];
     total: number;
     page: number;
@@ -149,7 +164,10 @@ export class WorkSlotsController {
     type: WorkSlotResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Bad request - validation failed' })
-  @ApiResponse({ status: 404, description: 'Work slot, branch, or employee not found' })
+  @ApiResponse({
+    status: 404,
+    description: 'Work slot, branch, or employee not found',
+  })
   @ApiResponse({ status: 409, description: 'Scheduling conflict detected' })
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -164,7 +182,10 @@ export class WorkSlotsController {
     status: 200,
     description: 'Work slot deleted successfully',
   })
-  @ApiResponse({ status: 400, description: 'Cannot delete work slot in progress or completed' })
+  @ApiResponse({
+    status: 400,
+    description: 'Cannot delete work slot in progress or completed',
+  })
   @ApiResponse({ status: 404, description: 'Work slot not found' })
   remove(@Param('id', ParseIntPipe) id: number): Promise<{ message: string }> {
     return this.workSlotsService.remove(id);

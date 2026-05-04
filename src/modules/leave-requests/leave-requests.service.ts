@@ -99,9 +99,7 @@ export class LeaveRequestsService {
       },
     });
 
-    return leaveRequests.map(
-      (request) => new LeaveRequestResponseDto(request),
-    );
+    return leaveRequests.map((request) => new LeaveRequestResponseDto(request));
   }
 
   async findOne(id: number): Promise<LeaveRequestResponseDto> {
@@ -147,9 +145,7 @@ export class LeaveRequestsService {
       },
     });
 
-    return leaveRequests.map(
-      (request) => new LeaveRequestResponseDto(request),
-    );
+    return leaveRequests.map((request) => new LeaveRequestResponseDto(request));
   }
 
   async findByStatus(status: LeaveStatus): Promise<LeaveRequestResponseDto[]> {
@@ -160,9 +156,7 @@ export class LeaveRequestsService {
       },
     });
 
-    return leaveRequests.map(
-      (request) => new LeaveRequestResponseDto(request),
-    );
+    return leaveRequests.map((request) => new LeaveRequestResponseDto(request));
   }
 
   async update(

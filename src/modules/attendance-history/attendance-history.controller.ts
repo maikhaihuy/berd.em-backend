@@ -62,7 +62,9 @@ export class AttendanceHistoryController {
     type: AttendanceHistoryResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Attendance history not found' })
-  async findOne(@Param('id') id: string): Promise<AttendanceHistoryResponseDto> {
+  async findOne(
+    @Param('id') id: string,
+  ): Promise<AttendanceHistoryResponseDto> {
     return this.attendanceHistoryService.findOne(+id);
   }
 
