@@ -1,35 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Employee } from '@prisma/client';
+import { EmployeeDto } from './employee.dto';
+import { UserLiteDto } from '@modules/users/dto/user.dto';
 
-export class EmployeeResponseDto {
-  @ApiProperty()
-  id: number;
-
-  @ApiProperty()
-  name: string;
-
-  @ApiProperty()
-  phone: string;
-
-  @ApiProperty({ required: false })
-  avatar?: string | null;
-
-  @ApiProperty({ required: false })
-  email?: string | null;
-
-  @ApiProperty({ required: false })
-  address?: string | null;
-
-  @ApiProperty()
-  isActive: boolean;
-
-  @ApiProperty()
-  createdAt: Date;
-
-  @ApiProperty()
-  updatedAt: Date;
-
-  constructor(partial: Partial<Employee>) {
-    Object.assign(this, partial);
-  }
+export class EmployeeResponseDto extends EmployeeDto {
+  @ApiProperty({ type: [Object] }) // You might want to create a separate PermissionResponseDto
+  user?: UserLiteDto;
 }

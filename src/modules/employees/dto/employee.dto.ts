@@ -1,4 +1,3 @@
-import { BranchDto } from '@modules/branches/dto/branch.dto';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class EmployeeDto {
@@ -12,30 +11,34 @@ export class EmployeeDto {
   phoneNumber!: string;
 
   @ApiProperty()
-  dateOfBirth?: Date;
+  dateOfBirth?: Date | null;
 
   @ApiProperty()
-  avatar?: string;
+  avatar?: string | null;
 
   @ApiProperty()
-  email?: string;
+  email?: string | null;
 
   @ApiProperty()
-  address?: string;
+  address?: string | null;
 
   @ApiProperty()
-  probationStartDate?: Date;
+  probationStartDate?: Date | null;
 
   @ApiProperty()
-  officialStartDate?: Date;
+  officialStartDate?: Date | null;
 
   @ApiProperty()
-  createdAt?: Date;
+  createdAt!: Date;
 
   @ApiProperty()
-  updatedAt?: Date;
+  createdBy!: number;
 
-  branches?: BranchDto[];
+  @ApiProperty()
+  updatedAt!: Date;
+
+  @ApiProperty()
+  updatedBy!: number;
 }
 
 export class EmployeeLiteDto {
@@ -49,20 +52,20 @@ export class EmployeeLiteDto {
   phoneNumber!: string;
 
   @ApiProperty({ required: false })
-  email?: string;
+  email?: string | null;
 
   @ApiProperty({ required: false })
-  avatar?: string;
+  avatar?: string | null;
 
   @ApiProperty({ required: false })
-  address?: string;
+  address?: string | null;
 
   @ApiProperty({ required: false })
-  dateOfBirth?: Date;
+  dateOfBirth?: Date | null;
 
   @ApiProperty({ required: false })
-  probationStartDate?: Date;
+  probationStartDate?: Date | null;
 
   @ApiProperty({ required: false })
-  officialStartDate?: Date;
+  officialStartDate?: Date | null;
 }

@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateShiftDto } from './dto/create-shift.dto';
 import { UpdateShiftDto } from './dto/update-shift.dto';
 import { ShiftMapper } from './shift.mapper';
-import { ShiftDto } from './dto/shift.dto';
+import { ShiftResponseDto } from './dto/shift-response.dto';
 
 @Injectable()
 export class ShiftsService {
@@ -12,7 +12,7 @@ export class ShiftsService {
   async create(
     createShiftDto: CreateShiftDto,
     currentUserId: number,
-  ): Promise<ShiftDto> {
+  ): Promise<ShiftResponseDto> {
     // Verify branch exists
     const existingBranch = await this.prisma.branch.findUnique({
       where: { id: createShiftDto.branchId },
@@ -30,29 +30,29 @@ export class ShiftsService {
         updatedBy: currentUserId,
       },
     });
-    return ShiftMapper.toShiftDto(shift);
+    return ShiftMapper.toDto(shift);
   }
 
-  async findAll(): Promise<ShiftDto[]> {
+  async findAll(): Promise<ShiftResponseDto[]> {
     const shifts = await this.prisma.shift.findMany();
     return ShiftMapper.toDtos(shifts);
   }
 
-  async findOne(id: number): Promise<ShiftDto> {
+  async findOne(id: number): Promise<ShiftResponseDto> {
     const shift = await this.prisma.shift.findUnique({
       where: { id },
     });
     if (!shift) {
       throw new NotFoundException(`Shift with ID ${id} not found.`);
     }
-    return ShiftMapper.toShiftDto(shift);
+    return ShiftMapper.toDto(shift);
   }
 
   async update(
     id: number,
     updateShiftDto: UpdateShiftDto,
     currentUserId: number,
-  ): Promise<ShiftDto> {
+  ): Promise<ShiftResponseDto> {
     const shift = await this.prisma.shift.update({
       where: { id },
       data: {
@@ -60,7 +60,7 @@ export class ShiftsService {
         updatedBy: currentUserId,
       },
     });
-    return ShiftMapper.toShiftDto(shift);
+    return ShiftMapper.toDto(shift);
   }
 
   async remove(id: number): Promise<void> {

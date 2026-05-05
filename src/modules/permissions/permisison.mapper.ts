@@ -2,7 +2,7 @@ import { Permission } from '@prisma/client';
 import { PermissionResponseDto } from './dto/permission-response.dto';
 import { PermissionDto } from './dto/permission.dto';
 import { PermissionWithRoles } from './permission.types';
-import { RoleLiteDto } from '@modules/roles/dto/role.dto';
+import { RoleMapper } from '@modules/roles/role.mappers';
 
 export class PermissionMapper {
   // 🧱 Base mapper
@@ -25,13 +25,9 @@ export class PermissionMapper {
     permission: Partial<Permission & PermissionWithRoles>,
   ): Partial<PermissionResponseDto> {
     return {
-      roles: permission.rolePermissions?.map(
-        (rp) =>
-          ({
-            id: rp.role.id,
-            name: rp.role.name,
-          }) as RoleLiteDto,
-      ),
+      roles:
+        permission.rolePermissions?.map((rp) => RoleMapper.mapLite(rp.role)) ||
+        [],
     };
   }
 

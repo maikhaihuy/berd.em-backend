@@ -10,7 +10,7 @@ import {
   HttpStatus,
   UseGuards,
 } from '@nestjs/common';
-import { ShiftsService } from './shifts.service';
+import { ShiftsService } from './shift.service';
 import { CreateShiftDto } from './dto/create-shift.dto';
 import { UpdateShiftDto } from './dto/update-shift.dto';
 import { ShiftResponseDto } from './dto/shift-response.dto';

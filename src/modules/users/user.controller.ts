@@ -12,7 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
-import { UsersService } from './users.service';
+import { UsersService } from './user.service';
 // import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 // import { AbilitiesGuard } from '../../common/guards/abilities.guard';
 // import { CheckAbilities } from '../../common/decorators/abilities.decorator';

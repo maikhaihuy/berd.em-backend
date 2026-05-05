@@ -1,6 +1,6 @@
 import { Role } from '@prisma/client';
 import { RoleResponseDto } from './dto/role-response.dto';
-import { RoleDto } from './dto/role.dto';
+import { RoleDto, RoleLiteDto } from './dto/role.dto';
 import { RoleWithPermissions } from './role.types';
 import { PermissionLiteDto } from '@modules/permissions/dto/permission.dto';
 
@@ -16,6 +16,13 @@ export class RoleMapper {
       createdBy: user.createdBy,
       updatedAt: user.updatedAt,
       updatedBy: user.updatedBy,
+    };
+  }
+
+  static mapLite(this: void, user: Role): RoleLiteDto {
+    return {
+      id: user.id,
+      name: user.name,
     };
   }
 

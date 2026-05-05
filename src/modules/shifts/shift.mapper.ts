@@ -1,8 +1,11 @@
 import { Shift } from '@prisma/client';
 import { ShiftDto, ShiftLiteDto } from './dto/shift.dto';
+import { ShiftResponseDto } from './dto/shift-response.dto';
+import { ShiftWithBranch } from './shift.types';
+import { BranchMapper } from '../branches/branch.mapper';
 
 export class ShiftMapper {
-  static toShiftDto(shift: Shift): ShiftDto {
+  static mapBase(shift: Shift): ShiftDto {
     return {
       id: shift.id,
       branchId: shift.branchId,
@@ -20,7 +23,7 @@ export class ShiftMapper {
     };
   }
 
-  static toShiftLiteDto(shift: Shift): ShiftLiteDto {
+  static mapLite(shift: Shift): ShiftLiteDto {
     return {
       id: shift.id,
       name: shift.name,
@@ -32,11 +35,22 @@ export class ShiftMapper {
     };
   }
 
-  static toDtos(shifts: Shift[]): ShiftDto[] {
-    return shifts.map((shift) => this.toShiftDto(shift));
+  static mapBranch(
+    shift: Partial<Shift & ShiftWithBranch>,
+  ): Partial<ShiftResponseDto> {
+    return {
+      branch: BranchMapper.mapLite(shift.branch!),
+    };
   }
 
-  static toLiteDtos(shifts: Shift[]): ShiftLiteDto[] {
-    return shifts.map((shift) => this.toShiftLiteDto(shift));
+  static toDto(shift: Shift): ShiftResponseDto {
+    return {
+      ...this.mapBase(shift),
+      ...this.mapBranch(shift),
+    } as ShiftResponseDto;
+  }
+
+  static toDtos(shifts: Shift[]): ShiftResponseDto[] {
+    return shifts.map((shift) => this.toDto(shift));
   }
 }

@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from '@modules/auth/auth.module';
-import { UsersModule } from '@modules/users/users.module';
+import { UsersModule } from '@modules/users/user.module';
 import { EmployeesModule } from '@modules/employees/employee.module';
-import { ShiftsModule } from '@modules/shifts/shifts.module';
+import { ShiftsModule } from '@modules/shifts/shift.module';
 import { BranchesModule } from '@modules/branches/branch.module';
 import { PrismaModule } from '@modules/prisma/prisma.module';
 import { RolesModule } from './modules/roles/role.module';

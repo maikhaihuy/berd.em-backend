@@ -1,10 +1,7 @@
 import { User } from '@prisma/client';
 import { UserResponseDto } from './dto/user-response.dto';
-import {
-  UserWithBranches,
-  UserWithRole,
-  UserWithRolePermissions,
-} from './user.types';
+import { UserWithRole, UserWithRolePermissions } from './user.types';
+import { UserLiteDto } from './dto/user.dto';
 
 export class UserMapper {
   // 🧱 Base mapper
@@ -23,37 +20,28 @@ export class UserMapper {
     };
   }
 
+  static mapLite(user: User): UserLiteDto {
+    return {
+      id: user.id,
+      fullName: user.fullName,
+      avatarUrl: user.avatarUrl,
+    };
+  }
+
   static mapRole(
     this: void,
     user: Partial<UserWithRole>,
   ): Partial<UserResponseDto> {
     return {
-      roleName: user.role?.name, // safe access
-    };
-  }
-
-  static mapBranches(
-    this: void,
-    user: Partial<UserWithBranches>,
-  ): Partial<UserResponseDto> {
-    return {
-      branches: user.userBranches?.map((ub) => ({
-        branchId: ub.branchId,
-        branchName: ub.branch.name,
-        isPrimary: ub.isPrimary,
-      })),
+      roleName: user.role?.name ?? undefined,
     };
   }
 
   // 🚀 Main mapper (1 entry point)
-  static toDto(
-    this: void,
-    user: Partial<UserWithRole & UserWithBranches>,
-  ): UserResponseDto {
+  static toDto(this: void, user: Partial<UserWithRole>): UserResponseDto {
     return {
       ...UserMapper.mapBase(user as User),
       ...UserMapper.mapRole(user),
-      ...UserMapper.mapBranches(user),
     } as UserResponseDto;
   }
 

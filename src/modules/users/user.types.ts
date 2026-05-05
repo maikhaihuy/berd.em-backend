@@ -9,14 +9,6 @@ export const userWithEmployeeInclude = {
   employee: true,
 } satisfies Prisma.UserInclude;
 
-export const userWithBranchesInclude = {
-  userBranches: {
-    include: {
-      branch: true,
-    },
-  },
-} satisfies Prisma.UserInclude;
-
 // Type infer từ Prisma
 export type UserWithRole = Prisma.UserGetPayload<{
   include: typeof userWithRoleInclude;
@@ -24,10 +16,6 @@ export type UserWithRole = Prisma.UserGetPayload<{
 
 export type UserWithEmployee = Prisma.UserGetPayload<{
   include: typeof userWithEmployeeInclude;
-}>;
-
-export type UserWithBranches = Prisma.UserGetPayload<{
-  include: typeof userWithBranchesInclude;
 }>;
 
 // Advanced: RBAC sâu hơn

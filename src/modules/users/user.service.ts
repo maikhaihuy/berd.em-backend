@@ -8,17 +8,14 @@ import { Prisma } from '@prisma/client';
 import { UserResponseDto } from './dto/user-response.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { userWithBranchesInclude, userWithRoleInclude } from './user.types';
+import { userWithRoleInclude } from './user.types';
 import { UserMapper } from './user.mapper';
 
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  async create(
-    createUserDto: CreateUserDto,
-    currentUserId: number,
-  ): Promise<UserResponseDto> {
+  async create(createUserDto: CreateUserDto): Promise<UserResponseDto> {
     const { branchIds, primaryBranchId, ...userData } = createUserDto;
 
     // Check if zaloId already exists
@@ -68,21 +65,18 @@ export class UsersService {
       const user = await this.prisma.user.create({
         data: {
           ...userData,
-          createdBy: currentUserId,
-          updatedBy: currentUserId,
-          userBranches:
-            branchIds && branchIds.length > 0
-              ? {
-                  create: branchIds.map((branchId) => ({
-                    branchId,
-                    isPrimary: branchId === primaryBranchId,
-                  })),
-                }
-              : undefined,
+          // userBranches:
+          //   branchIds && branchIds.length > 0
+          //     ? {
+          //         create: branchIds.map((branchId) => ({
+          //           branchId,
+          //           isPrimary: branchId === primaryBranchId,
+          //         })),
+          //       }
+          //     : undefined,
         },
         include: {
           ...userWithRoleInclude,
-          ...userWithBranchesInclude,
         },
       });
 
@@ -104,7 +98,6 @@ export class UsersService {
     const users = await this.prisma.user.findMany({
       include: {
         ...userWithRoleInclude,
-        ...userWithBranchesInclude,
       },
     });
     return users.map((user) => UserMapper.toDto(user));
@@ -115,7 +108,6 @@ export class UsersService {
       where: { id },
       include: {
         ...userWithRoleInclude,
-        ...userWithBranchesInclude,
       },
     });
     if (!user) {
@@ -129,7 +121,6 @@ export class UsersService {
       where: { zaloId },
       include: {
         ...userWithRoleInclude,
-        ...userWithBranchesInclude,
       },
     });
     return user ? UserMapper.toDto(user) : null;
@@ -138,7 +129,6 @@ export class UsersService {
   async update(
     id: number,
     updateUserDto: UpdateUserDto,
-    currentUserId: number,
   ): Promise<UserResponseDto> {
     // Verify user exists
     const existingUser = await this.prisma.user.findUnique({
@@ -176,11 +166,9 @@ export class UsersService {
         where: { id },
         data: {
           ...updateUserDto,
-          updatedBy: currentUserId,
         },
         include: {
           ...userWithRoleInclude,
-          ...userWithBranchesInclude,
         },
       });
       return UserMapper.toDto(user);
