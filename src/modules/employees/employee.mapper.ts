@@ -1,9 +1,8 @@
 import { Employee } from '@prisma/client';
 import { EmployeeResponseDto } from './dto/employee-response.dto';
-import {
-  EmployeeWithBranches
-} from './employee.types';
+import { EmployeeWithBranches } from './employee.types';
 import { UserMapper } from '@modules/users/user.mapper';
+import { BranchMapper } from '@modules/branches/branch.mapper';
 
 export class EmployeeMapper {
   // 🧱 Base mapper
@@ -26,7 +25,16 @@ export class EmployeeMapper {
     };
   }
 
-  static mapUser(this: void, employee: Employee): EmployeeResponseDto {
+  static mapBranches(
+    this: void,
+    employee: EmployeeWithBranches,
+  ): EmployeeResponseDto {
+    return {
+      branches: employee.branches.map((branch) => BranchMapper.mapLite(branch)),
+    };
+  }
+
+  static mapUser(this: void, employee: Employee): Partial<EmployeeResponseDto> {
     return {
       user: UserMapper.mapLite(employee.user!),
     };
@@ -35,17 +43,16 @@ export class EmployeeMapper {
   // 🚀 Main mapper (1 entry point)
   static toDto(
     this: void,
-    employee: Partial<EmployeeWithRole & EmployeeWithBranches>,
-  ): EmployeeResponseDto {
+    employee: Partial<EmployeeResponseDto & EmployeeWithBranches>,
+  ): Partial<EmployeeResponseDto> {
     return {
       ...EmployeeMapper.mapBase(employee as Employee),
-      ...EmployeeMapper.mapRole(employee),
       ...EmployeeMapper.mapBranches(employee),
-    } as EmployeeResponseDto;
+    } as Partial<EmployeeResponseDto>;
   }
 
   // 🔁 Mapper list
-  static toDtos(employees: EmployeeWithRole[]): EmployeeResponseDto[] {
+  static toDtos(employees: EmployeeWithBranches[]): EmployeeResponseDto[] {
     return employees.map(EmployeeMapper.toDto);
   }
 }
