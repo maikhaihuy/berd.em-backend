@@ -2,7 +2,6 @@ import { Branch } from '@prisma/client';
 import { BranchResponseDto } from './dto/branch-response.dto';
 import { BranchDto, BranchLiteDto } from './dto/branch.dto';
 import { BranchWithEmployees } from './branch.types';
-import { EmployeeLiteDto } from '@modules/employees/dto/employee.dto';
 import { EmployeeMapper } from '@modules/employees/employee.mapper';
 
 export class BranchMapper {
@@ -28,6 +27,9 @@ export class BranchMapper {
       id: branch.id,
       name: branch.name,
       abbreviation: branch.abbreviation,
+      address: branch.address,
+      email: branch.email,
+      phone: branch.phone,
     };
   }
 
@@ -36,7 +38,10 @@ export class BranchMapper {
     branch: Partial<Branch & BranchWithEmployees>,
   ): Partial<BranchResponseDto> {
     return {
-      employees: branch.employees?.map((employee) => EmployeeMapper.mapLite(employee)) || [],
+      employees:
+        branch.employeeBranches?.map((eb) =>
+          EmployeeMapper.mapLite(eb.employee),
+        ) || [],
     };
   }
 

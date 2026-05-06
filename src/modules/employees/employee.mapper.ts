@@ -1,13 +1,14 @@
 import { Employee } from '@prisma/client';
 import { EmployeeResponseDto } from './dto/employee-response.dto';
-import { EmployeeWithBranches } from './employee.types';
+import { EmployeeWithBranches, EmployeeWithUser } from './employee.types';
 import { UserMapper } from '@modules/users/user.mapper';
 import { BranchMapper } from '@modules/branches/branch.mapper';
+import { EmployeeDto, EmployeeLiteDto } from './dto/employee.dto';
 
 export class EmployeeMapper {
   // 🧱 Base mapper
   // Annotate this: void cho static method
-  static mapBase(this: void, employee: Employee): EmployeeResponseDto {
+  static mapBase(this: void, employee: Employee): EmployeeDto {
     return {
       id: employee.id,
       fullName: employee.fullName,
@@ -24,17 +25,35 @@ export class EmployeeMapper {
       updatedBy: employee.updatedBy,
     };
   }
-
-  static mapBranches(
-    this: void,
-    employee: EmployeeWithBranches,
-  ): EmployeeResponseDto {
+  static mapLite(this: void, employee: Employee): EmployeeLiteDto {
     return {
-      branches: employee.branches.map((branch) => BranchMapper.mapLite(branch)),
+      id: employee.id,
+      fullName: employee.fullName,
+      phoneNumber: employee.phoneNumber,
+      dateOfBirth: employee.dateOfBirth,
+      avatar: employee.avatar,
+      email: employee.email,
+      address: employee.address,
+      probationStartDate: employee.probationStartDate,
+      officialStartDate: employee.officialStartDate,
     };
   }
 
-  static mapUser(this: void, employee: Employee): Partial<EmployeeResponseDto> {
+  static mapBranches(
+    this: void,
+    employee: Partial<Employee & EmployeeWithBranches>,
+  ): Partial<EmployeeResponseDto> {
+    return {
+      branches: employee.employeeBranches.map((ep) =>
+        BranchMapper.mapLite(ep.branch),
+      ),
+    };
+  }
+
+  static mapUser(
+    this: void,
+    employee: EmployeeWithUser,
+  ): Partial<EmployeeResponseDto> {
     return {
       user: UserMapper.mapLite(employee.user!),
     };
@@ -44,11 +63,11 @@ export class EmployeeMapper {
   static toDto(
     this: void,
     employee: Partial<EmployeeResponseDto & EmployeeWithBranches>,
-  ): Partial<EmployeeResponseDto> {
+  ): EmployeeResponseDto {
     return {
       ...EmployeeMapper.mapBase(employee as Employee),
-      ...EmployeeMapper.mapBranches(employee),
-    } as Partial<EmployeeResponseDto>;
+      ...EmployeeMapper.mapBranches(employee as EmployeeWithBranches),
+    } as EmployeeResponseDto;
   }
 
   // 🔁 Mapper list

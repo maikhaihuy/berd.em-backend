@@ -43,11 +43,11 @@ export class BranchLiteDto {
   abbreviation!: string;
 
   @ApiProperty({ required: false })
-  phone?: string;
+  phone?: string | null;
 
   @ApiProperty({ required: false })
-  email?: string;
+  email?: string | null;
 
   @ApiProperty({ required: false })
-  address?: number;
+  address?: string | null;
 }

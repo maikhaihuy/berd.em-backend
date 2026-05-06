@@ -1,18 +1,21 @@
 import { Prisma } from '@prisma/client';
 
-// Base include (reuse được)
 export const employeeWithBranchesInclude = {
-  branches: true,
+  employeeBranches: {
+    include: {
+      branch: true,
+    },
+  },
 } satisfies Prisma.EmployeeInclude;
 
 export type EmployeeWithBranches = Prisma.EmployeeGetPayload<{
   include: typeof employeeWithBranchesInclude;
 }>;
 
-export const employeeWithAvailabilitiesInclude = {
-  availabilities: true,
+export const employeeWithUserInclude = {
+  user: true,
 } satisfies Prisma.EmployeeInclude;
 
-export type EmployeeWithAvailabilities = Prisma.EmployeeGetPayload<{
-  include: typeof employeeWithAvailabilitiesInclude;
+export type EmployeeWithUser = Prisma.EmployeeGetPayload<{
+  include: typeof employeeWithUserInclude;
 }>;

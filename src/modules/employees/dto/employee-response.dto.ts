@@ -5,4 +5,7 @@ import { UserLiteDto } from '@modules/users/dto/user.dto';
 export class EmployeeResponseDto extends EmployeeDto {
   @ApiProperty({ type: [Object] }) // You might want to create a separate PermissionResponseDto
   user?: UserLiteDto;
+
+  @ApiProperty({ type: [Object] })
+  branches?: any[];
 }

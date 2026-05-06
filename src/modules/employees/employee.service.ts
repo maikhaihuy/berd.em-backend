@@ -10,6 +10,8 @@ import { EmployeeResponseDto } from './dto/employee-response.dto';
 import { Prisma } from '@prisma/client';
 import { UpsertEmployeeHourlyRateDto } from '@modules/employee-hourly-rates/dto/upsert-employee-hourly-rate.dto';
 import { EmployeeHourlyRateResponseDto } from '@modules/employee-hourly-rates/dto/employee-hourly-rate-response.dto';
+import { EmployeeMapper } from './employee.mapper';
+import { employeeWithBranchesInclude } from './employee.types';
 
 @Injectable()
 export class EmployeesService {
@@ -84,7 +86,7 @@ export class EmployeesService {
         return employeeWithRelations;
       });
 
-      return new EmployeeResponseDto(employee);
+      return EmployeeMapper.toDto(employee);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
@@ -99,8 +101,10 @@ export class EmployeesService {
   }
 
   async findAll(): Promise<EmployeeResponseDto[]> {
-    const employees = await this.prisma.employee.findMany();
-    return employees.map((employee) => new EmployeeResponseDto(employee));
+    const employees = await this.prisma.employee.findMany({
+      include: employeeWithBranchesInclude,
+    });
+    return EmployeeMapper.toDtos(employees);
   }
 
   async findOne(id: number): Promise<EmployeeResponseDto> {
@@ -110,7 +114,7 @@ export class EmployeesService {
     if (!employee) {
       throw new NotFoundException(`Employee with ID ${id} not found.`);
     }
-    return new EmployeeResponseDto(employee);
+    return EmployeeMapper.toDto(employee);
   }
 
   async update(
@@ -190,7 +194,7 @@ export class EmployeesService {
         return updatedEmployee;
       });
 
-      return new EmployeeResponseDto(employee);
+      return EmployeeMapper.toDto(employee);
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
