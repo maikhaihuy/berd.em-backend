@@ -184,7 +184,7 @@ model Branch {
 model Employee {
   id                  Int       @id @default(autoincrement())
   fullName            String
-  phoneNumber         String
+  phoneNumber         String   @unique
   dateOfBirth         DateTime?
   avatar              String?
   email               String?

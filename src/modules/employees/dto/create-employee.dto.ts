@@ -12,12 +12,12 @@ export class CreateEmployeeDto {
   @ApiProperty({ example: 'John Doe' })
   @IsString()
   @IsNotEmpty()
-  fullName: string;
+  fullName!: string;
 
   @ApiProperty({ example: '+1234567890' })
   @IsString()
   @IsNotEmpty()
-  phoneNumber: string;
+  phoneNumber!: string;
 
   @ApiProperty({ example: 'https://example.com/avatar.jpg', required: false })
   @IsString()
@@ -52,5 +52,14 @@ export class CreateEmployeeDto {
   })
   @IsInt({ each: true })
   @ArrayNotEmpty()
-  branchIds: number[];
+  branchIds!: number[];
+
+  @ApiProperty({
+    description: 'Primary branch ID',
+    example: 1,
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  primaryBranchId!: number;
 }

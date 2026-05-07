@@ -11,7 +11,10 @@ import { Prisma } from '@prisma/client';
 import { UpsertEmployeeHourlyRateDto } from '@modules/employee-hourly-rates/dto/upsert-employee-hourly-rate.dto';
 import { EmployeeHourlyRateResponseDto } from '@modules/employee-hourly-rates/dto/employee-hourly-rate-response.dto';
 import { EmployeeMapper } from './employee.mapper';
-import { employeeWithBranchesInclude } from './employee.types';
+import {
+  employeeWithBranchesInclude,
+  employeeWithUserInclude,
+} from './employee.types';
 
 @Injectable()
 export class EmployeesService {
@@ -19,74 +22,59 @@ export class EmployeesService {
 
   async create(
     createEmployeeDto: CreateEmployeeDto,
-    currentUserId?: number,
+    currentUserId: number,
   ): Promise<EmployeeResponseDto> {
-    const { branchIds, ...rest } = createEmployeeDto;
+    const { branchIds, primaryBranchId, ...employeeData } = createEmployeeDto;
+
+    // Verify branches if provided
+    if (branchIds && branchIds.length > 0) {
+      const branches = await this.prisma.branch.findMany({
+        where: { id: { in: branchIds } },
+      });
+      if (branches.length !== branchIds.length) {
+        throw new BadRequestException('One or more branches do not exist');
+      }
+
+      // Validate primaryBranchId is in branchIds if provided
+      if (primaryBranchId && !branchIds.includes(primaryBranchId)) {
+        throw new BadRequestException(
+          'Primary branch must be in the list of assigned branches',
+        );
+      }
+    }
+
+    // Check if phone number already exists
+    const existingPhone = await this.prisma.employee.findUnique({
+      where: { phoneNumber: employeeData.phoneNumber },
+    });
+    if (existingPhone) {
+      throw new BadRequestException(
+        'Employee with this phone number already exists',
+      );
+    }
 
     try {
-      const employee = await this.prisma.$transaction(async (tx) => {
-        // Create employee first
-        const {
-          dateOfBirth,
-          probationStartDate,
-          officialStartDate,
-          ...otherFields
-        } = rest;
-        const employeeData: Prisma.EmployeeCreateInput = {
-          ...otherFields,
-          createdBy: currentUserId ?? 1,
-          updatedBy: currentUserId ?? 1,
-        };
-
-        // Convert date strings to Date objects if provided
-        if (dateOfBirth) {
-          employeeData.dateOfBirth = new Date(dateOfBirth);
-        }
-        if (probationStartDate) {
-          employeeData.probationStartDate = new Date(probationStartDate);
-        }
-        if (officialStartDate) {
-          employeeData.officialStartDate = new Date(officialStartDate);
-        }
-
-        const newEmployee = await tx.employee.create({
-          data: employeeData,
-        });
-
-        // Create EmployeeBranch relationships with isPrimary field
-        if (branchIds && branchIds.length > 0) {
-          for (let i = 0; i < branchIds.length; i++) {
-            await tx.employeeBranch.create({
-              data: {
-                employeeId: newEmployee.id,
-                branchId: branchIds[i],
-                isPrimary: i === 0, // First branch is primary
-              },
-            });
-          }
-        }
-
-        // Return employee with relationships
-        const employeeWithRelations = await tx.employee.findUnique({
-          where: { id: newEmployee.id },
-          include: {
-            hourlyRates: true,
-            branches: {
-              include: {
-                branch: true,
-              },
-            },
-          },
-        });
-
-        if (!employeeWithRelations) {
-          throw new NotFoundException('Failed to create employee');
-        }
-
-        return employeeWithRelations;
+      const employee = await this.prisma.employee.create({
+        data: {
+          ...employeeData,
+          createdBy: currentUserId,
+          updatedBy: currentUserId,
+          employeeBranches:
+            branchIds && branchIds.length > 0
+              ? {
+                  create: branchIds.map((branchId) => ({
+                    branchId,
+                    isPrimary: branchId === primaryBranchId,
+                  })),
+                }
+              : undefined,
+        },
+        include: {
+          ...employeeWithBranchesInclude,
+        },
       });
 
-      return EmployeeMapper.toDto(employee);
+      return EmployeeMapper.toDtoWithBranches(employee);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
@@ -102,7 +90,10 @@ export class EmployeesService {
 
   async findAll(): Promise<EmployeeResponseDto[]> {
     const employees = await this.prisma.employee.findMany({
-      include: employeeWithBranchesInclude,
+      include: {
+        ...employeeWithBranchesInclude,
+        ...employeeWithUserInclude,
+      },
     });
     return EmployeeMapper.toDtos(employees);
   }
@@ -110,6 +101,10 @@ export class EmployeesService {
   async findOne(id: number): Promise<EmployeeResponseDto> {
     const employee = await this.prisma.employee.findUnique({
       where: { id },
+      include: {
+        ...employeeWithBranchesInclude,
+        ...employeeWithUserInclude,
+      },
     });
     if (!employee) {
       throw new NotFoundException(`Employee with ID ${id} not found.`);
@@ -120,81 +115,53 @@ export class EmployeesService {
   async update(
     id: number,
     updateEmployeeDto: UpdateEmployeeDto,
-    currentUserId?: number,
+    currentUserId: number,
   ): Promise<EmployeeResponseDto> {
-    const { branchIds, ...rest } = updateEmployeeDto;
+    const { branchIds, ...employeeData } = updateEmployeeDto;
+
+    // Verify employee exists
+    const existingEmployee = await this.prisma.employee.findUnique({
+      where: { id },
+    });
+    if (!existingEmployee) {
+      throw new NotFoundException(`User with ID ${id} not found.`);
+    }
+
+    // If updating phone number, check it's not already taken
+    if (
+      employeeData.phoneNumber &&
+      employeeData.phoneNumber !== existingEmployee.phoneNumber
+    ) {
+      const phoneExists = await this.prisma.employee.findUnique({
+        where: { phoneNumber: updateEmployeeDto.phoneNumber },
+      });
+      if (phoneExists) {
+        throw new BadRequestException('Phone number already in use');
+      }
+    }
 
     try {
-      const employee = await this.prisma.$transaction(async (tx) => {
-        // Update employee basic info
-        const {
-          dateOfBirth,
-          probationStartDate,
-          officialStartDate,
-          ...otherFields
-        } = rest;
-        const updateData: Prisma.EmployeeUpdateInput = {
-          ...otherFields,
-          updatedBy: currentUserId ?? 1,
-        };
-
-        // Convert date strings to Date objects if provided
-        if (dateOfBirth) {
-          updateData.dateOfBirth = new Date(dateOfBirth);
-        }
-        if (probationStartDate) {
-          updateData.probationStartDate = new Date(probationStartDate);
-        }
-        if (officialStartDate) {
-          updateData.officialStartDate = new Date(officialStartDate);
-        }
-
-        await tx.employee.update({
-          where: { id },
-          data: updateData,
-        });
-
-        // Update EmployeeBranch relationships if branchIds provided
-        if (branchIds !== undefined) {
-          // Delete existing relationships
-          await tx.employeeBranch.deleteMany({
-            where: { employeeId: id },
-          });
-
-          // Create new relationships
-          if (branchIds.length > 0) {
-            for (let i = 0; i < branchIds.length; i++) {
-              await tx.employeeBranch.create({
-                data: {
-                  employeeId: id,
-                  branchId: branchIds[i],
-                  isPrimary: i === 0, // First branch is primary
-                },
-              });
-            }
-          }
-        }
-
-        // Return updated employee with relationships
-        const updatedEmployee = await tx.employee.findUnique({
-          where: { id },
-          include: {
-            branches: {
-              include: {
-                branch: true,
-              },
-            },
-          },
-        });
-
-        if (!updatedEmployee) {
-          throw new NotFoundException(`Employee with ID ${id} not found.`);
-        }
-
-        return updatedEmployee;
+      const employee = await this.prisma.employee.update({
+        where: { id },
+        data: {
+          ...employeeData,
+          updatedBy: currentUserId,
+          employeeBranches: branchIds
+            ? {
+                deleteMany: {}, // Remove existing relations
+                create: branchIds.map((branchId) => ({
+                  branchId,
+                  isPrimary: false, // You can add logic to set primary branch if needed
+                })),
+              }
+            : undefined,
+        },
+        include: {
+          ...employeeWithBranchesInclude,
+        },
       });
 
-      return EmployeeMapper.toDto(employee);
+      return EmployeeMapper.toDtoWithBranches(employee);
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&

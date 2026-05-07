@@ -44,23 +44,6 @@ export class UsersService {
       throw new BadRequestException('Role does not exist');
     }
 
-    // Verify branches if provided
-    if (branchIds && branchIds.length > 0) {
-      const branches = await this.prisma.branch.findMany({
-        where: { id: { in: branchIds } },
-      });
-      if (branches.length !== branchIds.length) {
-        throw new BadRequestException('One or more branches do not exist');
-      }
-
-      // Validate primaryBranchId is in branchIds if provided
-      if (primaryBranchId && !branchIds.includes(primaryBranchId)) {
-        throw new BadRequestException(
-          'Primary branch must be in the list of assigned branches',
-        );
-      }
-    }
-
     try {
       const user = await this.prisma.user.create({
         data: {
@@ -130,26 +113,26 @@ export class UsersService {
     id: number,
     updateUserDto: UpdateUserDto,
   ): Promise<UserResponseDto> {
-    // Verify user exists
-    const existingUser = await this.prisma.user.findUnique({
-      where: { id },
-    });
-    if (!existingUser) {
-      throw new NotFoundException(`User with ID ${id} not found.`);
-    }
+    // // Verify user exists
+    // const existingUser = await this.prisma.user.findUnique({
+    //   where: { id },
+    // });
+    // if (!existingUser) {
+    //   throw new NotFoundException(`User with ID ${id} not found.`);
+    // }
 
-    // If updating phone number, check it's not already taken
-    if (
-      updateUserDto.phoneNumber &&
-      updateUserDto.phoneNumber !== existingUser.phoneNumber
-    ) {
-      const phoneExists = await this.prisma.user.findUnique({
-        where: { phoneNumber: updateUserDto.phoneNumber },
-      });
-      if (phoneExists) {
-        throw new BadRequestException('Phone number already in use');
-      }
-    }
+    // // If updating phone number, check it's not already taken
+    // if (
+    //   updateUserDto.phoneNumber &&
+    //   updateUserDto.phoneNumber !== existingUser.phoneNumber
+    // ) {
+    //   const phoneExists = await this.prisma.user.findUnique({
+    //     where: { phoneNumber: updateUserDto.phoneNumber },
+    //   });
+    //   if (phoneExists) {
+    //     throw new BadRequestException('Phone number already in use');
+    //   }
+    // }
 
     // If updating role, verify it exists
     if (updateUserDto.roleId) {

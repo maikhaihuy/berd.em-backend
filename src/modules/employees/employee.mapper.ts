@@ -8,7 +8,7 @@ import { EmployeeDto, EmployeeLiteDto } from './dto/employee.dto';
 export class EmployeeMapper {
   // 🧱 Base mapper
   // Annotate this: void cho static method
-  static mapBase(this: void, employee: Employee): EmployeeDto {
+  static mapBase(employee: Employee): EmployeeDto {
     return {
       id: employee.id,
       fullName: employee.fullName,
@@ -25,7 +25,7 @@ export class EmployeeMapper {
       updatedBy: employee.updatedBy,
     };
   }
-  static mapLite(this: void, employee: Employee): EmployeeLiteDto {
+  static mapLite(employee: Employee): EmployeeLiteDto {
     return {
       id: employee.id,
       fullName: employee.fullName,
@@ -40,8 +40,7 @@ export class EmployeeMapper {
   }
 
   static mapBranches(
-    this: void,
-    employee: Partial<Employee & EmployeeWithBranches>,
+    employee: Employee & EmployeeWithBranches,
   ): Partial<EmployeeResponseDto> {
     return {
       branches: employee.employeeBranches.map((ep) =>
@@ -51,27 +50,47 @@ export class EmployeeMapper {
   }
 
   static mapUser(
-    this: void,
-    employee: EmployeeWithUser,
+    employee: Employee & EmployeeWithUser,
   ): Partial<EmployeeResponseDto> {
     return {
-      user: UserMapper.mapLite(employee.user!),
+      user: employee.user ? UserMapper.mapLite(employee.user) : null,
     };
   }
 
   // 🚀 Main mapper (1 entry point)
-  static toDto(
-    this: void,
-    employee: Partial<EmployeeResponseDto & EmployeeWithBranches>,
+  static toDtoWithBranches(
+    employee: Employee & EmployeeWithBranches,
   ): EmployeeResponseDto {
     return {
-      ...EmployeeMapper.mapBase(employee as Employee),
-      ...EmployeeMapper.mapBranches(employee as EmployeeWithBranches),
-    } as EmployeeResponseDto;
+      ...EmployeeMapper.mapBase(employee),
+      ...EmployeeMapper.mapBranches(employee),
+    };
+  }
+
+  static toDtoWithUser(
+    employee: Employee & EmployeeWithUser,
+  ): EmployeeResponseDto {
+    return {
+      ...EmployeeMapper.mapBase(employee),
+      ...EmployeeMapper.mapUser(employee),
+    };
+  }
+  static toDto(
+    employee: EmployeeWithBranches & EmployeeWithUser,
+    options?: { withBranches?: boolean; withUser?: boolean },
+  ): EmployeeResponseDto {
+    return {
+      ...EmployeeMapper.mapBase(employee),
+      ...(options?.withBranches ? EmployeeMapper.mapBranches(employee) : {}),
+      ...(options?.withUser ? EmployeeMapper.mapUser(employee) : {}),
+    };
   }
 
   // 🔁 Mapper list
-  static toDtos(employees: EmployeeWithBranches[]): EmployeeResponseDto[] {
-    return employees.map(EmployeeMapper.toDto);
+  static toDtos(
+    employees: (EmployeeWithBranches & EmployeeWithUser)[],
+    options?: { withBranches?: boolean; withUser?: boolean },
+  ): EmployeeResponseDto[] {
+    return employees.map((em) => EmployeeMapper.toDto(em, options));
   }
 }
