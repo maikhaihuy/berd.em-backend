@@ -41,17 +41,22 @@ package "Authentication & Authorization" as AUTH #cfe2ff {
     *permissionId : Int <<PK, FK>>
   }
 
-  entity UserBranch {
-    *userId : Int <<PK, FK>>
-    *branchId : Int <<PK, FK>>
-    isPrimary : boolean
-  }
-
   entity RefreshToken {
     *id : Int <<PK>>
     --
     userId : Int <<FK>>
-    token : String
+    hashedToken : String?
+    device : String?
+    ipAddress : String?
+    expiresAt : DateTime
+    createdAt : DateTime
+  }
+
+  entity PasswordResetToken {
+    *id : Int <<PK>>
+    --
+    userId : Int <<FK>>
+    hashedToken : String?
     expiresAt : DateTime
     createdAt : DateTime
   }
@@ -62,71 +67,72 @@ package "Core Entities" as CORE #d1e7dd {
   left to right direction
 
   entity Branch {
-    *id (PK, Int)
+    *id Int <<PK>>
     --
-    name (String)
-    abbreviation (String)
-    address (String)
-    email (String?)
-    phone (String?)
+    name: String
+    abbreviation: String
+    address: String
+    email: String?
+    phone: String?
     --
-    createdAt (DateTime)
-    createdBy (Int)
-    updatedAt (DateTime)
-    updatedBy (Int)
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
   }
 
   entity Employee {
-    + id (PK, Int)
+    * id Int <<PK>>
+    userId: Int <<FK>>
     --
-    fullName (String)
-    phoneNumber (String)
-    dateOfBirth (Date?)
-    avatar (String?)
-    email (String?)
-    address (String?)
-    probationStartDate (Date?)
-    officialStartDate (Date?)
+    fullName: String
+    phoneNumber: String
+    dateOfBirth: Date?
+    avatar: String?
+    email: String?
+    address: String?
+    probationStartDate: Date?
+    officialStartDate: Date?
     --
-    createdAt (DateTime)
-    createdBy (Int)
-    updatedAt (DateTime)
-    updatedBy (Int)
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
   }
 
   entity EmployeeHourlyRate {
-    *id (PK, Int)
+    * id Int <<PK>>
+    employeeId: Int <<FK>>
     --
-    employeeId (FK, Int)
-    rate (Decimal)
-    effectiveDate (Date)
-    endDate (Date?)
-    note (String?)
+    rate: Decimal
+    effectiveDate: Date
+    endDate: Date?
+    note: String?
     --
-    createdAt (DateTime)
-    createdBy (Int)
-    updatedAt (DateTime)
-    updatedBy (Int)
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
   }
 
   entity EmployeeBranch {
-    *employeeId (PK, FK, Int)
-    *branchId (PK, FK, Int)
-    IsPrimary (boolean)
+    *employeeId Int <<PK, FK, Int>>
+    *branchId Int <<PK, FK, Int>>
+    IsPrimary: Boolean
   }
 
   entity Availability {
-    *id (PK, Int)
+    *id Int <<PK>>
     --
-    employeeId (FK, Int)
-    startTime (DateTimeOffset)
-    endTime (DateTimeOffset)
-    note (String?)
+    employeeId Int <<FK, Int>>
+    startTime: DateTimeOffset
+    endTime: DateTimeOffset
+    note: String?
     --
-    createdAt (DateTime)
-    createdBy (Int)
-    updatedAt (DateTime)
-    updatedBy (Int)
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
   }
 }
 
@@ -135,69 +141,69 @@ package "Shift Management" as SHIFT #fff3cd {
   left to right direction
 
   entity Shift {
-    *id (PK, Int)
-    branchId (FK, Int)
+    *id Int <<PK>>
+    branchId Int <<FK, Int>>
     --
-    name (String)
-    abbreviation (String)
-    maxSlots (Int)
-    startTime : (Time)
-    endTime : (Time)
-    multiplier : (Decimal)
-    status: (Enum: Draft, Active, Inactive, Archived)
+    name: String
+    abbreviation: String
+    maxSlots: Int
+    startTime: Time
+    endTime: Time
+    multiplier: Decimal
+    status: Enum: Draft, Active, Inactive, Archived
     --
-    createdAt (DateTime)
-    createdBy (Int)
-    updatedAt (DateTime)
-    updatedBy (Int)
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
   }
 
   entity WorkSlot {
-    *id (PK, Int)
-    branchId : (FK, Int)
-    employeeId : (FK, Int)
+    *id Int <<PK>>
+    branchId Int <<FK, Int>>
+    employeeId Int <<FK, Int>>
     --
-    assignedAt (DateTime)
-    actualStartTime (DateTime?)
-    actualEndTime (DateTime?)
-    startTime (DateTime)
-    endTime (DateTime)
-    status (Enum: Scheduled, InProgress, Completed, Absent)
-    note (String?)
+    assignedAt: DateTime
+    actualStartTime: DateTime?
+    actualEndTime: DateTime?
+    startTime: DateTime
+    endTime: DateTime
+    status: Enum: Scheduled, InProgress, Completed, Absent
+    note: String?
     --
-    createdAt (DateTime)
-    createdBy (Int)
-    updatedAt (DateTime)
-    updatedBy (Int)
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
   }
 
   entity AttendanceHistory {
-    *id (PK, Int)
-    workSlotId:  (FK, Int)
+    *id Int <<PK>>
+    workSlotId: Int <<FK, Int>>
     --
-    action (Enum: CHECK_IN, CHECK_OUT, REPLACEMENT_REQUEST, MANAGER_ADJUST)
-    detail (Json?)
+    action: Enum: CHECK_IN, CHECK_OUT, REPLACEMENT_REQUEST, MANAGER_ADJUSTMENT
+    detail: Json?
     --
-    createdAt (DateTime)
-    createdBy (Int)
+    createdAt: DateTime
+    createdBy: Int
   }
 
   entity LeaveRequest {
-    *id (PK, Int)
-    workSlotId (FK, Int)
-    replacementEmployeeId (FK, Int)
-    absenceEmployeeId (FK, Int)
-    approvedId (FK, Int?)
+    *id Int <<PK>>
+    workSlotId Int <<FK, Int>>
+    replacementEmployeeId Int <<FK, Int>>
+    absenceEmployeeId Int <<FK, Int>>
+    approvedId Int <<FK, Int?>>
     --
-    reason (String?)
-    note (String?)
-    status (Enum: Pending, Approved, Rejected, Cancelled)
-    approvedAt (DateTime?)
+    reason: String?
+    note: String?
+    status: Enum: Pending, Approved, Rejected, Cancelled)
+    approvedAt: DateTime?
     --
-    createdAt (DateTime)
-    createdBy (Int)
-    updatedAt (DateTime)
-    updatedBy (Int)
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
   }
 }
 
@@ -206,59 +212,59 @@ package "Payment Management" as PAY #f8d7da {
   left to right direction
 
   entity TimeLog {
-    *id (PK, Int)
-    workSlotIdId (FK, Int)
-    employeeId (FK, Int)
+    *id Int <<PK>>
+    workSlotId Int <<FK, Int>>
+    employeeId Int <<FK, Int>>
     --
-    actualStartTime (DateTimeOffset?)
-    actualEndTime (DateTimeOffset?)
-    requestStartTime (DateTimeOffset?)
-    requestEndTime (DateTimeOffset?)
-    overtimeMinutes (Int?)
-    multiplier (Decimal)
-    requestDate (DateTimeOffset?)
-    requestReason (String?)
-    status (Enum: Pending, Submitted, Verified, Rejected)
-    verifiedBy (FK, Int?)
-    verifiedAt (DateTimeOffset?)
-    note (String?)
+    actualStartTime: DateTimeOffset?
+    actualEndTime: DateTimeOffset?
+    requestStartTime: DateTimeOffset?
+    requestEndTime: DateTimeOffset?
+    overtimeMinutes: Int?
+    multiplier: Decimal
+    requestDate: DateTimeOffset?
+    requestReason: String?
+    status: Enum: Pending, Submitted, Verified, Rejected
+    verifiedBy: Int?
+    verifiedAt: DateTimeOffset?
+    note: String?
     --
-    createdAt (DateTime)
-    createdBy (Int)
-    updatedAt (DateTime)
-    updatedBy (Int)
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
   }
 
   entity PayPeriod {
-    *id (PK, Int)
+    *id Int <<PK>>
     --
-    startDate (Date)
-    endDate (Date)
-    status (Enum: Open, Closed, Finalized)
-    notes (String?)
+    startDate: Date
+    endDate: Date
+    status: Enum: Open, Closed, Finalized
+    notes: String?
     --
-    createdAt (DateTime)
-    createdBy (Int)
-    updatedAt (DateTime)
-    updatedBy (Int)
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
   }
 
   entity PayrollEntry {
-    *id (PK, Int)
+    *id Int <<PK>>
     --
-    timeLogId (FK, Int)
-    employeeId (FK, Int)
-    payPeriodId (FK, Int)
-    payDate (Date)
-    workDate (Date)
-    calculatedAt (DateTime)
-    calculatedBy (FK, Int)
-    totalPay (Decimal)
+    timeLogId Int <<FK, Int>>
+    employeeId Int <<FK, Int>>
+    payPeriodId Int <<FK, Int>>
+    payDate: Date
+    workDate: Date
+    calculatedAt: DateTime
+    calculatedBy: Int <<FK, Int>>
+    totalPay: Decimal
     --
-    createdAt (DateTime)
-    createdBy (Int)
-    updatedAt (DateTime)
-    updatedBy (Int)
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
   }
 }
 
@@ -267,8 +273,6 @@ package "Payment Management" as PAY #f8d7da {
 User }|--|| Role
 Role ||--|{ RolePermission
 Permission ||--|{ RolePermission
-User ||--|{ UserBranch
-Branch ||--|{ UserBranch
 User ||--|{ RefreshToken
 
 EmployeeBranch }o--|| Employee : "employeeId"

@@ -9,27 +9,53 @@ import { CreateAvailabilityDto } from './dto/create-availability.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 import { AvailabilityResponseDto } from './dto/availability-response.dto';
 import { Prisma } from '@prisma/client';
+import { AvailabilityMapper } from './availability.mapper';
+import { availabilityWithEmployeeInclude } from './availability.types';
+import { userWithEmployeeInclude } from '@modules/users/user.types';
 
 @Injectable()
 export class AvailabilityService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async getCurrentUserEmployee(currentUserId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: currentUserId },
+      include: userWithEmployeeInclude,
+    });
+
+    if (!user?.employee) {
+      throw new ForbiddenException('User must be associated with an employee');
+    }
+
+    return user.employee;
+  }
+
   async create(
     createAvailabilityDto: CreateAvailabilityDto,
     currentUserId: number,
   ): Promise<AvailabilityResponseDto> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: currentUserId },
-      select: { employeeId: true },
-    });
+    const employee = await this.getCurrentUserEmployee(currentUserId);
 
-    if (!user?.employeeId) {
-      throw new ForbiddenException('User must be associated with an employee');
-    }
-
-    if (createAvailabilityDto.employeeId !== user.employeeId) {
+    if (createAvailabilityDto.employeeId !== employee.id) {
       throw new ForbiddenException(
         'Employees can only create availability for themselves',
+      );
+    }
+
+    const availabilitiesExist = await this.prisma.availability.findMany({
+      where: {
+        employeeId: createAvailabilityDto.employeeId,
+        startTime: {
+          lt: new Date(createAvailabilityDto.endTime),
+        },
+        endTime: {
+          gt: new Date(createAvailabilityDto.startTime),
+        },
+      },
+    });
+    if (availabilitiesExist.length > 0) {
+      throw new BadRequestException(
+        'Availability for this time slot already exists',
       );
     }
 
@@ -42,16 +68,10 @@ export class AvailabilityService {
           createdBy: currentUserId,
           updatedBy: currentUserId,
         },
-        include: {
-          employee: {
-            select: {
-              fullName: true,
-            },
-          },
-        },
+        include: availabilityWithEmployeeInclude,
       });
 
-      return new AvailabilityResponseDto(availability);
+      return AvailabilityMapper.toDto(availability);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
@@ -72,14 +92,7 @@ export class AvailabilityService {
     to: Date,
     currentUserId: number,
   ): Promise<AvailabilityResponseDto[]> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: currentUserId },
-      select: { employeeId: true },
-    });
-
-    if (!user?.employeeId) {
-      throw new ForbiddenException('User must be associated with an employee');
-    }
+    const employee = await this.getCurrentUserEmployee(currentUserId);
 
     const availabilities = await this.prisma.availability.findMany({
       where: {
@@ -89,47 +102,26 @@ export class AvailabilityService {
         endTime: {
           lte: to,
         },
-        employeeId: user.employeeId,
+        employeeId: employee.id,
       },
-      include: {
-        employee: {
-          select: {
-            fullName: true,
-          },
-        },
-      },
+      include: availabilityWithEmployeeInclude,
       orderBy: {
         startTime: 'asc',
       },
     });
 
-    return availabilities.map(
-      (availability) => new AvailabilityResponseDto(availability),
-    );
+    return AvailabilityMapper.toDtos(availabilities);
   }
 
   async findOne(
     id: number,
     currentUserId: number,
   ): Promise<AvailabilityResponseDto> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: currentUserId },
-      select: { employeeId: true },
-    });
-
-    if (!user?.employeeId) {
-      throw new ForbiddenException('User must be associated with an employee');
-    }
+    const employee = await this.getCurrentUserEmployee(currentUserId);
 
     const availability = await this.prisma.availability.findUnique({
-      where: { id, employeeId: user.employeeId },
-      include: {
-        employee: {
-          select: {
-            fullName: true,
-          },
-        },
-      },
+      where: { id, employeeId: employee.id },
+      include: availabilityWithEmployeeInclude,
     });
 
     if (!availability) {
@@ -148,7 +140,7 @@ export class AvailabilityService {
     //   }
     // }
 
-    return new AvailabilityResponseDto(availability);
+    return AvailabilityMapper.toDto(availability);
   }
 
   async update(
@@ -164,16 +156,9 @@ export class AvailabilityService {
       throw new NotFoundException('Availability not found');
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: currentUserId },
-      select: { employeeId: true },
-    });
+    const employee = await this.getCurrentUserEmployee(currentUserId);
 
-    if (!user?.employeeId) {
-      throw new ForbiddenException('User must be associated with an employee');
-    }
-
-    if (availability.employeeId !== user.employeeId) {
+    if (availability.employeeId !== employee.id) {
       throw new ForbiddenException(
         'Employees can only create availability for themselves',
       );
@@ -187,16 +172,10 @@ export class AvailabilityService {
           startTime: new Date(updateAvailabilityDto.startTime),
           endTime: new Date(updateAvailabilityDto.endTime),
         },
-        include: {
-          employee: {
-            select: {
-              fullName: true,
-            },
-          },
-        },
+        include: availabilityWithEmployeeInclude,
       });
 
-      return new AvailabilityResponseDto(updatedAvailability);
+      return AvailabilityMapper.toDto(updatedAvailability);
     } catch (error: any) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
@@ -224,14 +203,7 @@ export class AvailabilityService {
       throw new NotFoundException('Availability not found');
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: currentUserId },
-      select: { employeeId: true },
-    });
-
-    if (!user?.employeeId || user.employeeId !== availability.employeeId) {
-      throw new ForbiddenException('Access denied');
-    }
+    await this.getCurrentUserEmployee(currentUserId);
 
     await this.prisma.availability.delete({
       where: { id },
