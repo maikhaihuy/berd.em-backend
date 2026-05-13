@@ -20,7 +20,6 @@ import { AuthenticatedUser } from './decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from './dto/authenticated-user.dto';
 import { RefreshSessionDto } from './dto/refresh-session.dto';
 import { Throttle } from '@nestjs/throttler';
-import { RefreshDto } from './dto/refresh.dto';
 import { ZaloLoginDto } from './dto/zalo-login.dto';
 import { LoginDto } from './dto/login.dto';
 import { LocalAuthGuard } from '@common/guards/local-auth.guard';
@@ -72,7 +71,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Logout and invalidate refresh token' })
   @HttpCode(HttpStatus.OK)
   async logout(@RefreshSession() refreshSession: RefreshSessionDto) {
-    await this.authService.logout(refreshSession.id);
+    await this.authService.logout(refreshSession.tokenId);
     return { message: 'Logout successful' };
   }
 
@@ -82,7 +81,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Logout from current device only' })
   @HttpCode(HttpStatus.OK)
   async logoutDevice(@RefreshSession() refreshSession: RefreshSessionDto) {
-    await this.authService.logout(refreshSession.id, refreshSession.tokenId);
+    await this.authService.logout(refreshSession.tokenId);
     return { message: 'Device logout successful' };
   }
 
@@ -91,7 +90,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Logout from all devices' })
   @HttpCode(HttpStatus.OK)
   async logoutAll(@AuthenticatedUser() user: AuthenticatedUserDto) {
-    await this.refreshTokenService.revokeAllUserTokens(user.id);
+    await this.refreshTokenService.revokeAllUserTokens(user.userId);
     return { message: 'Logged out from all devices' };
   }
 
@@ -100,7 +99,9 @@ export class AuthController {
   @ApiOperation({ summary: 'Get active sessions for current user' })
   @HttpCode(HttpStatus.OK)
   async getActiveSessions(@AuthenticatedUser() user: AuthenticatedUserDto) {
-    const tokens = await this.refreshTokenService.getUserActiveTokens(user.id);
+    const tokens = await this.refreshTokenService.getUserActiveTokens(
+      user.userId,
+    );
     return {
       activeSessions: tokens.map((token) => ({
         id: token.id,

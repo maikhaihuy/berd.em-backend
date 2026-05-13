@@ -36,7 +36,7 @@ export class PermissionsController {
   ) {
     return await this.permissionsService.create(
       createPermissionDto,
-      currentUser.id,
+      currentUser.userId,
     );
   }
 
@@ -80,7 +80,7 @@ export class PermissionsController {
     return await this.permissionsService.update(
       +id,
       updatePermissionDto,
-      currentUser.id,
+      currentUser.userId,
     );
   }
 
@@ -96,6 +96,6 @@ export class PermissionsController {
     @Param('id') id: string,
     @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ) {
-    await this.permissionsService.remove(+id, currentUser.id);
+    await this.permissionsService.remove(+id, currentUser.userId);
   }
 }

@@ -16,7 +16,7 @@ export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   async create(createUserDto: CreateUserDto): Promise<UserResponseDto> {
-    const { branchIds, primaryBranchId, ...userData } = createUserDto;
+    const { ...userData } = createUserDto;
 
     // Check if zaloId already exists
     const existingUser = await this.prisma.user.findUnique({

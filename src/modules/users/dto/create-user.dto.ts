@@ -5,8 +5,6 @@ import {
   IsOptional,
   IsUrl,
   IsEnum,
-  IsArray,
-  ArrayNotEmpty,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { UserStatus } from '@prisma/client';
@@ -47,25 +45,4 @@ export class CreateUserDto {
   @ApiProperty({ description: 'Role ID', example: 1 })
   @IsInt()
   roleId!: number;
-
-  @ApiProperty({
-    description: 'Branch IDs to assign to user',
-    type: [Number],
-    example: [1, 2],
-    required: false,
-  })
-  @IsOptional()
-  @IsArray()
-  @ArrayNotEmpty()
-  @IsInt({ each: true })
-  branchIds?: number[];
-
-  @ApiProperty({
-    description: 'Primary branch ID',
-    example: 1,
-    required: false,
-  })
-  @IsOptional()
-  @IsInt()
-  primaryBranchId?: number;
 }

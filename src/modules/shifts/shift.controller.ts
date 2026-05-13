@@ -37,7 +37,7 @@ export class ShiftsController {
     @Body() createShiftDto: CreateShiftDto,
     @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ): Promise<ShiftResponseDto> {
-    return await this.shiftsService.create(createShiftDto, currentUser.id);
+    return await this.shiftsService.create(createShiftDto, currentUser.userId);
   }
 
   @Get()
@@ -77,7 +77,7 @@ export class ShiftsController {
     @Body() updateShiftDto: UpdateShiftDto,
     @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ): Promise<ShiftResponseDto> {
-    return await this.shiftsService.update(+id, updateShiftDto, currentUser.id);
+    return await this.shiftsService.update(+id, updateShiftDto, currentUser.userId);
   }
 
   @Delete(':id')

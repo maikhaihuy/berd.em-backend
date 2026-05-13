@@ -9,7 +9,6 @@ import { PrismaModule } from '@modules/prisma/prisma.module';
 import { RolesModule } from './modules/roles/role.module';
 import { PermissionsModule } from './modules/permissions/permission.module';
 import { RolePermissionsModule } from './modules/role-permissions/role-permissions.module';
-import { UserBranchesModule } from './modules/user-branches/user-branches.module';
 import { EmployeeHourlyRatesModule } from '@modules/employee-hourly-rates/employee-hourly-rates.module';
 import { AvailabilityModule } from '@modules/availability/availability.module';
 // NOTE: ScheduleModule and RosterModule have been REMOVED (deprecated in ERD v0.3.1)
@@ -36,7 +35,6 @@ import { TimeTrackingModule } from './modules/time-tracking/time-tracking.module
     RolesModule,
     PermissionsModule,
     RolePermissionsModule,
-    UserBranchesModule,
     // Core Entities
     EmployeesModule,
     EmployeeHourlyRatesModule,

@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -16,10 +15,10 @@ import { PasswordService } from '../../common/services/password.service';
 import { ZaloAuthService } from './zalo-auth.service';
 import { ZaloLoginDto } from './dto/zalo-login.dto';
 import {
-  userWithBranchesInclude,
   userWithEmployeeInclude,
   userWithRoleInclude,
 } from '@modules/users/user.types';
+import { employeeWithBranchesInclude } from '@modules/employees/employee.types';
 
 @Injectable()
 export class AuthService {
@@ -51,7 +50,6 @@ export class AuthService {
       where: { phoneNumber },
       include: {
         ...userWithRoleInclude,
-        ...userWithBranchesInclude,
         ...userWithEmployeeInclude,
       },
     });
@@ -76,47 +74,58 @@ export class AuthService {
       });
     }
 
-    // 5. Generate JWT tokens
+    // 5. Fetch user's branches for token payload
+    const userWithBranches = await this.prisma.employee.findUnique({
+      where: { id: user.id },
+      include: {
+        ...employeeWithBranchesInclude,
+      },
+    });
+    if (!userWithBranches) {
+      throw new NotFoundException('Employee record not found for user');
+    }
+
+    // 6. Generate JWT tokens
     const accessTokenPayload: AccessTokenPayloadDto = {
       sub: user.id,
       phone: user.phoneNumber, // Using phone number as email for compatibility
       empId: user.employee?.id || undefined,
       role: user.role.name,
-      branches: user.userBranches.map((ub) => ub.branch.id),
+      branches: userWithBranches.employeeBranches.map((eb) => eb.branch.id),
     };
 
     const jwtAccessToken =
       this.jwtTokenService.generateAccessToken(accessTokenPayload);
 
-    // 6. Generate and save refresh token
+    // 7. Generate and save refresh token
     const refreshTokenPayload: RefreshTokenPayloadDto = {
       sub: user.id,
       empId: user.employee?.id || undefined,
       phone: user.phoneNumber,
       role: user.role.name,
-      branches: user.userBranches.map((ub) => ub.branch.id),
+      branches: userWithBranches.employeeBranches.map((eb) => eb.branch.id),
     };
 
-    const { token: jwtRefreshToken, tokenId } =
+    const { token: jwtRefreshToken } =
       await this.refreshTokenService.createRefreshToken(refreshTokenPayload);
 
-    // 7. Return tokens with user info
+    // 8. Return tokens with user info
     return {
       accessToken: jwtAccessToken,
       refreshToken: jwtRefreshToken,
-      user: {
-        id: user.id,
-        phoneNumber: user.phoneNumber,
-        fullName: user.fullName,
-        role: user.role.name,
-        roleId: user.roleId,
-      },
+      // user: {
+      //   id: user.id,
+      //   phoneNumber: user.phoneNumber,
+      //   fullName: user.fullName,
+      //   role: user.role.name,
+      //   roleId: user.roleId,
+      // },
     };
   }
 
   async login(user: AuthenticatedUserDto): Promise<TokenDto> {
     const accessToken = this.jwtTokenService.generateAccessToken({
-      sub: user.id,
+      sub: user.userId,
       phone: user.phone,
       empId: user.employeeId,
       role: user.role,
@@ -125,7 +134,7 @@ export class AuthService {
 
     const { token: refreshToken } =
       await this.refreshTokenService.createRefreshToken({
-        sub: user.id,
+        sub: user.userId,
         phone: user.phone,
         empId: user.employeeId,
         role: user.role,
@@ -139,7 +148,7 @@ export class AuthService {
   }
 
   async refreshToken(refreshSession: RefreshSessionDto): Promise<TokenDto> {
-    const { id: userId } = refreshSession;
+    const { userId: userId } = refreshSession;
 
     // const isValid = await this.refreshTokenService.validateRefreshToken(
     //   userId,
@@ -154,7 +163,6 @@ export class AuthService {
       where: { id: userId },
       include: {
         ...userWithRoleInclude,
-        ...userWithBranchesInclude,
         ...userWithEmployeeInclude,
       },
     });
@@ -163,12 +171,22 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
+    const userWithBranches = await this.prisma.employee.findUnique({
+      where: { id: user.id },
+      include: {
+        ...employeeWithBranchesInclude,
+      },
+    });
+    if (!userWithBranches) {
+      throw new NotFoundException('Employee record not found for user');
+    }
+
     const accessToken = this.jwtTokenService.generateAccessToken({
       sub: user.id,
       phone: user.phoneNumber,
       empId: user.employee?.id || undefined,
       role: user.role.name,
-      branches: refreshSession.branches,
+      branches: userWithBranches.employeeBranches.map((eb) => eb.branch.id),
     });
 
     const { token: refreshToken } =
@@ -189,20 +207,21 @@ export class AuthService {
     };
   }
 
-  async logout(userId: number, refreshToken: string): Promise<void> {
-    await this.refreshTokenService.revokeRefreshToken(userId, refreshToken);
+  // TODO: its'not completed yet, we also need to revoke the refresh token in database
+  async logout(tokenId: string): Promise<void> {
+    await this.refreshTokenService.revokeRefreshToken(tokenId);
   }
 
   // DEPRECATED: Password reset methods - no longer needed with Zalo auth
-  async forgotPassword(email: string): Promise<void> {
-    throw new BadRequestException(
-      'Password reset is not available. Please use Zalo login.',
-    );
-  }
+  // async forgotPassword(email: string): Promise<void> {
+  //   throw new BadRequestException(
+  //     'Password reset is not available. Please use Zalo login.',
+  //   );
+  // }
 
-  async resetPassword(token: string, newPassword: string): Promise<void> {
-    throw new BadRequestException(
-      'Password reset is not available. Please use Zalo login.',
-    );
-  }
+  // async resetPassword(token: string, newPassword: string): Promise<void> {
+  //   throw new BadRequestException(
+  //     'Password reset is not available. Please use Zalo login.',
+  //   );
+  // }
 }

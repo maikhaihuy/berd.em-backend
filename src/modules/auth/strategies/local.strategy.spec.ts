@@ -77,7 +77,7 @@ describe('LocalStrategy', () => {
       });
       expect(bcrypt.compare).toHaveBeenCalledWith(password, mockUser.password);
       expect(result).toBeInstanceOf(AuthenticatedUserDto);
-      expect(result.id).toBe(mockUser.id);
+      expect(result.userId).toBe(mockUser.id);
       expect(result.username).toBe(mockUser.username);
     });
 

@@ -3,7 +3,7 @@ import { ApiProperty } from '@nestjs/swagger';
 // this response dto is used for jwt strategy
 export class AuthenticatedUserDto {
   @ApiProperty()
-  id!: number;
+  userId!: number;
 
   @ApiProperty()
   phone!: string;

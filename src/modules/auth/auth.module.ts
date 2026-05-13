@@ -12,6 +12,7 @@ import { JwtTokenService } from './jwt-token.service';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { PasswordService } from '../../common/services/password.service';
 import { ZaloAuthService } from './zalo-auth.service';
+import { LocalStrategy } from './strategies/local.strategy';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { ZaloAuthService } from './zalo-auth.service';
     JwtTokenService,
     JwtAccessStrategy,
     JwtRefreshStrategy,
+    LocalStrategy,
     ZaloAuthService,
   ],
   exports: [

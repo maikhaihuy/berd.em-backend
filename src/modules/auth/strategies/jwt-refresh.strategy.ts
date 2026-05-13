@@ -12,6 +12,7 @@ import {
   InvalidTokenException,
 } from '../exceptions/auth.exceptions';
 import { RefreshDto } from '../dto/refresh.dto';
+import { userWithRoleInclude } from '@modules/users/user.types';
 
 @Injectable()
 export class JwtRefreshStrategy extends PassportStrategy(
@@ -49,7 +50,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
         include: {
-          roles: true,
+          ...userWithRoleInclude,
           refreshTokens: {
             where: {
               expiresAt: { gte: new Date() },
@@ -83,16 +84,18 @@ export class JwtRefreshStrategy extends PassportStrategy(
       }
 
       const session = new RefreshSessionDto({
-        id: user.id,
-        username: user.username,
-        roles: user.roles.map((role) => role.name),
+        userId: user.id,
+        phone: user.phoneNumber,
+        role: user.role.name,
         tokenId: tokenRecord.id,
       });
 
       return done(null, session);
     } catch (error) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      this.logger.error('Error validating refresh token', error.stack);
+      this.logger.error(
+        'Error validating refresh token',
+        error instanceof Error ? error.stack : String(error),
+      );
 
       if (error instanceof TokenExpiredError) {
         return done(new TokenExpiredException('Refresh token has expired'));
@@ -116,7 +119,10 @@ export class JwtRefreshStrategy extends PassportStrategy(
           return tokenRecord;
         }
       } catch (error) {
-        this.logger.error('Error comparing tokens', error);
+        this.logger.error(
+          'Error comparing tokens',
+          error instanceof Error ? error.message : String(error),
+        );
       }
     }
     return null;
@@ -131,7 +137,10 @@ export class JwtRefreshStrategy extends PassportStrategy(
         },
       });
     } catch (error) {
-      this.logger.error('Error cleaning up expired tokens', error);
+      this.logger.error(
+        'Error cleaning up expired tokens',
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
 }

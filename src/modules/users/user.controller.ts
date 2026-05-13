@@ -20,8 +20,6 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { JwtAccessGuard } from '@common/guards/jwt-access.guard';
-import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
-import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 
 @ApiTags('users')
 @Controller('users')
@@ -37,11 +35,8 @@ export class UsersController {
     type: UserResponseDto,
   })
   @ApiBody({ type: CreateUserDto })
-  async create(
-    @Body() createUserDto: CreateUserDto,
-    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
-  ) {
-    return await this.usersService.create(createUserDto, currentUser.id);
+  async create(@Body() createUserDto: CreateUserDto) {
+    return await this.usersService.create(createUserDto);
   }
 
   @Get()
@@ -77,12 +72,8 @@ export class UsersController {
   })
   @ApiResponse({ status: 404, description: 'User not found.' })
   @ApiBody({ type: UpdateUserDto })
-  async update(
-    @Param('id') id: string,
-    @Body() updateUserDto: UpdateUserDto,
-    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
-  ) {
-    return await this.usersService.update(+id, updateUserDto, currentUser.id);
+  async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    return await this.usersService.update(+id, updateUserDto);
   }
 
   // Note: Role update is now handled via PUT /users/:id with roleId field

@@ -37,7 +37,7 @@ export class BranchesController {
     @Body() createBranchDto: CreateBranchDto,
     @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ): Promise<BranchResponseDto> {
-    return await this.branchesService.create(createBranchDto, currentUser.id);
+    return await this.branchesService.create(createBranchDto, currentUser.userId);
   }
 
   @Get()
@@ -80,7 +80,7 @@ export class BranchesController {
     return await this.branchesService.update(
       +id,
       updateBranchDto,
-      currentUser.id,
+      currentUser.userId,
     );
   }
 
@@ -96,7 +96,7 @@ export class BranchesController {
     @Param('id') id: string,
     @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ): Promise<void> {
-    await this.branchesService.remove(+id, currentUser.id);
+    await this.branchesService.remove(+id, currentUser.userId);
   }
 
   // @Get(':id/shifts')

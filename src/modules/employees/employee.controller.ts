@@ -44,7 +44,7 @@ export class EmployeesController {
   ): Promise<EmployeeResponseDto> {
     return await this.employeesService.create(
       createEmployeeDto,
-      currentUser.id,
+      currentUser.userId,
     );
   }
 
@@ -88,7 +88,7 @@ export class EmployeesController {
     return await this.employeesService.update(
       +id,
       updateEmployeeDto,
-      currentUser.id,
+      currentUser.userId,
     );
   }
 
@@ -104,7 +104,7 @@ export class EmployeesController {
     @Param('id') id: string,
     @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ): Promise<void> {
-    await this.employeesService.remove(+id, currentUser.id);
+    await this.employeesService.remove(+id, currentUser.userId);
   }
 
   @Post(':id/hourly-rates')
@@ -123,7 +123,7 @@ export class EmployeesController {
     return await this.employeesService.syncHourlyRates(
       +employeeId,
       ratesDto,
-      currentUser.id,
+      currentUser.userId,
     );
   }
 }

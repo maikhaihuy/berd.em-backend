@@ -33,7 +33,7 @@ export class RolesController {
     @Body() createRoleDto: CreateRoleDto,
     @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ) {
-    return await this.rolesService.create(createRoleDto, currentUser.id);
+    return await this.rolesService.create(createRoleDto, currentUser.userId);
   }
 
   @Get()
@@ -70,7 +70,7 @@ export class RolesController {
     @Body() updateRoleDto: UpdateRoleDto,
     @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ) {
-    return await this.rolesService.update(+id, updateRoleDto, currentUser.id);
+    return await this.rolesService.update(+id, updateRoleDto, currentUser.userId);
   }
 
   @Delete(':id')
@@ -85,6 +85,6 @@ export class RolesController {
     @Param('id') id: string,
     @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ) {
-    await this.rolesService.remove(+id, currentUser.id);
+    await this.rolesService.remove(+id, currentUser.userId);
   }
 }

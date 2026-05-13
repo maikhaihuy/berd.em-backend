@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { AuthenticatedUserDto } from '../dto/authenticated-user.dto';
 import { AccessTokenPayloadDto } from '../dto/access-token-payload.dto';
+import { userWithRoleInclude } from '@modules/users/user.types';
 
 @Injectable()
 export class JwtAccessStrategy extends PassportStrategy(Strategy) {
@@ -24,13 +25,7 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy) {
   ): Promise<AuthenticatedUserDto> {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      include: {
-        roles: {
-          include: {
-            permissions: true,
-          },
-        },
-      },
+      include: userWithRoleInclude,
     });
 
     if (!user) {
@@ -38,7 +33,7 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy) {
     }
     return new AuthenticatedUserDto({
       ...user,
-      roles: user.roles.map((role) => role.name),
+      role: user.role.name,
     });
   }
 }
