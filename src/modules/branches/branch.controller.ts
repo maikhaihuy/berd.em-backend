@@ -37,7 +37,10 @@ export class BranchesController {
     @Body() createBranchDto: CreateBranchDto,
     @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ): Promise<BranchResponseDto> {
-    return await this.branchesService.create(createBranchDto, currentUser.userId);
+    return await this.branchesService.create(
+      createBranchDto,
+      currentUser.userId,
+    );
   }
 
   @Get()

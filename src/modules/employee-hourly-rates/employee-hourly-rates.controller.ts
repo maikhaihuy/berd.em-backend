@@ -3,12 +3,12 @@ import {
   Get,
   Post,
   Body,
-  Patch,
   Param,
   Delete,
   HttpCode,
   HttpStatus,
   UseGuards,
+  Put,
 } from '@nestjs/common';
 import { EmployeeHourlyRatesService } from './employee-hourly-rates.service';
 import { CreateEmployeeHourlyRateDto } from './dto/create-employee-hourly-rate.dto';
@@ -16,6 +16,8 @@ import { UpdateEmployeeHourlyRateDto } from './dto/update-employee-hourly-rate.d
 import { EmployeeHourlyRateResponseDto } from './dto/employee-hourly-rate-response.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { JwtAccessGuard } from '../../common/guards/jwt-access.guard';
+import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
+import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 
 @ApiTags('employee-hourly-rates')
 @UseGuards(JwtAccessGuard)
@@ -35,9 +37,11 @@ export class EmployeeHourlyRatesController {
   @ApiBody({ type: CreateEmployeeHourlyRateDto })
   async create(
     @Body() createEmployeeHourlyRateDto: CreateEmployeeHourlyRateDto,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ): Promise<EmployeeHourlyRateResponseDto> {
     return await this.employeeHourlyRatesService.create(
       createEmployeeHourlyRateDto,
+      currentUser.userId,
     );
   }
 
@@ -66,7 +70,7 @@ export class EmployeeHourlyRatesController {
     return await this.employeeHourlyRatesService.findOne(+id);
   }
 
-  @Patch(':id')
+  @Put(':id')
   @ApiOperation({ summary: 'Update an employee hourly rate by ID' })
   @ApiResponse({
     status: 200,
@@ -78,10 +82,12 @@ export class EmployeeHourlyRatesController {
   async update(
     @Param('id') id: string,
     @Body() updateEmployeeHourlyRateDto: UpdateEmployeeHourlyRateDto,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ): Promise<EmployeeHourlyRateResponseDto> {
     return await this.employeeHourlyRatesService.update(
       +id,
       updateEmployeeHourlyRateDto,
+      currentUser.userId,
     );
   }
 
@@ -93,7 +99,10 @@ export class EmployeeHourlyRatesController {
     description: 'The hourly rate has been successfully deleted.',
   })
   @ApiResponse({ status: 404, description: 'Hourly rate not found.' })
-  async remove(@Param('id') id: string): Promise<void> {
-    await this.employeeHourlyRatesService.remove(+id);
+  async remove(
+    @Param('id') id: string,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
+  ): Promise<void> {
+    await this.employeeHourlyRatesService.remove(+id, currentUser.userId);
   }
 }
