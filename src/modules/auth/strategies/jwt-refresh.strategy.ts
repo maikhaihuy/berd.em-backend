@@ -13,6 +13,7 @@ import {
 } from '../exceptions/auth.exceptions';
 import { RefreshDto } from '../dto/refresh.dto';
 import { userWithRoleInclude } from '@modules/users/user.types';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class JwtRefreshStrategy extends PassportStrategy(
