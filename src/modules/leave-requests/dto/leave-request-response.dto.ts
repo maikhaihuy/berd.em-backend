@@ -1,59 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { LeaveStatus } from '@prisma/client';
+import { LeaveRequestDto } from './leave-request.dto';
+import { EmployeeLiteDto } from '@modules/employees/dto/employee.dto';
 
-export class LeaveRequestResponseDto {
-  @ApiProperty({ description: 'Leave request ID', example: 1 })
-  id: number;
-
-  @ApiProperty({ description: 'Work slot ID', example: 1 })
-  workSlotId: number;
+export class LeaveRequestResponseDto extends LeaveRequestDto {
+  @ApiProperty({ description: 'Work slot details' })
+  workSlot!: WorkSlotLiteDto;
 
   @ApiProperty({ description: 'Absence employee ID', example: 1 })
-  absenceEmployeeId: number;
+  absenceEmployee!: EmployeeLiteDto;
 
   @ApiProperty({ description: 'Replacement employee ID', example: 2 })
-  replacementEmployeeId: number;
+  replacementEmployee!: EmployeeLiteDto;
 
   @ApiProperty({ description: 'Approved by user ID', required: false })
-  approvedId?: number | null;
-
-  @ApiProperty({
-    description: 'Reason for leave',
-    required: false,
-    example: 'Family emergency',
-  })
-  reason?: string | null;
-
-  @ApiProperty({
-    description: 'Additional notes',
-    required: false,
-    example: 'Approved - replacement confirmed',
-  })
-  note?: string | null;
-
-  @ApiProperty({
-    description: 'Leave request status',
-    enum: LeaveStatus,
-    example: LeaveStatus.PENDING,
-  })
-  status: LeaveStatus;
-
-  @ApiProperty({ description: 'Approved at timestamp', required: false })
-  approvedAt?: Date | null;
-
-  @ApiProperty({ description: 'Created at timestamp' })
-  createdAt: Date;
-
-  @ApiProperty({ description: 'Created by user ID' })
-  createdBy: number;
-
-  @ApiProperty({ description: 'Updated at timestamp' })
-  updatedAt: Date;
-
-  @ApiProperty({ description: 'Updated by user ID' })
-  updatedBy: number;
-
-  constructor(partial: Partial<LeaveRequestResponseDto>) {
-    Object.assign(this, partial);
-  }
+  approver?: EmployeeLiteDto | null;
 }

@@ -14,12 +14,12 @@ export class CheckInDto {
   })
   @IsDateString()
   @IsNotEmpty()
-  actualStartTime: string;
+  actualStartTime!: string;
 
   @ApiProperty({ description: 'ID of the user performing check-in' })
   @IsInt()
   @IsNotEmpty()
-  performedBy: number;
+  performedBy!: number;
 
   @ApiProperty({ description: 'Optional note for check-in', required: false })
   @IsString()

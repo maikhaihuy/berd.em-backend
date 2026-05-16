@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { WorkSlotsService } from './work-slots.service';
-import { WorkSlotsController } from './work-slots.controller';
+import { WorkSlotsService } from './work-slot.service';
+import { WorkSlotsController } from './work-slot.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({

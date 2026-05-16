@@ -6,21 +6,29 @@ import {
   Delete,
   Body,
   Param,
-  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { LeaveRequestsService } from './leave-requests.service';
 import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
 import { UpdateLeaveRequestDto } from './dto/update-leave-request.dto';
 import { ApproveLeaveRequestDto } from './dto/approve-leave-request.dto';
 import { LeaveRequestResponseDto } from './dto/leave-request-response.dto';
 import { JwtAccessGuard } from '@common/guards/jwt-access.guard';
+import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
+import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
 import { LeaveStatus } from '@prisma/client';
 
 @ApiTags('leave-requests')
+@ApiBearerAuth()
 @Controller('leave-requests')
 @UseGuards(JwtAccessGuard)
 export class LeaveRequestsController {
@@ -37,10 +45,9 @@ export class LeaveRequestsController {
   @ApiBody({ type: CreateLeaveRequestDto })
   async create(
     @Body() createDto: CreateLeaveRequestDto,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
   ): Promise<LeaveRequestResponseDto> {
-    // TODO: Get currentUserId from JWT token
-    const currentUserId = 1; // Placeholder
-    return this.leaveRequestsService.create(createDto, currentUserId);
+    return this.leaveRequestsService.create(createDto, user.userId);
   }
 
   @Get()
@@ -52,6 +59,18 @@ export class LeaveRequestsController {
   })
   async findAll(): Promise<LeaveRequestResponseDto[]> {
     return this.leaveRequestsService.findAll();
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get leave request by ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Leave request found',
+    type: LeaveRequestResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Leave request not found' })
+  async findOne(@Param('id') id: string): Promise<LeaveRequestResponseDto> {
+    return this.leaveRequestsService.findOne(+id);
   }
 
   @Get('status/:status')
@@ -80,18 +99,6 @@ export class LeaveRequestsController {
     return this.leaveRequestsService.findByEmployee(+employeeId);
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get leave request by ID' })
-  @ApiResponse({
-    status: 200,
-    description: 'Leave request found',
-    type: LeaveRequestResponseDto,
-  })
-  @ApiResponse({ status: 404, description: 'Leave request not found' })
-  async findOne(@Param('id') id: string): Promise<LeaveRequestResponseDto> {
-    return this.leaveRequestsService.findOne(+id);
-  }
-
   @Put(':id')
   @ApiOperation({ summary: 'Update a leave request' })
   @ApiResponse({
@@ -104,10 +111,9 @@ export class LeaveRequestsController {
   async update(
     @Param('id') id: string,
     @Body() updateDto: UpdateLeaveRequestDto,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
   ): Promise<LeaveRequestResponseDto> {
-    // TODO: Get currentUserId from JWT token
-    const currentUserId = 1; // Placeholder
-    return this.leaveRequestsService.update(+id, updateDto, currentUserId);
+    return this.leaveRequestsService.update(+id, updateDto, user.userId);
   }
 
   @Put(':id/approve')
@@ -122,10 +128,9 @@ export class LeaveRequestsController {
   async approve(
     @Param('id') id: string,
     @Body() approveDto: ApproveLeaveRequestDto,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
   ): Promise<LeaveRequestResponseDto> {
-    // TODO: Get currentUserId from JWT token (manager/admin)
-    const currentUserId = 1; // Placeholder
-    return this.leaveRequestsService.approve(+id, approveDto, currentUserId);
+    return this.leaveRequestsService.approve(+id, approveDto, user.userId);
   }
 
   @Put(':id/cancel')
@@ -137,10 +142,11 @@ export class LeaveRequestsController {
     type: LeaveRequestResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Leave request not found' })
-  async cancel(@Param('id') id: string): Promise<LeaveRequestResponseDto> {
-    // TODO: Get currentUserId from JWT token
-    const currentUserId = 1; // Placeholder
-    return this.leaveRequestsService.cancel(+id, currentUserId);
+  async cancel(
+    @Param('id') id: string,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
+  ): Promise<LeaveRequestResponseDto> {
+    return this.leaveRequestsService.cancel(+id, user.userId);
   }
 
   @Delete(':id')

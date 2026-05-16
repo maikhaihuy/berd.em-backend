@@ -5,7 +5,7 @@ import { AttendanceAction } from '@prisma/client';
 export class CreateAttendanceHistoryDto {
   @ApiProperty({ description: 'Work slot ID', example: 1 })
   @IsInt()
-  workSlotId: number;
+  workSlotId!: number;
 
   @ApiProperty({
     description: 'Attendance action',
@@ -13,7 +13,7 @@ export class CreateAttendanceHistoryDto {
     example: AttendanceAction.CHECK_IN,
   })
   @IsEnum(AttendanceAction)
-  action: AttendanceAction;
+  action!: AttendanceAction;
 
   @ApiProperty({
     description: 'Additional details (JSON)',

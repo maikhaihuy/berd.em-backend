@@ -15,7 +15,7 @@ import { AvailabilityModule } from '@modules/availability/availability.module';
 // These are fully replaced by WorkSlotModule - modules deleted from codebase
 import { ExceptionModule } from '@common/exception.module';
 import { validate } from '@common/env.validation';
-import { WorkSlotsModule } from './modules/work-slots/work-slots.module';
+import { WorkSlotsModule } from './modules/work-slots/work-slot.module';
 import { AttendanceHistoryModule } from './modules/attendance-history/attendance-history.module';
 import { LeaveRequestsModule } from './modules/leave-requests/leave-requests.module';
 import { TimeTrackingModule } from './modules/time-tracking/time-tracking.module';

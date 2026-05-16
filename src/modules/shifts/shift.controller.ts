@@ -77,7 +77,11 @@ export class ShiftsController {
     @Body() updateShiftDto: UpdateShiftDto,
     @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ): Promise<ShiftResponseDto> {
-    return await this.shiftsService.update(+id, updateShiftDto, currentUser.userId);
+    return await this.shiftsService.update(
+      +id,
+      updateShiftDto,
+      currentUser.userId,
+    );
   }
 
   @Delete(':id')

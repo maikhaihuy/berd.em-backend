@@ -12,7 +12,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
-import { WorkSlotsService } from './work-slots.service';
+import { WorkSlotsService } from './work-slot.service';
 import { CreateWorkSlotDto } from './dto/create-work-slot.dto';
 import { UpdateWorkSlotDto } from './dto/update-work-slot.dto';
 import { WorkSlotResponseDto } from './dto/work-slot-response.dto';

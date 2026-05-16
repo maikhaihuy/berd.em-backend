@@ -14,12 +14,12 @@ export class CheckOutDto {
   })
   @IsDateString()
   @IsNotEmpty()
-  actualEndTime: string;
+  actualEndTime!: string;
 
   @ApiProperty({ description: 'ID of the user performing check-out' })
   @IsInt()
   @IsNotEmpty()
-  performedBy: number;
+  performedBy!: number;
 
   @ApiProperty({ description: 'Optional note for check-out', required: false })
   @IsString()

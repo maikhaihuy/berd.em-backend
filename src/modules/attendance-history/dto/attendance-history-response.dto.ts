@@ -3,17 +3,17 @@ import { AttendanceAction, Prisma } from '@prisma/client';
 
 export class AttendanceHistoryResponseDto {
   @ApiProperty({ description: 'Attendance history ID', example: 1 })
-  id: number;
+  id!: number;
 
   @ApiProperty({ description: 'Work slot ID', example: 1 })
-  workSlotId: number;
+  workSlotId!: number;
 
   @ApiProperty({
     description: 'Attendance action',
     enum: AttendanceAction,
     example: AttendanceAction.CHECK_IN,
   })
-  action: AttendanceAction;
+  action!: AttendanceAction;
 
   @ApiProperty({
     description: 'Additional details (JSON)',
@@ -23,12 +23,8 @@ export class AttendanceHistoryResponseDto {
   detail?: Prisma.JsonValue;
 
   @ApiProperty({ description: 'Created at timestamp' })
-  createdAt: Date;
+  createdAt!: Date;
 
   @ApiProperty({ description: 'Created by user ID' })
-  createdBy: number;
-
-  constructor(partial: Partial<AttendanceHistoryResponseDto>) {
-    Object.assign(this, partial);
-  }
+  createdBy!: number;
 }

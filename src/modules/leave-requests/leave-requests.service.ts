@@ -140,6 +140,24 @@ export class LeaveRequestsService {
           { replacementEmployeeId: employeeId },
         ],
       },
+      include: {
+        workSlot: {
+          include: {
+            employee: {
+              select: { id: true, fullName: true },
+            },
+            branch: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+        absenceEmployee: {
+          select: { id: true, fullName: true },
+        },
+        replacementEmployee: {
+          select: { id: true, fullName: true },
+        },
+      },
       orderBy: {
         createdAt: 'desc',
       },
@@ -151,6 +169,24 @@ export class LeaveRequestsService {
   async findByStatus(status: LeaveStatus): Promise<LeaveRequestResponseDto[]> {
     const leaveRequests = await this.prisma.leaveRequest.findMany({
       where: { status },
+      include: {
+        workSlot: {
+          include: {
+            employee: {
+              select: { id: true, fullName: true },
+            },
+            branch: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+        absenceEmployee: {
+          select: { id: true, fullName: true },
+        },
+        replacementEmployee: {
+          select: { id: true, fullName: true },
+        },
+      },
       orderBy: {
         createdAt: 'desc',
       },
@@ -208,6 +244,24 @@ export class LeaveRequestsService {
         ...updateDto,
         updatedBy: currentUserId,
       },
+      include: {
+        workSlot: {
+          include: {
+            employee: {
+              select: { id: true, fullName: true },
+            },
+            branch: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+        absenceEmployee: {
+          select: { id: true, fullName: true },
+        },
+        replacementEmployee: {
+          select: { id: true, fullName: true },
+        },
+      },
     });
 
     return new LeaveRequestResponseDto(leaveRequest);
@@ -243,6 +297,24 @@ export class LeaveRequestsService {
         note: approveDto.note || existingRequest.note,
         updatedBy: currentUserId,
       },
+      include: {
+        workSlot: {
+          include: {
+            employee: {
+              select: { id: true, fullName: true },
+            },
+            branch: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+        absenceEmployee: {
+          select: { id: true, fullName: true },
+        },
+        replacementEmployee: {
+          select: { id: true, fullName: true },
+        },
+      },
     });
 
     return new LeaveRequestResponseDto(leaveRequest);
@@ -276,6 +348,24 @@ export class LeaveRequestsService {
       data: {
         status: LeaveStatus.CANCELLED,
         updatedBy: currentUserId,
+      },
+      include: {
+        workSlot: {
+          include: {
+            employee: {
+              select: { id: true, fullName: true },
+            },
+            branch: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+        absenceEmployee: {
+          select: { id: true, fullName: true },
+        },
+        replacementEmployee: {
+          select: { id: true, fullName: true },
+        },
       },
     });
 

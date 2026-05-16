@@ -18,10 +18,10 @@ export class BulkCreateWorkSlotDto {
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => CreateWorkSlotDto)
-  workSlots: CreateWorkSlotDto[];
+  workSlots!: CreateWorkSlotDto[];
 
   @ApiProperty({ description: 'ID of the user creating these work slots' })
   @IsInt()
   @IsNotEmpty()
-  createdBy: number;
+  createdBy!: number;
 }

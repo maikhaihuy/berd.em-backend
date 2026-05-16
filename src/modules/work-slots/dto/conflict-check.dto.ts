@@ -5,7 +5,7 @@ export class ConflictCheckDto {
   @ApiProperty({ description: 'Employee ID to check for conflicts' })
   @IsInt()
   @IsNotEmpty()
-  employeeId: number;
+  employeeId!: number;
 
   @ApiProperty({
     description: 'Start time to check',
@@ -13,7 +13,7 @@ export class ConflictCheckDto {
   })
   @IsDateString()
   @IsNotEmpty()
-  startTime: string;
+  startTime!: string;
 
   @ApiProperty({
     description: 'End time to check',
@@ -21,18 +21,18 @@ export class ConflictCheckDto {
   })
   @IsDateString()
   @IsNotEmpty()
-  endTime: string;
+  endTime!: string;
 }
 
 export class ConflictResponseDto {
   @ApiProperty({ description: 'Whether there are conflicts' })
-  hasConflict: boolean;
+  hasConflict!: boolean;
 
   @ApiProperty({
     description: 'List of conflicting work slots',
     type: [Number],
   })
-  conflictingWorkSlotIds: number[];
+  conflictingWorkSlotIds!: number[];
 
   @ApiProperty({ description: 'Conflict details', required: false })
   message?: string;

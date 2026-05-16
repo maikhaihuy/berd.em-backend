@@ -13,12 +13,12 @@ export class CreateWorkSlotDto {
   @ApiProperty({ description: 'Branch ID where the work slot is assigned' })
   @IsInt()
   @IsNotEmpty()
-  branchId: number;
+  branchId!: number;
 
   @ApiProperty({ description: 'Employee ID assigned to this work slot' })
   @IsInt()
   @IsNotEmpty()
-  employeeId: number;
+  employeeId!: number;
 
   @ApiProperty({
     description: 'Date when the work slot is assigned',
@@ -26,7 +26,7 @@ export class CreateWorkSlotDto {
   })
   @IsDateString()
   @IsNotEmpty()
-  assignedAt: string;
+  assignedAt!: string;
 
   @ApiProperty({
     description: 'Start time of the work slot',
@@ -34,7 +34,7 @@ export class CreateWorkSlotDto {
   })
   @IsDateString()
   @IsNotEmpty()
-  startTime: string;
+  startTime!: string;
 
   @ApiProperty({
     description: 'End time of the work slot',
@@ -42,7 +42,7 @@ export class CreateWorkSlotDto {
   })
   @IsDateString()
   @IsNotEmpty()
-  endTime: string;
+  endTime!: string;
 
   @ApiProperty({
     description: 'Status of the work slot',
@@ -62,5 +62,5 @@ export class CreateWorkSlotDto {
   @ApiProperty({ description: 'ID of the user creating this work slot' })
   @IsInt()
   @IsNotEmpty()
-  createdBy: number;
+  createdBy!: number;
 }

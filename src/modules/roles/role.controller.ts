@@ -70,7 +70,11 @@ export class RolesController {
     @Body() updateRoleDto: UpdateRoleDto,
     @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ) {
-    return await this.rolesService.update(+id, updateRoleDto, currentUser.userId);
+    return await this.rolesService.update(
+      +id,
+      updateRoleDto,
+      currentUser.userId,
+    );
   }
 
   @Delete(':id')
