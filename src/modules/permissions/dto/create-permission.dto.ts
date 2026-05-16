@@ -5,12 +5,12 @@ export class CreatePermissionDto {
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
-  action: string;
+  action!: string;
 
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
-  subject: string;
+  subject!: string;
 
   @ApiProperty({ required: false })
   @IsString()

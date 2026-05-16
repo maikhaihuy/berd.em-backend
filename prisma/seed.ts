@@ -8,23 +8,10 @@ async function main() {
   const SETTINGS_USERNAME = process.env.SETTINGS_USERNAME?.trim() || 'settings';
   const SETTINGS_PASSWORD =
     process.env.SETTINGS_PASSWORD?.trim() || 'ChangeMe!123';
-  // 0) Ensure SETTINGS user exists first (idempotent)
-  // We intentionally set id: 1 so createdBy/updatedBy=1 in services remain valid.
-  // Self-reference on createdBy/updatedBy is acceptable because the row exists at insert time.
-  const hashed = await bcrypt.hash(SETTINGS_PASSWORD, 12);
 
-  const settingsUser = await prisma.user.upsert({
-    where: { username: SETTINGS_USERNAME },
-    update: {},
-    create: {
-      id: 1,
-      username: SETTINGS_USERNAME,
-      password: hashed,
-      status: 'ACTIVE',
-    },
-  });
-
-  const SYSTEM_USER_ID = settingsUser.id;
+  // 0) Create a temporary system user ID for seed operations
+  // We'll use ID 1 as the SYSTEM_USER_ID, ensuring it exists before dependencies
+  const SYSTEM_USER_ID = 1;
 
   // 1) Seed permissions (createMany + skipDuplicates for idempotency)
   const permissionsSeed = [
@@ -114,36 +101,74 @@ async function main() {
         description: role.description || '',
         createdBy: SYSTEM_USER_ID,
         updatedBy: SYSTEM_USER_ID,
-        permissions: {
-          connect: role.permissionIds.map((id) => ({ id })),
+        rolePermissions: {
+          create: role.permissionIds.map((permissionId) => ({
+            permission: {
+              connect: {
+                id: permissionId,
+              },
+            },
+          })),
         },
       },
       update: {
         description: role.description,
         updatedBy: SYSTEM_USER_ID,
-        permissions: {
-          set: role.permissionIds.map((id) => ({ id })), // idempotent
+        rolePermissions: {
+          create: role.permissionIds.map((permissionId) => ({
+            permission: {
+              connect: {
+                id: permissionId,
+              },
+            },
+          })),
         },
       },
-      include: { permissions: true },
+      include: {
+        rolePermissions: {
+          include: {
+            permission: true,
+          },
+        },
+      },
     });
   }
 
-  // 4) Ensure the SETTINGS user has Admin role
+  // 4) Create or update SETTINGS user (after roles exist for proper FK dependency)
+  // Idempotent: upsert ensures it's safe to run multiple times
   const adminRole = await prisma.role.findUnique({ where: { name: 'Admin' } });
-  if (adminRole) {
-    await prisma.user.update({
-      where: { id: SYSTEM_USER_ID },
-      data: {
-        roles: {
-          set: [{ id: adminRole.id }],
-        },
-      },
-    });
+
+  if (!adminRole) {
+    throw new Error('Admin role must exist before creating SETTINGS user');
   }
+
+  const hashed = await bcrypt.hash(SETTINGS_PASSWORD, 12);
+
+  const settingsUser = await prisma.user.upsert({
+    where: { phoneNumber: SETTINGS_USERNAME },
+    update: {
+      password: hashed,
+      status: 'ACTIVE',
+      role: {
+        connect: { id: adminRole.id },
+      },
+    },
+    create: {
+      id: SYSTEM_USER_ID,
+      phoneNumber: SETTINGS_USERNAME,
+      zaloId: `zalo_${SETTINGS_USERNAME}`,
+      fullName: 'Settings User',
+      password: hashed,
+      status: 'ACTIVE',
+      roleId: adminRole.id,
+    },
+    include: {
+      role: true,
+    },
+  });
 
   console.log(
-    'Seed completed: SETTINGS user/employee, permissions, and roles upserted.',
+    'Seed completed: permissions, roles, and SETTINGS user upserted.',
   );
 }
 

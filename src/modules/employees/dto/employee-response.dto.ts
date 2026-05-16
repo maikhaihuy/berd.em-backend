@@ -1,35 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Employee } from '@prisma/client';
+import { EmployeeDto } from './employee.dto';
+import { UserLiteDto } from '@modules/users/dto/user.dto';
+import { BranchLiteDto } from '@modules/branches/dto/branch.dto';
 
-export class EmployeeResponseDto {
-  @ApiProperty()
-  id: number;
+export class EmployeeResponseDto extends EmployeeDto {
+  @ApiProperty({ type: UserLiteDto, nullable: true, required: false })
+  user?: UserLiteDto | null;
 
-  @ApiProperty()
-  name: string;
-
-  @ApiProperty()
-  phone: string;
-
-  @ApiProperty({ required: false })
-  avatar?: string | null;
-
-  @ApiProperty({ required: false })
-  email?: string | null;
-
-  @ApiProperty({ required: false })
-  address?: string | null;
-
-  @ApiProperty()
-  isActive: boolean;
-
-  @ApiProperty()
-  createdAt: Date;
-
-  @ApiProperty()
-  updatedAt: Date;
-
-  constructor(partial: Partial<Employee>) {
-    Object.assign(this, partial);
-  }
+  @ApiProperty({ type: [BranchLiteDto], required: false })
+  branches?: BranchLiteDto[] | undefined;
 }

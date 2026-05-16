@@ -1,0 +1,300 @@
+@startuml
+skinparam linetype ortho
+skinparam packageStyle rectangle
+left to right direction
+
+' ===================== AUTH & USER =====================
+package "Authentication & Authorization" as AUTH #cfe2ff {
+  
+  entity User {
+    *id : Int <<PK>>
+    --
+    zaloId : String <<Unique>> (ID định danh từ Zalo)
+    phoneNumber : String <<Unique>>
+    fullName : String
+    avatarUrl : String?
+    status : Enum(ACTIVE, INACTIVE)
+    roleId : Int <<FK>> (Một user chỉ có 1 role chính)
+    --
+    createdAt : DateTime
+    updatedAt : DateTime
+  }
+
+  entity Role {
+    *id : Int <<PK>>
+    --
+    name : String (ADMIN, MANAGER, STAFF)
+    description : String
+  }
+
+  entity Permission {
+    *id : Int <<PK>>
+    --
+    action : String (manage, read, create, update, delete)
+    subject : String (Employee, Order, Branch, etc.)
+    condition : Json (Dùng cho CASL - ví dụ: {"branchId": "${branchId}"})
+    description : String?
+  }
+
+  entity RolePermission {
+    *roleId : Int <<PK, FK>>
+    *permissionId : Int <<PK, FK>>
+  }
+
+  entity RefreshToken {
+    *id : Int <<PK>>
+    --
+    userId : Int <<FK>>
+    hashedToken : String?
+    device : String?
+    ipAddress : String?
+    expiresAt : DateTime
+    createdAt : DateTime
+  }
+
+  entity PasswordResetToken {
+    *id : Int <<PK>>
+    --
+    userId : Int <<FK>>
+    hashedToken : String?
+    expiresAt : DateTime
+    createdAt : DateTime
+  }
+}
+
+' ===================== CORE ENTITIES =====================
+package "Core Entities" as CORE #d1e7dd {
+  left to right direction
+
+  entity Branch {
+    *id Int <<PK>>
+    --
+    name: String
+    abbreviation: String
+    address: String
+    email: String?
+    phone: String?
+    --
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
+  }
+
+  entity Employee {
+    * id Int <<PK>>
+    userId: Int <<FK>>
+    --
+    fullName: String
+    phoneNumber: String
+    dateOfBirth: Date?
+    avatar: String?
+    email: String?
+    address: String?
+    probationStartDate: Date?
+    officialStartDate: Date?
+    --
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
+  }
+
+  entity EmployeeHourlyRate {
+    * id Int <<PK>>
+    employeeId: Int <<FK>>
+    --
+    rate: Decimal
+    effectiveDate: Date
+    endDate: Date?
+    note: String?
+    --
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
+  }
+
+  entity EmployeeBranch {
+    *employeeId Int <<PK, FK, Int>>
+    *branchId Int <<PK, FK, Int>>
+    IsPrimary: Boolean
+  }
+
+  entity Availability {
+    *id Int <<PK>>
+    --
+    employeeId Int <<FK, Int>>
+    startTime: DateTimeOffset
+    endTime: DateTimeOffset
+    note: String?
+    --
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
+  }
+}
+
+' ===================== SHIFT MANAGEMENT =====================
+package "Shift Management" as SHIFT #fff3cd {
+  left to right direction
+
+  entity Shift {
+    *id Int <<PK>>
+    branchId Int <<FK, Int>>
+    --
+    name: String
+    abbreviation: String
+    maxSlots: Int
+    startTime: Time
+    endTime: Time
+    multiplier: Decimal
+    status: Enum: Draft, Active, Inactive, Archived
+    --
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
+  }
+
+  entity WorkSlot {
+    *id Int <<PK>>
+    branchId Int <<FK, Int>>
+    employeeId Int <<FK, Int>>
+    --
+    assignedAt: DateTime
+    actualStartTime: DateTime?
+    actualEndTime: DateTime?
+    startTime: DateTime
+    endTime: DateTime
+    status: Enum: Scheduled, InProgress, Completed, Absent
+    note: String?
+    --
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
+  }
+
+  entity AttendanceHistory {
+    *id Int <<PK>>
+    workSlotId: Int <<FK, Int>>
+    --
+    action: Enum: CHECK_IN, CHECK_OUT, REPLACEMENT_REQUEST, MANAGER_ADJUSTMENT
+    detail: Json?
+    --
+    createdAt: DateTime
+    createdBy: Int
+  }
+
+  entity LeaveRequest {
+    *id Int <<PK>>
+    workSlotId Int <<FK, Int>>
+    replacementEmployeeId Int <<FK, Int>>
+    absenceEmployeeId Int <<FK, Int>>
+    approvedId Int <<FK, Int?>>
+    --
+    reason: String?
+    note: String?
+    status: Enum: Pending, Approved, Rejected, Cancelled)
+    approvedAt: DateTime?
+    --
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
+  }
+}
+
+' ===================== PAYMENT MANAGEMENT =====================
+package "Payment Management" as PAY #f8d7da {
+  left to right direction
+
+  entity TimeLog {
+    *id Int <<PK>>
+    workSlotId Int <<FK, Int>>
+    employeeId Int <<FK, Int>>
+    --
+    actualStartTime: DateTimeOffset?
+    actualEndTime: DateTimeOffset?
+    requestStartTime: DateTimeOffset?
+    requestEndTime: DateTimeOffset?
+    overtimeMinutes: Int?
+    multiplier: Decimal
+    requestDate: DateTimeOffset?
+    requestReason: String?
+    status: Enum: Pending, Submitted, Verified, Rejected
+    verifiedBy: Int?
+    verifiedAt: DateTimeOffset?
+    note: String?
+    --
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
+  }
+
+  entity PayPeriod {
+    *id Int <<PK>>
+    --
+    startDate: Date
+    endDate: Date
+    status: Enum: Open, Closed, Finalized
+    notes: String?
+    --
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
+  }
+
+  entity PayrollEntry {
+    *id Int <<PK>>
+    --
+    timeLogId Int <<FK, Int>>
+    employeeId Int <<FK, Int>>
+    payPeriodId Int <<FK, Int>>
+    payDate: Date
+    workDate: Date
+    calculatedAt: DateTime
+    calculatedBy: Int <<FK, Int>>
+    totalPay: Decimal
+    --
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
+  }
+}
+
+' ===================== RELATIONSHIPS =====================
+
+User }|--|| Role
+Role ||--|{ RolePermission
+Permission ||--|{ RolePermission
+User ||--|{ RefreshToken
+
+EmployeeBranch }o--|| Employee : "employeeId"
+EmployeeBranch }o--|| Branch : "branchId"
+EmployeeHourlyRate }o--|| Employee : "employeeId"
+User |o--o| Employee : "employeeId"
+
+Shift }o--|| Branch : "branchId"
+WorkSlot }o--|| Branch : "branchId"
+WorkSlot }o--|| Employee : "employeeId"
+AttendanceHistory }o--|| WorkSlot : "workSlotId"
+LeaveRequest }o--|| Employee : "absenceEmployeeId"
+LeaveRequest }o--|| Employee : "replacementEmployeeId"
+LeaveRequest }o--|| WorkSlot : "workSlotId"
+
+Availability }o--|| Employee : "employeeId"
+
+TimeLog }o--|| Employee : "employeeId"
+TimeLog }o--|| WorkSlot : "workSlotId"
+
+PayrollEntry }o--|| Employee : "employeeId"
+PayrollEntry }o--|| PayPeriod : "payPeriodId"
+PayrollEntry ||--o| TimeLog : "timeLogId"
+
+@enduml

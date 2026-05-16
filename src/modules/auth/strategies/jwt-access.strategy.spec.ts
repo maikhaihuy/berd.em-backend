@@ -103,7 +103,7 @@ describe('JwtAccessStrategy', () => {
         },
       });
       expect(result).toBeInstanceOf(AuthenticatedUserDto);
-      expect(result.id).toBe(mockUser.id);
+      expect(result.userId).toBe(mockUser.id);
       expect(result.username).toBe(mockUser.username);
       expect(result.employeeId).toBe(mockUser.employeeId);
       expect(result.roles).toEqual(['employee']);

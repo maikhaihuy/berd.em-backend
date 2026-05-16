@@ -1,28 +1,32 @@
-import { PermissionDto } from '@modules/permissions/dto/permission.dto';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class RoleDto {
   @ApiProperty()
-  id: number;
+  id!: number;
 
   @ApiProperty()
-  name: string;
+  name!: string;
 
   @ApiProperty()
   description?: string | null;
 
   @ApiProperty()
-  createdAt: Date;
+  createdAt!: Date;
 
   @ApiProperty()
-  createdBy: number;
+  createdBy!: number;
 
   @ApiProperty()
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @ApiProperty()
-  updatedBy: number;
+  updatedBy!: number;
+}
 
-  // Relations
-  permissions?: PermissionDto[] | null;
+export class RoleLiteDto {
+  @ApiProperty()
+  id!: number;
+
+  @ApiProperty()
+  name!: string;
 }

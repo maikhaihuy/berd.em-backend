@@ -1,25 +1,8 @@
+import { RoleLiteDto } from '@modules/roles/dto/role.dto';
 import { ApiProperty } from '@nestjs/swagger';
+import { PermissionDto } from './permission.dto';
 
-export class PermissionResponseDto {
-  @ApiProperty()
-  id: number;
-
-  @ApiProperty()
-  action: string;
-
-  @ApiProperty()
-  subject: string;
-
-  @ApiProperty()
-  description?: string | null;
-
-  @ApiProperty()
-  createdAt: Date;
-
-  @ApiProperty()
-  updatedAt: Date;
-
-  constructor(partial: Partial<PermissionResponseDto>) {
-    Object.assign(this, partial);
-  }
+export class PermissionResponseDto extends PermissionDto {
+  @ApiProperty({ type: [Object] }) // You might want to create a separate PermissionResponseDto
+  roles?: RoleLiteDto[];
 }

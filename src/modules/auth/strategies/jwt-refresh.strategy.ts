@@ -3,7 +3,6 @@ import { ExtractJwt, Strategy, StrategyOptionsWithRequest } from 'passport-jwt';
 import { TokenExpiredError } from 'jsonwebtoken';
 import { Request } from 'express';
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { RefreshSessionDto } from '../dto/refresh-session.dto';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
@@ -12,9 +11,9 @@ import {
   TokenExpiredException,
   InvalidTokenException,
 } from '../exceptions/auth.exceptions';
-interface RefreshTokenRequest {
-  refresh_token: string;
-}
+import { RefreshDto } from '../dto/refresh.dto';
+import { userWithRoleInclude } from '@modules/users/user.types';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class JwtRefreshStrategy extends PassportStrategy(
@@ -31,7 +30,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
       jwtFromRequest: ExtractJwt.fromBodyField('refresh_token'),
       secretOrKey: configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
       passReqToCallback: true,
-      ignoreExpiration: false, // Let passport-jwt handle expiration
+      ignoreExpiration: true, // Let passport-jwt handle expiration
     } as StrategyOptionsWithRequest);
   }
 
@@ -41,7 +40,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
     done: (error: Error | null, user?: any, info?: any) => void,
   ): Promise<RefreshSessionDto | void> {
     try {
-      const refreshToken = (req.body as RefreshTokenRequest)?.refresh_token;
+      const refreshToken = (req.body as RefreshDto)?.refreshToken;
 
       if (!refreshToken || typeof refreshToken !== 'string') {
         this.logger.warn('Refresh token missing from request body');
@@ -55,7 +54,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
         include: {
-          roles: true,
+          ...userWithRoleInclude,
           refreshTokens: {
             where: {
               expiresAt: { gte: new Date() },
@@ -89,16 +88,18 @@ export class JwtRefreshStrategy extends PassportStrategy(
       }
 
       const session = new RefreshSessionDto({
-        id: user.id,
-        username: user.username,
-        roles: user.roles.map((role) => role.name),
+        userId: user.id,
+        phone: user.phoneNumber,
+        role: user.role.name,
         tokenId: tokenRecord.id,
       });
 
       return done(null, session);
     } catch (error) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      this.logger.error('Error validating refresh token', error.stack);
+      this.logger.error(
+        'Error validating refresh token',
+        error instanceof Error ? error.stack : String(error),
+      );
 
       if (error instanceof TokenExpiredError) {
         return done(new TokenExpiredException('Refresh token has expired'));
@@ -122,7 +123,10 @@ export class JwtRefreshStrategy extends PassportStrategy(
           return tokenRecord;
         }
       } catch (error) {
-        this.logger.error('Error comparing tokens', error);
+        this.logger.error(
+          'Error comparing tokens',
+          error instanceof Error ? error.message : String(error),
+        );
       }
     }
     return null;
@@ -137,7 +141,10 @@ export class JwtRefreshStrategy extends PassportStrategy(
         },
       });
     } catch (error) {
-      this.logger.error('Error cleaning up expired tokens', error);
+      this.logger.error(
+        'Error cleaning up expired tokens',
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
 }

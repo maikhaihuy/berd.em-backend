@@ -6,6 +6,7 @@ import { ConfigService } from '@nestjs/config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.setGlobalPrefix('api'); // Set global prefix for all routes
   const configService = app.get(ConfigService);
 
   // If you rely on cookies for refresh, ensure CORS is configured correctly:
@@ -72,7 +73,7 @@ async function bootstrap() {
 
   // Apply a global security requirement so Swagger sends the Authorization header
   document.security = [{ 'access-token': [] }];
-  SwaggerModule.setup('api', app, document, {
+  SwaggerModule.setup('docs', app, document, {
     swaggerOptions: {
       // Keeps the Authorization token across page refreshes in Swagger UI
       persistAuthorization: true,
@@ -82,8 +83,8 @@ async function bootstrap() {
   const port = configService.get<number>('PORT') || 3000;
   await app.listen(port);
 
-  console.log(`Application is running on: http://localhost:${port}`);
-  console.log(`Swagger documentation: http://localhost:${port}/api`);
+  console.log(`Application is running on: http://localhost:${port}/api`);
+  console.log(`Swagger documentation: http://localhost:${port}/docs`);
 }
 
 bootstrap();

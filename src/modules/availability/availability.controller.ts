@@ -46,7 +46,7 @@ export class AvailabilityController {
   ) {
     return this.availabilityService.create(
       createAvailabilityDto,
-      currentUser.id,
+      currentUser.userId,
     );
   }
 
@@ -83,7 +83,7 @@ export class AvailabilityController {
     return this.availabilityService.findAll(
       startOfWeek,
       endOfWeek,
-      currentUser.id,
+      currentUser.userId,
     );
   }
 
@@ -98,7 +98,7 @@ export class AvailabilityController {
     @Param('id', ParseIntPipe) id: number,
     @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ) {
-    return this.availabilityService.findOne(id, currentUser.id);
+    return this.availabilityService.findOne(id, currentUser.userId);
   }
 
   @Patch(':id')
@@ -116,7 +116,7 @@ export class AvailabilityController {
     return this.availabilityService.update(
       id,
       updateAvailabilityDto,
-      currentUser.id,
+      currentUser.userId,
     );
   }
 
@@ -130,6 +130,6 @@ export class AvailabilityController {
     @Param('id', ParseIntPipe) id: number,
     @AuthenticatedUser() currentUser: AuthenticatedUserDto,
   ) {
-    return this.availabilityService.remove(id, currentUser.id);
+    return this.availabilityService.remove(id, currentUser.userId);
   }
 }

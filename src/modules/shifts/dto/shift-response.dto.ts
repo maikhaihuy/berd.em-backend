@@ -1,41 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Shift, ShiftStatus } from '@prisma/client';
+import { ShiftDto } from './shift.dto';
+import { BranchLiteDto } from '@modules/branches/dto/branch.dto';
 
-export class ShiftResponseDto {
-  @ApiProperty()
-  id: number;
-
-  @ApiProperty()
-  name: string;
-
-  @ApiProperty()
-  abbreviation: string;
-
-  @ApiProperty()
-  maxSlots: number;
-
-  @ApiProperty()
-  branchId: number;
-
-  @ApiProperty()
-  startTime: Date; // Time field
-
-  @ApiProperty()
-  endTime: Date; // Time field
-
-  @ApiProperty()
-  multiplier: number;
-
-  @ApiProperty()
-  status: ShiftStatus;
-
-  @ApiProperty()
-  createdAt: Date;
-
-  @ApiProperty()
-  updatedAt: Date;
-
-  constructor(partial: Partial<Shift>) {
-    Object.assign(this, partial);
-  }
+export class ShiftResponseDto extends ShiftDto {
+  @ApiProperty({ type: [Object] })
+  branch!: BranchLiteDto;
 }

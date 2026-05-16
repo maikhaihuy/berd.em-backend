@@ -11,7 +11,7 @@ export class CreateRoleDto {
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name!: string;
 
   @ApiProperty({ required: false })
   @IsString()
@@ -21,5 +21,5 @@ export class CreateRoleDto {
   @ApiProperty({ type: [Number] })
   @IsInt({ each: true })
   @ArrayNotEmpty()
-  permissionIds: number[];
+  permissionIds!: number[];
 }

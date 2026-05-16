@@ -5,13 +5,13 @@ export class CreateAvailabilityDto {
   @ApiProperty({ description: 'Employee ID' })
   @IsInt()
   @IsPositive()
-  employeeId: number;
+  employeeId!: number;
 
   @ApiProperty({ example: '2023-01-01T08:00:00Z' })
   @IsDateString()
-  startTime: string;
+  startTime!: string;
 
   @ApiProperty({ example: '2023-01-01T16:00:00Z' })
   @IsDateString()
-  endTime: string;
+  endTime!: string;
 }

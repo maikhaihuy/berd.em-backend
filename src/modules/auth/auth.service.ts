@@ -1,21 +1,24 @@
 import {
-  BadRequestException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
-import * as crypto from 'crypto';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { TokenDto } from './dto/token.dto';
-import { RegisterDto } from './dto/register.dto';
-import { Prisma } from '@prisma/client';
 import { RefreshTokenService } from './refresh-token.service';
 import { AuthenticatedUserDto } from './dto/authenticated-user.dto';
 import { AccessTokenPayloadDto } from './dto/access-token-payload.dto';
 import { RefreshSessionDto } from './dto/refresh-session.dto';
 import { JwtTokenService } from './jwt-token.service';
 import { RefreshTokenPayloadDto } from './dto/refresh-token-payload.dto';
-import { PasswordService } from './password.service';
+import { PasswordService } from '../../common/services/password.service';
+import { ZaloAuthService } from './zalo-auth.service';
+import { ZaloLoginDto } from './dto/zalo-login.dto';
+import {
+  userWithEmployeeInclude,
+  userWithRoleInclude,
+} from '@modules/users/user.types';
+import { employeeWithBranchesInclude } from '@modules/employees/employee.types';
 
 @Injectable()
 export class AuthService {
@@ -24,141 +27,119 @@ export class AuthService {
     private readonly jwtTokenService: JwtTokenService,
     private readonly refreshTokenService: RefreshTokenService,
     private readonly passwordService: PasswordService,
+    private readonly zaloAuthService: ZaloAuthService,
   ) {}
 
-  async register(registerDto: RegisterDto): Promise<AuthenticatedUserDto> {
-    const {
-      username,
-      password,
-      fullName,
-      phoneNumber,
-      email,
-      address,
-      dateOfBirth,
-      probationStartDate,
-      officialStartDate,
-      roleIds,
-      branchIds,
-    } = registerDto;
+  /**
+   * Zalo Phone Number Login
+   * Only pre-registered employees can log in using their Zalo phone number
+   */
+  async loginWithZalo(zaloLoginDto: ZaloLoginDto): Promise<TokenDto> {
+    const { accessToken, phoneToken } = zaloLoginDto;
 
-    // Check if user already exists
-    const existingUser = await this.prisma.user.findUnique({
-      where: { username },
+    // 1. Call Zalo Graph API to decrypt phone number
+    const zaloProfile = await this.zaloAuthService.getPhoneNumber(
+      accessToken,
+      phoneToken,
+    );
+
+    const phoneNumber = zaloProfile.phoneNumber;
+
+    // 2. Check if the user exists in our database
+    const user = await this.prisma.user.findUnique({
+      where: { phoneNumber },
+      include: {
+        ...userWithRoleInclude,
+        ...userWithEmployeeInclude,
+      },
     });
-    if (existingUser) {
-      throw new BadRequestException('Username already exists');
+
+    // 3. Deny access if not pre-registered
+    if (!user) {
+      throw new NotFoundException(
+        'Your phone number is not registered in the system. Please contact your manager to register.',
+      );
     }
 
-    // Validate roles exist
-    const roles = await this.prisma.role.findMany({
-      where: { id: { in: roleIds } },
+    // Check if user is active
+    if (user.status !== 'ACTIVE') {
+      throw new ForbiddenException('Your account is not active');
+    }
+
+    // 4. Update user's Zalo ID if not already set (first time login)
+    if (!user.zaloId) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { zaloId: accessToken.substring(0, 50) }, // Store partial token as zaloId
+      });
+    }
+
+    // 5. Fetch user's branches for token payload
+    const userWithBranches = await this.prisma.employee.findUnique({
+      where: { id: user.id },
+      include: {
+        ...employeeWithBranchesInclude,
+      },
     });
-    if (roles.length !== roleIds.length) {
-      throw new BadRequestException('One or more roles do not exist');
+    if (!userWithBranches) {
+      throw new NotFoundException('Employee record not found for user');
     }
 
-    // Validate branches exist if provided
-    if (branchIds && branchIds.length > 0) {
-      const branches = await this.prisma.branch.findMany({
-        where: { id: { in: branchIds } },
-      });
-      if (branches.length !== branchIds.length) {
-        throw new BadRequestException('One or more branches do not exist');
-      }
-    }
+    // 6. Generate JWT tokens
+    const accessTokenPayload: AccessTokenPayloadDto = {
+      sub: user.id,
+      phone: user.phoneNumber, // Using phone number as email for compatibility
+      empId: user.employee?.id || undefined,
+      role: user.role.name,
+      branches: userWithBranches.employeeBranches.map((eb) => eb.branch.id),
+    };
 
-    // Hash password
-    const hashedPassword = await this.passwordService.hash(password);
+    const jwtAccessToken =
+      this.jwtTokenService.generateAccessToken(accessTokenPayload);
 
-    try {
-      // Use transaction to create both User and Employee
-      const result = await this.prisma.$transaction(async (tx) => {
-        // Create Employee first
-        const employee = await tx.employee.create({
-          data: {
-            fullName,
-            phoneNumber,
-            email,
-            address,
-            dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
-            probationStartDate: probationStartDate
-              ? new Date(probationStartDate)
-              : undefined,
-            officialStartDate: officialStartDate
-              ? new Date(officialStartDate)
-              : undefined,
-            createdBy: 1, // TODO: Get from current user context
-            updatedBy: 1, // TODO: Get from current user context
-          },
-        });
+    // 7. Generate and save refresh token
+    const refreshTokenPayload: RefreshTokenPayloadDto = {
+      sub: user.id,
+      empId: user.employee?.id || undefined,
+      phone: user.phoneNumber,
+      role: user.role.name,
+      branches: userWithBranches.employeeBranches.map((eb) => eb.branch.id),
+    };
 
-        // Create User with reference to Employee
-        const user = await tx.user.create({
-          data: {
-            username,
-            password: hashedPassword,
-            status: 'ACTIVE',
-            employeeId: employee.id,
-          },
-        });
+    const { token: jwtRefreshToken } =
+      await this.refreshTokenService.createRefreshToken(refreshTokenPayload);
 
-        // Connect roles directly to user (many-to-many)
-        if (roleIds && roleIds.length > 0) {
-          await tx.user.update({
-            where: { id: user.id },
-            data: {
-              roles: {
-                connect: roleIds.map((roleId) => ({ id: roleId })),
-              },
-            },
-          });
-        }
-
-        // Create EmployeeBranch relationships with isPrimary field
-        if (branchIds && branchIds.length > 0) {
-          for (let i = 0; i < branchIds.length; i++) {
-            await tx.employeeBranch.create({
-              data: {
-                employeeId: employee.id,
-                branchId: branchIds[i],
-                isPrimary: i === 0, // First branch is primary
-              },
-            });
-          }
-        }
-
-        return { user, employee };
-      });
-
-      return new AuthenticatedUserDto({
-        id: result.user.id,
-        username: result.user.username,
-        employeeId: result.user.employeeId || 0,
-      });
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      ) {
-        throw new BadRequestException('Username already exists');
-      }
-      throw error;
-    }
+    // 8. Return tokens with user info
+    return {
+      accessToken: jwtAccessToken,
+      refreshToken: jwtRefreshToken,
+      // user: {
+      //   id: user.id,
+      //   phoneNumber: user.phoneNumber,
+      //   fullName: user.fullName,
+      //   role: user.role.name,
+      //   roleId: user.roleId,
+      // },
+    };
   }
 
   async login(user: AuthenticatedUserDto): Promise<TokenDto> {
     const accessToken = this.jwtTokenService.generateAccessToken({
-      sub: user.id,
-      email: user.username,
-      roles: user.roles,
-    } as AccessTokenPayloadDto);
+      sub: user.userId,
+      phone: user.phone,
+      empId: user.employeeId,
+      role: user.role,
+      branches: user.branches,
+    });
 
     const { token: refreshToken } =
       await this.refreshTokenService.createRefreshToken({
-        sub: user.id,
-        email: user.username,
-        roles: user.roles,
-      } as RefreshTokenPayloadDto);
+        sub: user.userId,
+        phone: user.phone,
+        empId: user.employeeId,
+        role: user.role,
+        branches: user.branches,
+      });
 
     return {
       accessToken,
@@ -167,18 +148,56 @@ export class AuthService {
   }
 
   async refreshToken(refreshSession: RefreshSessionDto): Promise<TokenDto> {
+    const { userId: userId } = refreshSession;
+
+    // const isValid = await this.refreshTokenService.validateRefreshToken(
+    //   userId,
+    //   refreshToken,
+    // );
+
+    // if (!isValid) {
+    //   throw new ForbiddenException('Invalid refresh token');
+    // }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        ...userWithRoleInclude,
+        ...userWithEmployeeInclude,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const userWithBranches = await this.prisma.employee.findUnique({
+      where: { id: user.id },
+      include: {
+        ...employeeWithBranchesInclude,
+      },
+    });
+    if (!userWithBranches) {
+      throw new NotFoundException('Employee record not found for user');
+    }
+
     const accessToken = this.jwtTokenService.generateAccessToken({
-      sub: refreshSession.id,
-      email: refreshSession.username,
-      roles: refreshSession.roles,
-    } as AccessTokenPayloadDto);
+      sub: user.id,
+      phone: user.phoneNumber,
+      empId: user.employee?.id || undefined,
+      role: user.role.name,
+      branches: userWithBranches.employeeBranches.map((eb) => eb.branch.id),
+    });
+
     const { token: refreshToken } =
       await this.refreshTokenService.rotateRefreshToken(
         refreshSession.tokenId,
         {
-          sub: refreshSession.id,
-          email: refreshSession.username,
-          roles: refreshSession.roles,
+          sub: user.id,
+          phone: user.phoneNumber,
+          empId: user.employee?.id || undefined,
+          role: user.role.name,
+          branches: refreshSession.branches,
         } as RefreshTokenPayloadDto,
       );
 
@@ -188,88 +207,21 @@ export class AuthService {
     };
   }
 
-  async logout(userId: number, tokenId?: string) {
-    if (tokenId) {
-      // Revoke specific token
-      await this.refreshTokenService.revokeRefreshToken(tokenId);
-    } else {
-      // Revoke all tokens for user
-      await this.refreshTokenService.revokeAllUserTokens(userId);
-    }
+  // TODO: its'not completed yet, we also need to revoke the refresh token in database
+  async logout(tokenId: string): Promise<void> {
+    await this.refreshTokenService.revokeRefreshToken(tokenId);
   }
 
-  async forgotPassword(username: string) {
-    const user = await this.prisma.user.findUnique({ where: { username } });
-    if (!user) {
-      // Không báo lỗi để tránh lộ thông tin email có tồn tại hay không
-      return {
-        message:
-          'Nếu email tồn tại, bạn sẽ nhận được một link để đặt lại mật khẩu.',
-      };
-    }
+  // DEPRECATED: Password reset methods - no longer needed with Zalo auth
+  // async forgotPassword(email: string): Promise<void> {
+  //   throw new BadRequestException(
+  //     'Password reset is not available. Please use Zalo login.',
+  //   );
+  // }
 
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const hashToken = await bcrypt.hash(resetToken, 10);
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 phút
-
-    // Delete any existing reset tokens for this user
-    await this.prisma.passwordResetToken.deleteMany({
-      where: { userId: user.id },
-    });
-
-    // Create new reset token
-    await this.prisma.passwordResetToken.create({
-      data: {
-        userId: user.id,
-        hashToken,
-        expiresAt,
-      },
-    });
-
-    // TODO: Gửi email chứa `resetToken` cho người dùng
-    console.log(`Reset Token (gửi cho user): ${resetToken}`);
-
-    return { message: 'Link đặt lại mật khẩu đã được gửi đến email của bạn.' };
-  }
-
-  async resetPassword(token: string, newPass: string) {
-    // Find valid reset token
-    const resetTokenRecord = await this.prisma.passwordResetToken.findFirst({
-      where: {
-        expiresAt: { gt: new Date() },
-      },
-      include: {
-        user: true,
-      },
-    });
-
-    if (!resetTokenRecord) {
-      throw new ForbiddenException('Token không hợp lệ hoặc đã hết hạn.');
-    }
-
-    // Verify the token
-    const isValidToken = await this.passwordService.compare(
-      token,
-      resetTokenRecord.hashToken,
-    );
-    if (!isValidToken) {
-      throw new ForbiddenException('Token không hợp lệ hoặc đã hết hạn.');
-    }
-
-    const password = await this.passwordService.hash(newPass);
-
-    // Update user password and delete reset token
-    await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: resetTokenRecord.userId },
-        data: { password },
-      });
-
-      await tx.passwordResetToken.delete({
-        where: { id: resetTokenRecord.id },
-      });
-    });
-
-    return { message: 'Mật khẩu đã được đặt lại thành công.' };
-  }
+  // async resetPassword(token: string, newPassword: string): Promise<void> {
+  //   throw new BadRequestException(
+  //     'Password reset is not available. Please use Zalo login.',
+  //   );
+  // }
 }

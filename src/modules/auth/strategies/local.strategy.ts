@@ -7,7 +7,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { AuthenticatedUserDto } from '../dto/authenticated-user.dto';
-import { PasswordService } from '../password.service';
+import { PasswordService } from '../../../common/services/password.service';
+import { userWithRoleInclude } from '@modules/users/user.types';
 
 @Injectable()
 export class LocalStrategy extends PassportStrategy(Strategy) {
@@ -19,24 +20,29 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(
-    username: string,
+    phoneNumber: string,
     password: string,
   ): Promise<AuthenticatedUserDto> {
     const user = await this.prisma.user.findUnique({
-      where: { username },
-      include: {
-        roles: true,
-      },
+      where: { phoneNumber },
+      include: userWithRoleInclude,
     });
 
     if (!user) {
-      throw new NotFoundException(`User with username ${username} not found.`);
+      throw new NotFoundException(
+        `User with username ${phoneNumber} not found.`,
+      );
     }
 
     // TODO: Add status check when UserStatus enum is properly implemented
-    // if (user.status !== 'ACTIVE') {
-    //   throw new UnauthorizedException('User account is not active.');
-    // }
+    if (user.status !== 'ACTIVE') {
+      throw new UnauthorizedException('User account is not active.');
+    }
+    if (!user.password) {
+      throw new NotFoundException(
+        `User login with 3rd party not with password.`,
+      );
+    }
 
     if (!(await this.passwordService.compare(password, user.password))) {
       throw new UnauthorizedException('Username or password are not match.');
@@ -44,8 +50,8 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
 
     console.log('user: ', user);
     return new AuthenticatedUserDto({
-      id: user.id,
-      username: user.username,
+      userId: user.id,
+      phone: user.phoneNumber,
     });
   }
 }
