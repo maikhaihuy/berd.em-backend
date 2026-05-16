@@ -49,9 +49,12 @@ importers:
       '@types/jsonwebtoken':
         specifier: ^9.0.10
         version: 9.0.10
+<<<<<<< HEAD
       axios:
         specifier: ^1.15.2
         version: 1.15.2
+=======
+>>>>>>> 59e13225ce00497aa92cd5d33816e00ae3d473e1
       bcrypt:
         specifier: ^6.0.0
         version: 6.0.0
@@ -1244,10 +1247,14 @@ packages:
         optional: true
 
   '@nestjs/throttler@6.4.0':
+<<<<<<< HEAD
     resolution:
       {
         integrity: sha512-osL67i0PUuwU5nqSuJjtUJZMkxAnYB4VldgYUMGzvYRJDCqGRFMWbsbzm/CkUtPLRL30I8T74Xgt/OQxnYokiA==,
       }
+=======
+    resolution: {integrity: sha512-osL67i0PUuwU5nqSuJjtUJZMkxAnYB4VldgYUMGzvYRJDCqGRFMWbsbzm/CkUtPLRL30I8T74Xgt/OQxnYokiA==}
+>>>>>>> 59e13225ce00497aa92cd5d33816e00ae3d473e1
     peerDependencies:
       '@nestjs/common': ^7.0.0 || ^8.0.0 || ^9.0.0 || ^10.0.0 || ^11.0.0
       '@nestjs/core': ^7.0.0 || ^8.0.0 || ^9.0.0 || ^10.0.0 || ^11.0.0

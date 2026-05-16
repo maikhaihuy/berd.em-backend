@@ -21,10 +21,13 @@ export class JwtRefreshStrategy extends PassportStrategy(
 ) {
   private readonly logger = new Logger(JwtRefreshStrategy.name);
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {
     super({
-      jwtFromRequest: ExtractJwt.fromBodyField('refreshToken'),
-      secretOrKey: process.env.JWT_REFRESH_SECRET,
+      jwtFromRequest: ExtractJwt.fromBodyField('refresh_token'),
+      secretOrKey: configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
       passReqToCallback: true,
       ignoreExpiration: true, // Let passport-jwt handle expiration
     } as StrategyOptionsWithRequest);

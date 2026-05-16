@@ -32,6 +32,7 @@ import { LocalStrategy } from './strategies/local.strategy';
     JwtRefreshStrategy,
     LocalStrategy,
     ZaloAuthService,
+    PasswordService,
   ],
   exports: [
     AuthService,
