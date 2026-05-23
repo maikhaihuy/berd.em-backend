@@ -5,6 +5,27 @@ import { AttendanceHistoryResponseDto } from './dto/attendance-history-response.
 import { AttendanceHistoryFilterDto } from './dto/attendance-history-filter.dto';
 import { Prisma } from '@prisma/client';
 
+// Include pattern for attendance history with work slot, employee and branch details
+// Avoids N+1 queries by always loading related data
+const ATTENDANCE_HISTORY_INCLUDE = {
+  workSlot: {
+    include: {
+      employee: {
+        select: {
+          id: true,
+          fullName: true,
+        },
+      },
+      branch: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  },
+};
+
 @Injectable()
 export class AttendanceHistoryService {
   constructor(private prisma: PrismaService) {}
@@ -31,6 +52,7 @@ export class AttendanceHistoryService {
         detail: createDto.detail || Prisma.JsonNull,
         createdBy: currentUserId,
       },
+      include: ATTENDANCE_HISTORY_INCLUDE,
     });
 
     return new AttendanceHistoryResponseDto(attendanceHistory);
@@ -78,24 +100,7 @@ export class AttendanceHistoryService {
       orderBy: {
         createdAt: 'desc',
       },
-      include: {
-        workSlot: {
-          include: {
-            employee: {
-              select: {
-                id: true,
-                fullName: true,
-              },
-            },
-            branch: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
-      },
+      include: ATTENDANCE_HISTORY_INCLUDE,
     });
 
     return histories.map(
@@ -106,24 +111,7 @@ export class AttendanceHistoryService {
   async findOne(id: number): Promise<AttendanceHistoryResponseDto> {
     const history = await this.prisma.attendanceHistory.findUnique({
       where: { id },
-      include: {
-        workSlot: {
-          include: {
-            employee: {
-              select: {
-                id: true,
-                fullName: true,
-              },
-            },
-            branch: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
-      },
+      include: ATTENDANCE_HISTORY_INCLUDE,
     });
 
     if (!history) {
@@ -141,6 +129,7 @@ export class AttendanceHistoryService {
       orderBy: {
         createdAt: 'desc',
       },
+      include: ATTENDANCE_HISTORY_INCLUDE,
     });
 
     return histories.map(

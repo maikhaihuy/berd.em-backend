@@ -15,6 +15,7 @@ import {
   employeeWithBranchesInclude,
   employeeWithUserInclude,
 } from './employee.types';
+import { EmployeeHourlyRatesMapper } from '@modules/employee-hourly-rates/employee-hourly-rates.mapper';
 
 @Injectable()
 export class EmployeesService {
@@ -265,8 +266,8 @@ export class EmployeesService {
       const updatedRates = await this.prisma.employeeHourlyRate.findMany({
         where: { employeeId },
       });
-      return updatedRates.map(
-        (rate) => new EmployeeHourlyRateResponseDto(rate),
+      return updatedRates.map((rate) =>
+        EmployeeHourlyRatesMapper.mapBase(rate),
       );
     } catch (error) {
       if (

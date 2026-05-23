@@ -9,16 +9,25 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { AttendanceHistoryService } from './attendance-history.service';
 import { CreateAttendanceHistoryDto } from './dto/create-attendance-history.dto';
 import { AttendanceHistoryResponseDto } from './dto/attendance-history-response.dto';
 import { AttendanceHistoryFilterDto } from './dto/attendance-history-filter.dto';
 import { JwtAccessGuard } from '@common/guards/jwt-access.guard';
+import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
+import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
 
 @ApiTags('attendance-history')
-@Controller('attendance-history')
+@ApiBearerAuth()
 @UseGuards(JwtAccessGuard)
+@Controller('attendance-history')
 export class AttendanceHistoryController {
   constructor(
     private readonly attendanceHistoryService: AttendanceHistoryService,
@@ -35,23 +44,22 @@ export class AttendanceHistoryController {
   @ApiBody({ type: CreateAttendanceHistoryDto })
   async create(
     @Body() createDto: CreateAttendanceHistoryDto,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
   ): Promise<AttendanceHistoryResponseDto> {
-    // TODO: Get currentUserId from JWT token
-    const currentUserId = 1; // Placeholder
-    return this.attendanceHistoryService.create(createDto, currentUserId);
+    return this.attendanceHistoryService.create(createDto, user.userId);
   }
 
-  @Get()
-  @ApiOperation({ summary: 'Get all attendance history records with filters' })
+  @Get('work-slot/:workSlotId')
+  @ApiOperation({ summary: 'Get all attendance history for a work slot' })
   @ApiResponse({
     status: 200,
-    description: 'List of attendance history records',
+    description: 'List of attendance history records for work slot',
     type: [AttendanceHistoryResponseDto],
   })
-  async findAll(
-    @Query() filterDto: AttendanceHistoryFilterDto,
+  async findByWorkSlot(
+    @Param('workSlotId') workSlotId: string,
   ): Promise<AttendanceHistoryResponseDto[]> {
-    return this.attendanceHistoryService.findAll(filterDto);
+    return this.attendanceHistoryService.findByWorkSlot(+workSlotId);
   }
 
   @Get(':id')
@@ -68,17 +76,17 @@ export class AttendanceHistoryController {
     return this.attendanceHistoryService.findOne(+id);
   }
 
-  @Get('work-slot/:workSlotId')
-  @ApiOperation({ summary: 'Get all attendance history for a work slot' })
+  @Get()
+  @ApiOperation({ summary: 'Get all attendance history records with filters' })
   @ApiResponse({
     status: 200,
-    description: 'List of attendance history records for work slot',
+    description: 'List of attendance history records',
     type: [AttendanceHistoryResponseDto],
   })
-  async findByWorkSlot(
-    @Param('workSlotId') workSlotId: string,
+  async findAll(
+    @Query() filterDto: AttendanceHistoryFilterDto,
   ): Promise<AttendanceHistoryResponseDto[]> {
-    return this.attendanceHistoryService.findByWorkSlot(+workSlotId);
+    return this.attendanceHistoryService.findAll(filterDto);
   }
 
   // Note: No update or delete endpoints - attendance history is immutable for audit integrity

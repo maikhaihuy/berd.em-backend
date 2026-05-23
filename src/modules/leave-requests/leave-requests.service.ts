@@ -9,6 +9,8 @@ import { UpdateLeaveRequestDto } from './dto/update-leave-request.dto';
 import { ApproveLeaveRequestDto } from './dto/approve-leave-request.dto';
 import { LeaveRequestResponseDto } from './dto/leave-request-response.dto';
 import { LeaveStatus, Prisma } from '@prisma/client';
+import { leaveRequestWithRelationsInclude } from './leave-request.types';
+import { LeaveRequestMapper } from './leave-request.mapper';
 
 @Injectable()
 export class LeaveRequestsService {
@@ -69,67 +71,34 @@ export class LeaveRequestsService {
         createdBy: currentUserId,
         updatedBy: currentUserId,
       },
+      include: leaveRequestWithRelationsInclude,
     });
 
-    return new LeaveRequestResponseDto(leaveRequest);
+    return LeaveRequestMapper.toDto(leaveRequest);
   }
 
   async findAll(): Promise<LeaveRequestResponseDto[]> {
     const leaveRequests = await this.prisma.leaveRequest.findMany({
+      include: leaveRequestWithRelationsInclude,
       orderBy: {
         createdAt: 'desc',
       },
-      include: {
-        workSlot: {
-          include: {
-            employee: {
-              select: { id: true, fullName: true },
-            },
-            branch: {
-              select: { id: true, name: true },
-            },
-          },
-        },
-        absenceEmployee: {
-          select: { id: true, fullName: true },
-        },
-        replacementEmployee: {
-          select: { id: true, fullName: true },
-        },
-      },
     });
 
-    return leaveRequests.map((request) => new LeaveRequestResponseDto(request));
+    return LeaveRequestMapper.toDtos(leaveRequests);
   }
 
   async findOne(id: number): Promise<LeaveRequestResponseDto> {
     const leaveRequest = await this.prisma.leaveRequest.findUnique({
       where: { id },
-      include: {
-        workSlot: {
-          include: {
-            employee: {
-              select: { id: true, fullName: true },
-            },
-            branch: {
-              select: { id: true, name: true },
-            },
-          },
-        },
-        absenceEmployee: {
-          select: { id: true, fullName: true },
-        },
-        replacementEmployee: {
-          select: { id: true, fullName: true },
-        },
-      },
+      include: leaveRequestWithRelationsInclude,
     });
 
     if (!leaveRequest) {
       throw new NotFoundException(`Leave request with ID ${id} not found`);
     }
 
-    return new LeaveRequestResponseDto(leaveRequest);
+    return LeaveRequestMapper.toDto(leaveRequest);
   }
 
   async findByEmployee(employeeId: number): Promise<LeaveRequestResponseDto[]> {
@@ -140,59 +109,25 @@ export class LeaveRequestsService {
           { replacementEmployeeId: employeeId },
         ],
       },
-      include: {
-        workSlot: {
-          include: {
-            employee: {
-              select: { id: true, fullName: true },
-            },
-            branch: {
-              select: { id: true, name: true },
-            },
-          },
-        },
-        absenceEmployee: {
-          select: { id: true, fullName: true },
-        },
-        replacementEmployee: {
-          select: { id: true, fullName: true },
-        },
-      },
+      include: leaveRequestWithRelationsInclude,
       orderBy: {
         createdAt: 'desc',
       },
     });
 
-    return leaveRequests.map((request) => new LeaveRequestResponseDto(request));
+    return LeaveRequestMapper.toDtos(leaveRequests);
   }
 
   async findByStatus(status: LeaveStatus): Promise<LeaveRequestResponseDto[]> {
     const leaveRequests = await this.prisma.leaveRequest.findMany({
       where: { status },
-      include: {
-        workSlot: {
-          include: {
-            employee: {
-              select: { id: true, fullName: true },
-            },
-            branch: {
-              select: { id: true, name: true },
-            },
-          },
-        },
-        absenceEmployee: {
-          select: { id: true, fullName: true },
-        },
-        replacementEmployee: {
-          select: { id: true, fullName: true },
-        },
-      },
+      include: leaveRequestWithRelationsInclude,
       orderBy: {
         createdAt: 'desc',
       },
     });
 
-    return leaveRequests.map((request) => new LeaveRequestResponseDto(request));
+    return LeaveRequestMapper.toDtos(leaveRequests);
   }
 
   async update(
@@ -244,27 +179,10 @@ export class LeaveRequestsService {
         ...updateDto,
         updatedBy: currentUserId,
       },
-      include: {
-        workSlot: {
-          include: {
-            employee: {
-              select: { id: true, fullName: true },
-            },
-            branch: {
-              select: { id: true, name: true },
-            },
-          },
-        },
-        absenceEmployee: {
-          select: { id: true, fullName: true },
-        },
-        replacementEmployee: {
-          select: { id: true, fullName: true },
-        },
-      },
+      include: leaveRequestWithRelationsInclude,
     });
 
-    return new LeaveRequestResponseDto(leaveRequest);
+    return LeaveRequestMapper.toDto(leaveRequest);
   }
 
   async approve(
@@ -297,27 +215,10 @@ export class LeaveRequestsService {
         note: approveDto.note || existingRequest.note,
         updatedBy: currentUserId,
       },
-      include: {
-        workSlot: {
-          include: {
-            employee: {
-              select: { id: true, fullName: true },
-            },
-            branch: {
-              select: { id: true, name: true },
-            },
-          },
-        },
-        absenceEmployee: {
-          select: { id: true, fullName: true },
-        },
-        replacementEmployee: {
-          select: { id: true, fullName: true },
-        },
-      },
+      include: leaveRequestWithRelationsInclude,
     });
 
-    return new LeaveRequestResponseDto(leaveRequest);
+    return LeaveRequestMapper.toDto(leaveRequest);
   }
 
   async cancel(
@@ -349,27 +250,10 @@ export class LeaveRequestsService {
         status: LeaveStatus.CANCELLED,
         updatedBy: currentUserId,
       },
-      include: {
-        workSlot: {
-          include: {
-            employee: {
-              select: { id: true, fullName: true },
-            },
-            branch: {
-              select: { id: true, name: true },
-            },
-          },
-        },
-        absenceEmployee: {
-          select: { id: true, fullName: true },
-        },
-        replacementEmployee: {
-          select: { id: true, fullName: true },
-        },
-      },
+      include: leaveRequestWithRelationsInclude,
     });
 
-    return new LeaveRequestResponseDto(leaveRequest);
+    return LeaveRequestMapper.toDto(leaveRequest);
   }
 
   async remove(id: number): Promise<void> {

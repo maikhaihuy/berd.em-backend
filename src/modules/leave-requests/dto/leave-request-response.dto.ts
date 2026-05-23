@@ -1,17 +1,27 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { LeaveRequestDto } from './leave-request.dto';
 import { EmployeeLiteDto } from '@modules/employees/dto/employee.dto';
+import { WorkSlotLiteDto } from '@modules/work-slots/dto/work-slot.dto';
 
 export class LeaveRequestResponseDto extends LeaveRequestDto {
-  @ApiProperty({ description: 'Work slot details' })
-  workSlot!: WorkSlotLiteDto;
+  @ApiProperty({
+    description: 'Work slot details',
+    type: () => WorkSlotLiteDto,
+    required: false,
+  })
+  workSlot?: WorkSlotLiteDto;
 
-  @ApiProperty({ description: 'Absence employee ID', example: 1 })
-  absenceEmployee!: EmployeeLiteDto;
+  @ApiProperty({
+    description: 'Absence employee details',
+    type: () => EmployeeLiteDto,
+    required: false,
+  })
+  absenceEmployee?: EmployeeLiteDto;
 
-  @ApiProperty({ description: 'Replacement employee ID', example: 2 })
-  replacementEmployee!: EmployeeLiteDto;
-
-  @ApiProperty({ description: 'Approved by user ID', required: false })
-  approver?: EmployeeLiteDto | null;
+  @ApiProperty({
+    description: 'Replacement employee details',
+    type: () => EmployeeLiteDto,
+    required: false,
+  })
+  replacementEmployee?: EmployeeLiteDto;
 }
