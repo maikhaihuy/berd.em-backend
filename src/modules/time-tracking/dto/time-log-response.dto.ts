@@ -5,8 +5,8 @@ export class TimeLogResponseDto {
   @ApiProperty({ description: 'Time log ID', example: 1 })
   id!: number;
 
-  @ApiProperty({ description: 'Work slot ID', example: 1 })
-  workSlotId!: number;
+  @ApiProperty({ description: 'Assignment ID', example: 1 })
+  assignmentId!: number;
 
   @ApiProperty({ description: 'Employee ID', example: 1 })
   employeeId!: number;

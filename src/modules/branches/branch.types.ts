@@ -12,18 +12,13 @@ export type BranchWithEmployees = Prisma.BranchGetPayload<{
   include: typeof branchWithEmployeesInclude;
 }>;
 
-export const branchWithShiftsInclude = {
-  shifts: true,
+export const branchWithScheduleDomainInclude = {
+  masterShiftTemplates: true,
+  subShiftTemplates: true,
+  taskTemplates: true,
+  masterShifts: true,
 } satisfies Prisma.BranchInclude;
 
-export type BranchWithShifts = Prisma.BranchGetPayload<{
-  include: typeof branchWithShiftsInclude;
-}>;
-
-export const branchWithWorkSlotsInclude = {
-  workSlots: true,
-} satisfies Prisma.BranchInclude;
-
-export type BranchWithWorkSlots = Prisma.BranchGetPayload<{
-  include: typeof branchWithWorkSlotsInclude;
+export type BranchWithScheduleDomain = Prisma.BranchGetPayload<{
+  include: typeof branchWithScheduleDomainInclude;
 }>;

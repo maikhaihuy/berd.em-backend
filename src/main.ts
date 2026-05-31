@@ -64,7 +64,13 @@ async function bootstrap() {
     .addTag('auth', 'Authentication endpoints')
     .addTag('users', 'User management endpoints')
     .addTag('employees', 'Employee management endpoints')
-    .addTag('shifts', 'Shift management endpoints')
+    .addTag('master-shift-templates', 'Master shift template endpoints')
+    .addTag('sub-shift-templates', 'Sub shift template endpoints')
+    .addTag('task-templates', 'Task template endpoints')
+    .addTag('master-shifts', 'Generated master shift endpoints')
+    .addTag('sub-shifts', 'Generated sub shift endpoints')
+    .addTag('assignments', 'Assignment endpoints')
+    .addTag('tasks', 'Task endpoints')
     .addTag('time-tracking', 'Time tracking endpoints')
     .addTag('branches', 'Branch management endpoints')
     .build();
@@ -87,4 +93,4 @@ async function bootstrap() {
   console.log(`Swagger documentation: http://localhost:${port}/docs`);
 }
 
-bootstrap();
+void bootstrap();

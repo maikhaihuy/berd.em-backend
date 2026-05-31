@@ -1,18 +1,18 @@
 import { Prisma } from '@prisma/client';
 
 export const leaveRequestWithRelationsInclude = {
-  workSlot: {
-    select: {
-      id: true,
-      branchId: true,
-      employeeId: true,
-      assignedAt: true,
-      startTime: true,
-      endTime: true,
-      actualStartTime: true,
-      actualEndTime: true,
-      status: true,
-      note: true,
+  assignment: {
+    include: {
+      employee: {
+        select: { id: true, fullName: true, phoneNumber: true },
+      },
+      subShift: {
+        include: {
+          masterShift: {
+            select: { id: true, title: true, branchId: true, workDate: true },
+          },
+        },
+      },
     },
   },
   absenceEmployee: {

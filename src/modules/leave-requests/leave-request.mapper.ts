@@ -3,15 +3,13 @@ import { LeaveRequestDto } from './dto/leave-request.dto';
 import { LeaveRequestLiteDto } from './dto/leave-request-lite.dto';
 import { LeaveRequestResponseDto } from './dto/leave-request-response.dto';
 import { LeaveRequestWithRelations } from './leave-request.types';
-import { EmployeeLiteDto } from '@modules/employees/dto/employee.dto';
-import { WorkSlotLiteDto } from '@modules/work-slots/dto/work-slot.dto';
 
 export class LeaveRequestMapper {
   // 🧱 Base mapper - essential fields only
   static mapBase(this: void, leaveRequest: LeaveRequest): LeaveRequestDto {
     return {
       id: leaveRequest.id,
-      workSlotId: leaveRequest.workSlotId,
+      assignmentId: leaveRequest.assignmentId,
       absenceEmployeeId: leaveRequest.absenceEmployeeId,
       replacementEmployeeId: leaveRequest.replacementEmployeeId,
       approvedId: leaveRequest.approvedId,
@@ -30,7 +28,7 @@ export class LeaveRequestMapper {
   static mapLite(this: void, leaveRequest: LeaveRequest): LeaveRequestLiteDto {
     return {
       id: leaveRequest.id,
-      workSlotId: leaveRequest.workSlotId,
+      assignmentId: leaveRequest.assignmentId,
       absenceEmployeeId: leaveRequest.absenceEmployeeId,
       replacementEmployeeId: leaveRequest.replacementEmployeeId,
       status: leaveRequest.status,
@@ -44,20 +42,7 @@ export class LeaveRequestMapper {
     leaveRequest: Partial<LeaveRequestWithRelations>,
   ): Partial<LeaveRequestResponseDto> {
     return {
-      workSlot: leaveRequest.workSlot
-        ? {
-            id: leaveRequest.workSlot.id,
-            branchId: leaveRequest.workSlot.branchId,
-            employeeId: leaveRequest.workSlot.employeeId,
-            assignedAt: leaveRequest.workSlot.assignedAt,
-            startTime: leaveRequest.workSlot.startTime,
-            endTime: leaveRequest.workSlot.endTime,
-            actualStartTime: leaveRequest.workSlot.actualStartTime,
-            actualEndTime: leaveRequest.workSlot.actualEndTime,
-            status: leaveRequest.workSlot.status,
-            note: leaveRequest.workSlot.note,
-          }
-        : undefined,
+      assignment: leaveRequest.assignment,
       absenceEmployee: leaveRequest.absenceEmployee
         ? {
             id: leaveRequest.absenceEmployee.id,

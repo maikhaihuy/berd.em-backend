@@ -13,8 +13,7 @@ export class JwtRefreshGuard extends AuthGuard('jwt-refresh') {
     return super.canActivate(context);
   }
 
-  handleRequest(err, user, info) {
-    console.log('info: ', info);
+  handleRequest(err, user) {
     // Nếu có lỗi hoặc người dùng không tồn tại, ném ra ngoại lệ
     if (err || !user) {
       throw (

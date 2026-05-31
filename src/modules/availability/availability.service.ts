@@ -8,7 +8,7 @@ import { PrismaService } from '@modules/prisma/prisma.service';
 import { CreateAvailabilityDto } from './dto/create-availability.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 import { AvailabilityResponseDto } from './dto/availability-response.dto';
-import { Prisma } from '@prisma/client';
+import { AvailabilityStatus, Prisma } from '@prisma/client';
 import { AvailabilityMapper } from './availability.mapper';
 import { availabilityWithEmployeeInclude } from './availability.types';
 import { userWithEmployeeInclude } from '@modules/users/user.types';
@@ -42,29 +42,32 @@ export class AvailabilityService {
       );
     }
 
-    const availabilitiesExist = await this.prisma.availability.findMany({
-      where: {
-        employeeId: createAvailabilityDto.employeeId,
-        startTime: {
-          lt: new Date(createAvailabilityDto.endTime),
-        },
-        endTime: {
-          gt: new Date(createAvailabilityDto.startTime),
-        },
-      },
+    const subShift = await this.prisma.subShift.findUnique({
+      where: { id: createAvailabilityDto.subShiftId },
     });
-    if (availabilitiesExist.length > 0) {
-      throw new BadRequestException(
-        'Availability for this time slot already exists',
-      );
+    if (!subShift) {
+      throw new NotFoundException('Sub shift not found');
     }
+    this.validateCustomWindow(
+      createAvailabilityDto.startTime,
+      createAvailabilityDto.endTime,
+      subShift.startTime,
+      subShift.endTime,
+    );
 
     try {
       const availability = await this.prisma.availability.create({
         data: {
           employeeId: createAvailabilityDto.employeeId,
-          startTime: new Date(createAvailabilityDto.startTime),
-          endTime: new Date(createAvailabilityDto.endTime),
+          subShiftId: createAvailabilityDto.subShiftId,
+          startTime: createAvailabilityDto.startTime
+            ? new Date(createAvailabilityDto.startTime)
+            : undefined,
+          endTime: createAvailabilityDto.endTime
+            ? new Date(createAvailabilityDto.endTime)
+            : undefined,
+          status: createAvailabilityDto.status ?? AvailabilityStatus.REGISTERED,
+          note: createAvailabilityDto.note,
           createdBy: currentUserId,
           updatedBy: currentUserId,
         },
@@ -76,7 +79,7 @@ export class AvailabilityService {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
           throw new BadRequestException(
-            'Availability for this time slot already exists',
+            'Availability for this sub shift already exists',
           );
         }
         if (error.code === 'P2003') {
@@ -96,17 +99,19 @@ export class AvailabilityService {
 
     const availabilities = await this.prisma.availability.findMany({
       where: {
-        startTime: {
-          gte: from,
-        },
-        endTime: {
-          lte: to,
+        subShift: {
+          startTime: {
+            gte: from,
+          },
+          endTime: {
+            lte: to,
+          },
         },
         employeeId: employee.id,
       },
       include: availabilityWithEmployeeInclude,
       orderBy: {
-        startTime: 'asc',
+        subShift: { startTime: 'asc' },
       },
     });
 
@@ -119,7 +124,7 @@ export class AvailabilityService {
   ): Promise<AvailabilityResponseDto> {
     const employee = await this.getCurrentUserEmployee(currentUserId);
 
-    const availability = await this.prisma.availability.findUnique({
+    const availability = await this.prisma.availability.findFirst({
       where: { id, employeeId: employee.id },
       include: availabilityWithEmployeeInclude,
     });
@@ -165,12 +170,28 @@ export class AvailabilityService {
     }
 
     try {
+      const subShift = await this.prisma.subShift.findUnique({
+        where: { id: availability.subShiftId },
+      });
+      if (!subShift) throw new NotFoundException('Sub shift not found');
+      this.validateCustomWindow(
+        updateAvailabilityDto.startTime,
+        updateAvailabilityDto.endTime,
+        subShift.startTime,
+        subShift.endTime,
+      );
+
       const updatedAvailability = await this.prisma.availability.update({
         where: { id },
         data: {
           ...updateAvailabilityDto,
-          startTime: new Date(updateAvailabilityDto.startTime),
-          endTime: new Date(updateAvailabilityDto.endTime),
+          startTime: updateAvailabilityDto.startTime
+            ? new Date(updateAvailabilityDto.startTime)
+            : undefined,
+          endTime: updateAvailabilityDto.endTime
+            ? new Date(updateAvailabilityDto.endTime)
+            : undefined,
+          updatedBy: currentUserId,
         },
         include: availabilityWithEmployeeInclude,
       });
@@ -210,5 +231,30 @@ export class AvailabilityService {
     });
 
     return { message: 'Availability deleted successfully' };
+  }
+
+  private validateCustomWindow(
+    startTime: string | undefined,
+    endTime: string | undefined,
+    subShiftStart: Date,
+    subShiftEnd: Date,
+  ) {
+    if (!startTime && !endTime) return;
+    if (!startTime || !endTime) {
+      throw new BadRequestException(
+        'Both startTime and endTime are required when customizing availability time',
+      );
+    }
+
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    if (start >= end) {
+      throw new BadRequestException('Start time must be before end time');
+    }
+    if (start < subShiftStart || end > subShiftEnd) {
+      throw new BadRequestException(
+        'Availability time must stay within the sub shift window',
+      );
+    }
   }
 }

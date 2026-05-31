@@ -2,7 +2,6 @@
 import { Module, ValidationPipe } from '@nestjs/common';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import * as Sentry from '@sentry/node';
-import { nodeProfilingIntegration } from '@sentry/profiling-node';
 
 import { PrismaExceptionFilter } from './filters/prisma-exception.filter';
 import { GlobalExceptionFilter } from './filters/global-exception.filter';

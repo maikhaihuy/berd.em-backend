@@ -3,9 +3,9 @@ import { IsInt, IsString, IsOptional, IsEnum } from 'class-validator';
 import { LeaveStatus } from '@prisma/client';
 
 export class CreateLeaveRequestDto {
-  @ApiProperty({ description: 'Work slot ID', example: 1 })
+  @ApiProperty({ description: 'Assignment ID', example: 1 })
   @IsInt()
-  workSlotId: number;
+  assignmentId: number;
 
   @ApiProperty({ description: 'Employee requesting leave ID', example: 1 })
   @IsInt()

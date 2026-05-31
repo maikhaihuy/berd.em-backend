@@ -18,14 +18,13 @@ export class TimeTrackingService {
     createDto: CreateTimeLogDto,
     currentUserId: number,
   ): Promise<TimeLogResponseDto> {
-    // Verify work slot exists
-    const workSlot = await this.prisma.workSlot.findUnique({
-      where: { id: createDto.workSlotId },
+    const assignment = await this.prisma.assignment.findUnique({
+      where: { id: createDto.assignmentId },
     });
 
-    if (!workSlot) {
+    if (!assignment) {
       throw new NotFoundException(
-        `Work slot with ID ${createDto.workSlotId} not found`,
+        `Assignment with ID ${createDto.assignmentId} not found`,
       );
     }
 
@@ -42,7 +41,7 @@ export class TimeTrackingService {
 
     const timeLog = await this.prisma.timeLog.create({
       data: {
-        workSlotId: createDto.workSlotId,
+        assignmentId: createDto.assignmentId,
         employeeId: createDto.employeeId,
         actualStartTime: createDto.actualStartTime
           ? new Date(createDto.actualStartTime)
@@ -105,9 +104,9 @@ export class TimeTrackingService {
     return timeLogs.map((log) => new TimeLogResponseDto(log));
   }
 
-  async findByWorkSlot(workSlotId: number): Promise<TimeLogResponseDto[]> {
+  async findByAssignment(assignmentId: number): Promise<TimeLogResponseDto[]> {
     const timeLogs = await this.prisma.timeLog.findMany({
-      where: { workSlotId },
+      where: { assignmentId },
       orderBy: {
         createdAt: 'desc',
       },

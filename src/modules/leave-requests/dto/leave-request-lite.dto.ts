@@ -5,8 +5,8 @@ export class LeaveRequestLiteDto {
   @ApiProperty({ description: 'Leave request ID', example: 1 })
   id: number;
 
-  @ApiProperty({ description: 'Work slot ID', example: 1 })
-  workSlotId: number;
+  @ApiProperty({ description: 'Assignment ID', example: 1 })
+  assignmentId: number;
 
   @ApiProperty({ description: 'Absence employee ID', example: 1 })
   absenceEmployeeId: number;

@@ -5,10 +5,10 @@ import { AttendanceHistoryResponseDto } from './dto/attendance-history-response.
 import { AttendanceHistoryFilterDto } from './dto/attendance-history-filter.dto';
 import { Prisma } from '@prisma/client';
 
-// Include pattern for attendance history with work slot, employee and branch details
+// Include pattern for attendance history with assignment, employee and branch details
 // Avoids N+1 queries by always loading related data
 const ATTENDANCE_HISTORY_INCLUDE = {
-  workSlot: {
+  assignment: {
     include: {
       employee: {
         select: {
@@ -16,10 +16,18 @@ const ATTENDANCE_HISTORY_INCLUDE = {
           fullName: true,
         },
       },
-      branch: {
-        select: {
-          id: true,
-          name: true,
+      subShift: {
+        include: {
+          masterShift: {
+            include: {
+              branch: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -34,20 +42,19 @@ export class AttendanceHistoryService {
     createDto: CreateAttendanceHistoryDto,
     currentUserId: number,
   ): Promise<AttendanceHistoryResponseDto> {
-    // Verify work slot exists
-    const workSlot = await this.prisma.workSlot.findUnique({
-      where: { id: createDto.workSlotId },
+    const assignment = await this.prisma.assignment.findUnique({
+      where: { id: createDto.assignmentId },
     });
 
-    if (!workSlot) {
+    if (!assignment) {
       throw new NotFoundException(
-        `Work slot with ID ${createDto.workSlotId} not found`,
+        `Assignment with ID ${createDto.assignmentId} not found`,
       );
     }
 
     const attendanceHistory = await this.prisma.attendanceHistory.create({
       data: {
-        workSlotId: createDto.workSlotId,
+        assignmentId: createDto.assignmentId,
         action: createDto.action,
         detail: createDto.detail || Prisma.JsonNull,
         createdBy: currentUserId,
@@ -61,17 +68,17 @@ export class AttendanceHistoryService {
   async findAll(
     filterDto: AttendanceHistoryFilterDto,
   ): Promise<AttendanceHistoryResponseDto[]> {
-    const { workSlotId, employeeId, action, fromDate, toDate, page, limit } =
+    const { assignmentId, employeeId, action, fromDate, toDate, page, limit } =
       filterDto;
 
     const where: Prisma.AttendanceHistoryWhereInput = {};
 
-    if (workSlotId) {
-      where.workSlotId = workSlotId;
+    if (assignmentId) {
+      where.assignmentId = assignmentId;
     }
 
     if (employeeId) {
-      where.workSlot = {
+      where.assignment = {
         employeeId,
       };
     }
@@ -121,11 +128,11 @@ export class AttendanceHistoryService {
     return new AttendanceHistoryResponseDto(history);
   }
 
-  async findByWorkSlot(
-    workSlotId: number,
+  async findByAssignment(
+    assignmentId: number,
   ): Promise<AttendanceHistoryResponseDto[]> {
     const histories = await this.prisma.attendanceHistory.findMany({
-      where: { workSlotId },
+      where: { assignmentId },
       orderBy: {
         createdAt: 'desc',
       },

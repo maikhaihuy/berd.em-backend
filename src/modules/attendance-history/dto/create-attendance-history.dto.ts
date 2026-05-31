@@ -3,9 +3,9 @@ import { IsInt, IsEnum, IsOptional, IsObject } from 'class-validator';
 import { AttendanceAction } from '@prisma/client';
 
 export class CreateAttendanceHistoryDto {
-  @ApiProperty({ description: 'Work slot ID', example: 1 })
+  @ApiProperty({ description: 'Assignment ID', example: 1 })
   @IsInt()
-  workSlotId!: number;
+  assignmentId!: number;
 
   @ApiProperty({
     description: 'Attendance action',

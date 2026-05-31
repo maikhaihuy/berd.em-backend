@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { AvailabilityStatus } from '@prisma/client';
 
 export class AvailabilityDto {
   @ApiProperty()
@@ -8,10 +9,16 @@ export class AvailabilityDto {
   employeeId!: number;
 
   @ApiProperty()
-  startTime!: Date;
+  subShiftId!: number;
+
+  @ApiProperty({ required: false })
+  startTime?: Date | null;
+
+  @ApiProperty({ required: false })
+  endTime?: Date | null;
 
   @ApiProperty()
-  endTime!: Date;
+  status!: AvailabilityStatus;
 
   @ApiProperty({ required: false })
   note?: string | null;
@@ -37,10 +44,16 @@ export class AvailabilityLiteDto {
   employeeId!: number;
 
   @ApiProperty()
-  startTime!: Date;
+  subShiftId!: number;
+
+  @ApiProperty({ required: false })
+  startTime?: Date | null;
+
+  @ApiProperty({ required: false })
+  endTime?: Date | null;
 
   @ApiProperty()
-  endTime!: Date;
+  status!: AvailabilityStatus;
 
   @ApiProperty({ required: false })
   note?: string | null;

@@ -1,35 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { AttendanceAction, Prisma } from '@prisma/client';
-import { Type } from 'class-transformer';
-
-class EmployeeDetailsDto {
-  @ApiProperty({ description: 'Employee ID', example: 1 })
-  id!: number;
-
-  @ApiProperty({ description: 'Employee full name', example: 'John Doe' })
-  fullName!: string;
-}
-
-class BranchDetailsDto {
-  @ApiProperty({ description: 'Branch ID', example: 1 })
-  id!: number;
-
-  @ApiProperty({ description: 'Branch name', example: 'Main Office' })
-  name!: string;
-}
-
-class WorkSlotDetailsDto {
-  @ApiProperty({ description: 'Work slot ID', example: 1 })
-  id!: number;
-
-  @ApiProperty({ type: EmployeeDetailsDto, description: 'Associated employee' })
-  @Type(() => EmployeeDetailsDto)
-  employee!: EmployeeDetailsDto;
-
-  @ApiProperty({ type: BranchDetailsDto, description: 'Associated branch' })
-  @Type(() => BranchDetailsDto)
-  branch!: BranchDetailsDto;
-}
 
 export class AttendanceHistoryResponseDto {
   @ApiProperty({
@@ -42,10 +12,11 @@ export class AttendanceHistoryResponseDto {
     description: 'Work slot ID',
     example: 1,
   })
-  workSlotId!: number;
+  assignmentId!: number;
 
   @ApiProperty({
-    description: 'Attendance action (check-in, check-out, break-start, break-end)',
+    description:
+      'Attendance action (check-in, check-out, break-start, break-end)',
     enum: AttendanceAction,
     example: AttendanceAction.CHECK_IN,
   })
@@ -59,12 +30,10 @@ export class AttendanceHistoryResponseDto {
   detail?: Prisma.JsonValue;
 
   @ApiProperty({
-    type: WorkSlotDetailsDto,
-    description: 'Associated work slot with employee and branch information',
+    description: 'Associated assignment with employee and branch information',
     required: false,
   })
-  @Type(() => WorkSlotDetailsDto)
-  workSlot?: WorkSlotDetailsDto;
+  assignment?: unknown;
 
   @ApiProperty({
     description: 'Timestamp when record was created',

@@ -125,8 +125,10 @@ package "Core Entities" as CORE #d1e7dd {
     *id Int <<PK>>
     --
     employeeId Int <<FK, Int>>
-    startTime: DateTimeOffset
-    endTime: DateTimeOffset
+    subShiftId Int <<FK, Int>>
+    startTime: DateTimeOffset?
+    endTime: DateTimeOffset?
+    status: Enum: Registered, Assigned, Cancelled
     note: String?
     --
     createdAt: DateTime
@@ -140,17 +142,15 @@ package "Core Entities" as CORE #d1e7dd {
 package "Shift Management" as SHIFT #fff3cd {
   left to right direction
 
-  entity Shift {
+  entity BranchScheduleConfig {
     *id Int <<PK>>
-    branchId Int <<FK, Int>>
+    branchId Int <<Unique, FK>>
     --
-    name: String
-    abbreviation: String
-    maxSlots: Int
-    startTime: Time
-    endTime: Time
-    multiplier: Decimal
-    status: Enum: Draft, Active, Inactive, Archived
+    allowCustomAvailabilityTime: Boolean
+    availabilityOpenDaysBefore: Int?
+    availabilityCloseHoursBefore: Int?
+    scheduleGenerationDay: Int?
+    note: String?
     --
     createdAt: DateTime
     createdBy: Int
@@ -158,17 +158,144 @@ package "Shift Management" as SHIFT #fff3cd {
     updatedBy: Int
   }
 
-  entity WorkSlot {
+  entity MasterShiftTemplate {
     *id Int <<PK>>
     branchId Int <<FK, Int>>
+    --
+    name: String
+    abbreviation: String?
+    startTime: Time
+    endTime: Time
+    status: Enum: Draft, Active, Inactive, Archived
+    note: String?
+    --
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
+  }
+
+  entity SubShiftTemplate {
+    *id Int <<PK>>
+    branchId Int <<FK, Int>>
+    masterShiftTemplateId Int <<FK, Int>>
+    --
+    name: String
+    type: Enum: MAIN, SUPPORT
+    startTime: Time
+    endTime: Time
+    maxAssignments: Int?
+    sortOrder: Int
+    status: Enum: Draft, Active, Inactive, Archived
+    note: String?
+    --
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
+  }
+
+  entity TaskTemplate {
+    *id Int <<PK>>
+    branchId Int <<FK, Int>>
+    masterShiftTemplateId Int <<FK, Int?>>
+    subShiftTemplateId Int <<FK, Int?>>
+    --
+    title: String
+    description: String?
+    type: Enum: SharedMandatory, SharedOptional, Dedicated
+    isActive: Boolean
+    sortOrder: Int
+    note: String?
+    --
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
+  }
+
+  entity MasterShift {
+    *id Int <<PK>>
+    branchId Int <<FK, Int>>
+    masterShiftTemplateId Int <<FK, Int?>>
+    --
+    workDate: Date
+    title: String
+    startTime: DateTime
+    endTime: DateTime
+    status: Enum: Draft, Active, Inactive, Archived
+    note: String?
+    --
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
+  }
+
+  entity SubShift {
+    *id Int <<PK>>
+    masterShiftId Int <<FK, Int>>
+    subShiftTemplateId Int <<FK, Int?>>
+    --
+    title: String
+    type: Enum: MAIN, SUPPORT
+    startTime: DateTime
+    endTime: DateTime
+    maxAssignments: Int?
+    status: Enum: Draft, Active, Inactive, Archived
+    note: String?
+    --
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
+  }
+
+  entity Assignment {
+    *id Int <<PK>>
     employeeId Int <<FK, Int>>
+    subShiftId Int <<FK, Int>>
+    availabilityId Int <<Unique, FK, Int?>>
     --
     assignedAt: DateTime
     actualStartTime: DateTime?
     actualEndTime: DateTime?
-    startTime: DateTime
-    endTime: DateTime
     status: Enum: Scheduled, InProgress, Completed, Absent
+    note: String?
+    --
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
+  }
+
+  entity Task {
+    *id Int <<PK>>
+    taskTemplateId Int <<FK, Int?>>
+    masterShiftId Int <<FK, Int?>>
+    subShiftId Int <<FK, Int?>>
+    --
+    title: String
+    description: String?
+    type: Enum: SharedMandatory, SharedOptional, Dedicated
+    status: Enum: Pending, Completed
+    sortOrder: Int
+    dueAt: DateTime?
+    note: String?
+    --
+    createdAt: DateTime
+    createdBy: Int
+    updatedAt: DateTime
+    updatedBy: Int
+  }
+
+  entity TaskCompletion {
+    *id Int <<PK>>
+    taskId Int <<Unique, FK, Int>>
+    completedByEmployeeId Int <<FK, Int>>
+    --
+    completedAt: DateTime
+    evidence: Json?
     note: String?
     --
     createdAt: DateTime
@@ -179,7 +306,7 @@ package "Shift Management" as SHIFT #fff3cd {
 
   entity AttendanceHistory {
     *id Int <<PK>>
-    workSlotId: Int <<FK, Int>>
+    assignmentId: Int <<FK, Int>>
     --
     action: Enum: CHECK_IN, CHECK_OUT, REPLACEMENT_REQUEST, MANAGER_ADJUSTMENT
     detail: Json?
@@ -190,7 +317,7 @@ package "Shift Management" as SHIFT #fff3cd {
 
   entity LeaveRequest {
     *id Int <<PK>>
-    workSlotId Int <<FK, Int>>
+    assignmentId Int <<FK, Int>>
     replacementEmployeeId Int <<FK, Int>>
     absenceEmployeeId Int <<FK, Int>>
     approvedId Int <<FK, Int?>>
@@ -213,7 +340,7 @@ package "Payment Management" as PAY #f8d7da {
 
   entity TimeLog {
     *id Int <<PK>>
-    workSlotId Int <<FK, Int>>
+    assignmentId Int <<FK, Int>>
     employeeId Int <<FK, Int>>
     --
     actualStartTime: DateTimeOffset?
@@ -280,18 +407,35 @@ EmployeeBranch }o--|| Branch : "branchId"
 EmployeeHourlyRate }o--|| Employee : "employeeId"
 User |o--o| Employee : "employeeId"
 
-Shift }o--|| Branch : "branchId"
-WorkSlot }o--|| Branch : "branchId"
-WorkSlot }o--|| Employee : "employeeId"
-AttendanceHistory }o--|| WorkSlot : "workSlotId"
+BranchScheduleConfig }o--|| Branch : "branchId"
+MasterShiftTemplate }o--|| Branch : "branchId"
+SubShiftTemplate }o--|| Branch : "branchId"
+SubShiftTemplate }o--|| MasterShiftTemplate : "masterShiftTemplateId"
+TaskTemplate }o--|| Branch : "branchId"
+TaskTemplate }o--o| MasterShiftTemplate : "masterShiftTemplateId"
+TaskTemplate }o--o| SubShiftTemplate : "subShiftTemplateId"
+MasterShift }o--|| Branch : "branchId"
+MasterShift }o--o| MasterShiftTemplate : "masterShiftTemplateId"
+SubShift }o--|| MasterShift : "masterShiftId"
+SubShift }o--o| SubShiftTemplate : "subShiftTemplateId"
+Assignment }o--|| Employee : "employeeId"
+Assignment }o--|| SubShift : "subShiftId"
+Assignment }o--o| Availability : "availabilityId"
+Task }o--o| TaskTemplate : "taskTemplateId"
+Task }o--o| MasterShift : "masterShiftId"
+Task }o--o| SubShift : "subShiftId"
+TaskCompletion ||--|| Task : "taskId"
+TaskCompletion }o--|| Employee : "completedByEmployeeId"
+AttendanceHistory }o--|| Assignment : "assignmentId"
 LeaveRequest }o--|| Employee : "absenceEmployeeId"
 LeaveRequest }o--|| Employee : "replacementEmployeeId"
-LeaveRequest }o--|| WorkSlot : "workSlotId"
+LeaveRequest }o--|| Assignment : "assignmentId"
 
 Availability }o--|| Employee : "employeeId"
+Availability }o--|| SubShift : "subShiftId"
 
 TimeLog }o--|| Employee : "employeeId"
-TimeLog }o--|| WorkSlot : "workSlotId"
+TimeLog }o--|| Assignment : "assignmentId"
 
 PayrollEntry }o--|| Employee : "employeeId"
 PayrollEntry }o--|| PayPeriod : "payPeriodId"

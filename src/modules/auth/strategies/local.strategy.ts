@@ -48,7 +48,6 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Username or password are not match.');
     }
 
-    console.log('user: ', user);
     return new AuthenticatedUserDto({
       userId: user.id,
       phone: user.phoneNumber,

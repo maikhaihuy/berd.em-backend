@@ -5,14 +5,14 @@ import { Type } from 'class-transformer';
 
 export class AttendanceHistoryFilterDto {
   @ApiProperty({
-    description: 'Filter by work slot ID',
+    description: 'Filter by assignment ID',
     required: false,
     example: 1,
   })
   @IsOptional()
   @IsInt()
   @Type(() => Number)
-  workSlotId?: number;
+  assignmentId?: number;
 
   @ApiProperty({
     description: 'Filter by employee ID',

@@ -11,8 +11,10 @@ export class AvailabilityMapper {
     return {
       id: availability.id,
       employeeId: availability.employeeId,
+      subShiftId: availability.subShiftId,
       startTime: availability.startTime,
       endTime: availability.endTime,
+      status: availability.status,
       note: availability.note,
       createdAt: availability.createdAt,
       createdBy: availability.createdBy,
@@ -25,8 +27,10 @@ export class AvailabilityMapper {
     return {
       id: availability.id,
       employeeId: availability.employeeId,
+      subShiftId: availability.subShiftId,
       startTime: availability.startTime,
       endTime: availability.endTime,
+      status: availability.status,
       note: availability.note,
     };
   }

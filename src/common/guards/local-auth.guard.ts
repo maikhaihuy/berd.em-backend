@@ -12,9 +12,7 @@ export class LocalAuthGuard extends AuthGuard('local') {
     return result;
   }
 
-  handleRequest(err, user, info) {
-    console.log('info: ', info);
-    console.log('user: ', user);
+  handleRequest(err, user) {
     if (err || !user) {
       throw err || new UnauthorizedException('Invalid username or password');
     }

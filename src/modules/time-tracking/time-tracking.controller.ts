@@ -65,17 +65,17 @@ export class TimeTrackingController {
     return this.timeTrackingService.findByEmployee(+employeeId);
   }
 
-  @Get('work-slot/:workSlotId')
-  @ApiOperation({ summary: 'Get time logs for a work slot' })
+  @Get('assignment/:assignmentId')
+  @ApiOperation({ summary: 'Get time logs for an assignment' })
   @ApiResponse({
     status: 200,
-    description: 'List of time logs for the work slot',
+    description: 'List of time logs for the assignment',
     type: [TimeLogResponseDto],
   })
-  async findByWorkSlot(
-    @Param('workSlotId') workSlotId: string,
+  async findByAssignment(
+    @Param('assignmentId') assignmentId: string,
   ): Promise<TimeLogResponseDto[]> {
-    return this.timeTrackingService.findByWorkSlot(+workSlotId);
+    return this.timeTrackingService.findByAssignment(+assignmentId);
   }
 
   @Get(':id')

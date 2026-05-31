@@ -44,6 +44,25 @@ async function main() {
       subject: 'permissions',
       description: 'Delete permissions',
     },
+    // Shift and task domain
+    ...[
+      'master-shift-templates',
+      'sub-shift-templates',
+      'task-templates',
+      'master-shifts',
+      'sub-shifts',
+      'assignments',
+      'availability',
+      'attendance-history',
+      'leave-requests',
+      'time-logs',
+      'tasks',
+    ].flatMap((subject) => [
+      { action: 'create', subject, description: `Create ${subject}` },
+      { action: 'read', subject, description: `Read ${subject}` },
+      { action: 'update', subject, description: `Update ${subject}` },
+      { action: 'delete', subject, description: `Delete ${subject}` },
+    ]),
   ].map((p) => ({
     ...p,
     createdBy: SYSTEM_USER_ID,

@@ -94,7 +94,7 @@ export class ZaloAuthService {
    * Optionally retrieve additional profile information from Zalo
    * This can be extended based on available Zalo API endpoints
    */
-  async getZaloProfile(accessToken: string): Promise<Partial<ZaloProfileDto>> {
+  getZaloProfile(): Partial<ZaloProfileDto> {
     try {
       // This is a placeholder - adjust based on actual Zalo API endpoints available
       // You may need different endpoints for name, avatar, etc.

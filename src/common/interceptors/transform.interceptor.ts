@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   Injectable,
   NestInterceptor,
@@ -22,11 +23,15 @@ export class TransformInterceptor<T>
     next: CallHandler,
   ): Observable<Response<T>> {
     return next.handle().pipe(
-      map((data) => ({
-        data,
-        statusCode: context.switchToHttp().getResponse().statusCode,
-        timestamp: new Date().toISOString(),
-      })),
+      map((data: T) => {
+        const statusCode = context.switchToHttp().getResponse()
+          .statusCode as number;
+        return {
+          data,
+          statusCode,
+          timestamp: new Date().toISOString(),
+        };
+      }),
     );
   }
 }

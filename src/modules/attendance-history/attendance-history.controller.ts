@@ -49,17 +49,17 @@ export class AttendanceHistoryController {
     return this.attendanceHistoryService.create(createDto, user.userId);
   }
 
-  @Get('work-slot/:workSlotId')
-  @ApiOperation({ summary: 'Get all attendance history for a work slot' })
+  @Get('assignment/:assignmentId')
+  @ApiOperation({ summary: 'Get all attendance history for an assignment' })
   @ApiResponse({
     status: 200,
-    description: 'List of attendance history records for work slot',
+    description: 'List of attendance history records for assignment',
     type: [AttendanceHistoryResponseDto],
   })
-  async findByWorkSlot(
-    @Param('workSlotId') workSlotId: string,
+  async findByAssignment(
+    @Param('assignmentId') assignmentId: string,
   ): Promise<AttendanceHistoryResponseDto[]> {
-    return this.attendanceHistoryService.findByWorkSlot(+workSlotId);
+    return this.attendanceHistoryService.findByAssignment(+assignmentId);
   }
 
   @Get(':id')

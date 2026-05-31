@@ -10,9 +10,9 @@ import {
 import { TimeLogStatus } from '@prisma/client';
 
 export class CreateTimeLogDto {
-  @ApiProperty({ description: 'Work slot ID', example: 1 })
+  @ApiProperty({ description: 'Assignment ID', example: 1 })
   @IsInt()
-  workSlotId: number;
+  assignmentId: number;
 
   @ApiProperty({ description: 'Employee ID', example: 1 })
   @IsInt()

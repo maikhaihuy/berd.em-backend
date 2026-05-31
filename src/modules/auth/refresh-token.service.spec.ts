@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { RefreshTokenService } from './refresh-token.service';
 import { PrismaService } from '@modules/prisma/prisma.service';

@@ -20,14 +20,13 @@ export class LeaveRequestsService {
     createDto: CreateLeaveRequestDto,
     currentUserId: number,
   ): Promise<LeaveRequestResponseDto> {
-    // Verify work slot exists
-    const workSlot = await this.prisma.workSlot.findUnique({
-      where: { id: createDto.workSlotId },
+    const assignment = await this.prisma.assignment.findUnique({
+      where: { id: createDto.assignmentId },
     });
 
-    if (!workSlot) {
+    if (!assignment) {
       throw new NotFoundException(
-        `Work slot with ID ${createDto.workSlotId} not found`,
+        `Assignment with ID ${createDto.assignmentId} not found`,
       );
     }
 
@@ -62,7 +61,7 @@ export class LeaveRequestsService {
 
     const leaveRequest = await this.prisma.leaveRequest.create({
       data: {
-        workSlotId: createDto.workSlotId,
+        assignmentId: createDto.assignmentId,
         absenceEmployeeId: createDto.absenceEmployeeId,
         replacementEmployeeId: createDto.replacementEmployeeId,
         reason: createDto.reason,
