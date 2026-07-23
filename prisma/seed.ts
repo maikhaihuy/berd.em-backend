@@ -44,6 +44,22 @@ async function main() {
       subject: 'permissions',
       description: 'Delete permissions',
     },
+    // Role-permission links
+    ...['role-permissions'].flatMap((subject) => [
+      { action: 'create', subject, description: `Create ${subject}` },
+      { action: 'read', subject, description: `Read ${subject}` },
+      { action: 'update', subject, description: `Update ${subject}` },
+      { action: 'delete', subject, description: `Delete ${subject}` },
+    ]),
+
+    // Core entities
+    ...['branches', 'employees', 'employee-hourly-rates'].flatMap((subject) => [
+      { action: 'create', subject, description: `Create ${subject}` },
+      { action: 'read', subject, description: `Read ${subject}` },
+      { action: 'update', subject, description: `Update ${subject}` },
+      { action: 'delete', subject, description: `Delete ${subject}` },
+    ]),
+
     // Shift and task domain
     ...[
       'master-shift-templates',

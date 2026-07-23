@@ -11,6 +11,7 @@ import { RolePermissionsModule } from './modules/role-permissions/role-permissio
 import { EmployeeHourlyRatesModule } from '@modules/employee-hourly-rates/employee-hourly-rates.module';
 import { AvailabilityModule } from '@modules/availability/availability.module';
 import { ExceptionModule } from '@common/exception.module';
+import { AuthzModule } from '@common/authz.module';
 import { validate } from '@common/env.validation';
 import { AttendanceHistoryModule } from './modules/attendance-history/attendance-history.module';
 import { LeaveRequestsModule } from './modules/leave-requests/leave-requests.module';
@@ -34,6 +35,7 @@ import { TasksModule } from './modules/tasks/task.module';
     PrismaModule,
     // Authentication & Authorization
     AuthModule,
+    AuthzModule,
     UsersModule,
     RolesModule,
     PermissionsModule,

@@ -89,17 +89,21 @@ Based on diagnosis, recommend one or more of:
 **Goal**: Apply fixes and verify correctness.
 
 1. **For schema changes**:
+
    ```bash
    pnpm prisma migrate dev --name "<description>"
    ```
+
    - Confirm migration file is created
    - Verify development database updates
    - Check that no data is lost unexpectedly
 
 2. **For seed fixes**:
+
    ```bash
    pnpm prisma db seed
    ```
+
    - Run multiple times to verify idempotency
    - Check seed output for errors
    - Inspect database state: `pnpm prisma studio`
@@ -118,14 +122,14 @@ Based on diagnosis, recommend one or more of:
 
 ## Troubleshooting Guide
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| Seed script fails with FK constraint error | Parent record not created yet | See [Seed Validation Checklist](./references/seed-validation-checklist.md) for dependency ordering |
-| Seed runs twice, creates duplicates | Non-idempotent create logic | Use `upsert` or check `skipDuplicates` on `createMany` |
-| Migration fails on `ALTER COLUMN ... SET NOT NULL` | Existing NULL values in column | See [Migration Best Practices](./references/migration-best-practices.md) for safe migrations |
-| N+1 query in API response | Missing `.include()` in findMany | See [Query Optimization Patterns](./references/query-optimization-patterns.md) for include strategies |
-| `prisma migrate status` shows drift | Manual schema changes in database | See [Migration Best Practices](./references/migration-best-practices.md) for drift resolution |
-| Circular relation errors | Bidirectional `@relation` missing name | See [Migration Best Practices](./references/migration-best-practices.md) for circular FK solutions |
+| Issue                                              | Cause                                  | Solution                                                                                              |
+| -------------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Seed script fails with FK constraint error         | Parent record not created yet          | See [Seed Validation Checklist](./references/seed-validation-checklist.md) for dependency ordering    |
+| Seed runs twice, creates duplicates                | Non-idempotent create logic            | Use `upsert` or check `skipDuplicates` on `createMany`                                                |
+| Migration fails on `ALTER COLUMN ... SET NOT NULL` | Existing NULL values in column         | See [Migration Best Practices](./references/migration-best-practices.md) for safe migrations          |
+| N+1 query in API response                          | Missing `.include()` in findMany       | See [Query Optimization Patterns](./references/query-optimization-patterns.md) for include strategies |
+| `prisma migrate status` shows drift                | Manual schema changes in database      | See [Migration Best Practices](./references/migration-best-practices.md) for drift resolution         |
+| Circular relation errors                           | Bidirectional `@relation` missing name | See [Migration Best Practices](./references/migration-best-practices.md) for circular FK solutions    |
 
 ## Key Principles
 

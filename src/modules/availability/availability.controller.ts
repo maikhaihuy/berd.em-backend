@@ -6,7 +6,6 @@ import {
   Patch,
   Param,
   Delete,
-  UseGuards,
   Request,
   Query,
   ParseIntPipe,
@@ -18,7 +17,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { JwtAccessGuard } from '@common/guards/jwt-access.guard';
+import { RequirePermissions } from '@common/decorators/permissions.decorator';
 import { AvailabilityService } from './availability.service';
 import { CreateAvailabilityDto } from './dto/create-availability.dto';
 import { UpdateAvailabilityDto } from './dto/update-availability.dto';
@@ -28,11 +27,11 @@ import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.d
 
 @ApiTags('availability')
 @ApiBearerAuth()
-@UseGuards(JwtAccessGuard)
 @Controller('availability')
 export class AvailabilityController {
   constructor(private readonly availabilityService: AvailabilityService) {}
 
+  @RequirePermissions({ action: 'create', subject: 'availability' })
   @Post()
   @ApiOperation({ summary: 'Create availability' })
   @ApiResponse({
@@ -50,6 +49,7 @@ export class AvailabilityController {
     );
   }
 
+  @RequirePermissions({ action: 'read', subject: 'availability' })
   @Get()
   @ApiOperation({ summary: 'Get all availability records' })
   @ApiResponse({
@@ -87,6 +87,7 @@ export class AvailabilityController {
     );
   }
 
+  @RequirePermissions({ action: 'read', subject: 'availability' })
   @Get(':id')
   @ApiOperation({ summary: 'Get availability by ID' })
   @ApiResponse({
@@ -101,6 +102,7 @@ export class AvailabilityController {
     return this.availabilityService.findOne(id, currentUser.userId);
   }
 
+  @RequirePermissions({ action: 'update', subject: 'availability' })
   @Patch(':id')
   @ApiOperation({ summary: 'Update availability' })
   @ApiResponse({
@@ -120,6 +122,7 @@ export class AvailabilityController {
     );
   }
 
+  @RequirePermissions({ action: 'delete', subject: 'availability' })
   @Delete(':id')
   @ApiOperation({ summary: 'Delete availability' })
   @ApiResponse({

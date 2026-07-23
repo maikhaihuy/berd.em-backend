@@ -8,10 +8,9 @@ import {
   Patch,
   Post,
   Query,
-  UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { JwtAccessGuard } from '@common/guards/jwt-access.guard';
+import { RequirePermissions } from '@common/decorators/permissions.decorator';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
 import { AssignmentsService } from './assignment.service';
@@ -22,11 +21,11 @@ import { AssignmentCheckOutDto } from './dto/check-out.dto';
 
 @ApiTags('assignments')
 @ApiBearerAuth()
-@UseGuards(JwtAccessGuard)
 @Controller('assignments')
 export class AssignmentsController {
   constructor(private readonly service: AssignmentsService) {}
 
+  @RequirePermissions({ action: 'create', subject: 'assignments' })
   @Post()
   create(
     @Body() dto: CreateAssignmentDto,
@@ -35,6 +34,7 @@ export class AssignmentsController {
     return this.service.create(dto, user.userId);
   }
 
+  @RequirePermissions({ action: 'read', subject: 'assignments' })
   @Get()
   findAll(
     @Query('employeeId') employeeId?: string,
@@ -46,11 +46,13 @@ export class AssignmentsController {
     );
   }
 
+  @RequirePermissions({ action: 'read', subject: 'assignments' })
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.service.findOne(id);
   }
 
+  @RequirePermissions({ action: 'update', subject: 'assignments' })
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -60,6 +62,7 @@ export class AssignmentsController {
     return this.service.update(id, dto, user.userId);
   }
 
+  @RequirePermissions({ action: 'update', subject: 'assignments' })
   @Post(':id/check-in')
   @ApiOperation({ summary: 'Check in to an assignment' })
   checkIn(
@@ -70,6 +73,7 @@ export class AssignmentsController {
     return this.service.checkIn(id, dto, user.userId);
   }
 
+  @RequirePermissions({ action: 'update', subject: 'assignments' })
   @Post(':id/check-out')
   @ApiOperation({ summary: 'Check out from an assignment' })
   checkOut(
@@ -80,6 +84,7 @@ export class AssignmentsController {
     return this.service.checkOut(id, dto, user.userId);
   }
 
+  @RequirePermissions({ action: 'delete', subject: 'assignments' })
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.service.remove(id);

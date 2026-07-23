@@ -9,35 +9,62 @@ import { UserStatus } from '@prisma/client';
 
 describe('JwtAccessStrategy', () => {
   let strategy: JwtAccessStrategy;
-  let prismaService: jest.Mocked<PrismaService>;
+  let prismaService: { user: { findUnique: jest.Mock } };
   let configService: jest.Mocked<ConfigService>;
+
+  const buildPermission = (action: string, subject: string) => ({
+    id: 1,
+    action,
+    subject,
+    condition: null,
+    description: null,
+    createdAt: new Date(),
+    createdBy: 1,
+    updatedAt: new Date(),
+    updatedBy: 1,
+  });
 
   const mockUser = {
     id: 1,
-    username: 'testuser',
+    zaloId: 'zalo_test',
+    phoneNumber: '0900000000',
     password: 'hashedPassword',
-    employeeId: 123,
+    fullName: 'Test User',
+    avatarUrl: null,
     status: UserStatus.ACTIVE,
-    roles: [
-      {
-        id: 1,
-        name: 'employee',
-        permissions: [
-          { id: 1, action: 'read', subject: 'own' },
-          { id: 2, action: 'update', subject: 'own' },
-        ],
-      },
-    ],
+    roleId: 1,
+    role: {
+      id: 1,
+      name: 'Employee',
+      description: null,
+      createdAt: new Date(),
+      createdBy: 1,
+      updatedAt: new Date(),
+      updatedBy: 1,
+      rolePermissions: [
+        {
+          roleId: 1,
+          permissionId: 1,
+          permission: buildPermission('read', 'users'),
+        },
+        {
+          roleId: 1,
+          permissionId: 2,
+          permission: buildPermission('read', 'employees'),
+        },
+      ],
+    },
     createdAt: new Date(),
     updatedAt: new Date(),
   };
 
   const mockPayload: AccessTokenPayloadDto = {
     sub: 1,
-    email: 'test@example.com',
-    roles: ['employee'],
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + 3600,
+    phone: '0900000000',
+    role: 'Employee',
+    branches: [],
+    iat: Math.floor(new Date('2026-01-01').getTime() / 1000),
+    exp: Math.floor(new Date('2026-01-01').getTime() / 1000) + 3600,
   };
 
   beforeEach(async () => {
@@ -48,29 +75,21 @@ describe('JwtAccessStrategy', () => {
     };
 
     const mockConfigService = {
-      get: jest.fn(),
+      getOrThrow: jest.fn().mockReturnValue('test-jwt-secret'),
+      get: jest.fn().mockReturnValue('test-jwt-secret'),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         JwtAccessStrategy,
-        {
-          provide: PrismaService,
-          useValue: mockPrismaService,
-        },
-        {
-          provide: ConfigService,
-          useValue: mockConfigService,
-        },
+        { provide: PrismaService, useValue: mockPrismaService },
+        { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();
 
     strategy = module.get<JwtAccessStrategy>(JwtAccessStrategy);
     prismaService = module.get(PrismaService);
     configService = module.get(ConfigService);
-
-    // Setup default config mock
-    configService.get.mockReturnValue('test-jwt-secret');
   });
 
   afterEach(() => {
@@ -79,148 +98,50 @@ describe('JwtAccessStrategy', () => {
 
   it('should be defined', () => {
     expect(strategy).toBeDefined();
+    expect(configService).toBeDefined();
   });
 
   describe('validate', () => {
-    it('should return authenticated user when token payload is valid', async () => {
-      // Arrange
-      const findUniqueSpy = jest
-        .spyOn(prismaService.user, 'findUnique')
-        .mockResolvedValue(mockUser);
+    it('returns an authenticated user with role name and flattened permissions', async () => {
+      prismaService.user.findUnique.mockResolvedValue(mockUser);
 
-      // Act
       const result = await strategy.validate(mockPayload);
 
-      // Assert
-      expect(findUniqueSpy).toHaveBeenCalledWith({
-        where: { id: mockPayload.sub },
-        include: {
-          roles: {
-            include: {
-              permissions: true,
-            },
-          },
-        },
-      });
+      expect(prismaService.user.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: mockPayload.sub } }),
+      );
       expect(result).toBeInstanceOf(AuthenticatedUserDto);
-      expect(result.userId).toBe(mockUser.id);
-      expect(result.username).toBe(mockUser.username);
-      expect(result.employeeId).toBe(mockUser.employeeId);
-      expect(result.roles).toEqual(['employee']);
+      expect(result.role).toBe('Employee');
+      expect(result.permissions).toEqual([
+        { action: 'read', subject: 'users' },
+        { action: 'read', subject: 'employees' },
+      ]);
     });
 
-    it('should throw UnauthorizedException when user does not exist', async () => {
-      // Arrange
-      jest.spyOn(prismaService.user, 'findUnique').mockResolvedValue(null);
+    it('returns an empty permissions array when the role has none', async () => {
+      prismaService.user.findUnique.mockResolvedValue({
+        ...mockUser,
+        role: { ...mockUser.role, rolePermissions: [] },
+      });
 
-      // Act & Assert
+      const result = await strategy.validate(mockPayload);
+
+      expect(result.permissions).toEqual([]);
+    });
+
+    it('throws UnauthorizedException when the user does not exist', async () => {
+      prismaService.user.findUnique.mockResolvedValue(null);
+
       await expect(strategy.validate(mockPayload)).rejects.toThrow(
         UnauthorizedException,
       );
-      expect(jest.spyOn(prismaService.user, 'findUnique')).toHaveBeenCalledWith(
-        {
-          where: { id: mockPayload.sub },
-          include: {
-            roles: {
-              include: {
-                permissions: true,
-              },
-            },
-          },
-        },
-      );
     });
 
-    it('should handle user with multiple roles', async () => {
-      // Arrange
-      const userWithMultipleRoles = {
-        ...mockUser,
-        roles: [
-          {
-            id: 1,
-            name: 'employee',
-            permissions: [{ id: 1, action: 'read', subject: 'own' }],
-          },
-          {
-            id: 2,
-            name: 'manager',
-            permissions: [{ id: 2, action: 'manage', subject: 'all' }],
-          },
-        ],
-      };
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(
-        userWithMultipleRoles,
-      );
-
-      // Act
-      const result = await strategy.validate(mockPayload);
-
-      // Assert
-      expect(result.roles).toEqual(['employee', 'manager']);
-    });
-
-    it('should handle user with no roles', async () => {
-      // Arrange
-      const userWithNoRoles = {
-        ...mockUser,
-        roles: [],
-      };
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(
-        userWithNoRoles,
-      );
-
-      // Act
-      const result = await strategy.validate(mockPayload);
-
-      // Assert
-      expect(result.roles).toEqual([]);
-    });
-
-    it('should handle database error', async () => {
-      // Arrange
+    it('propagates database errors', async () => {
       const dbError = new Error('Database connection error');
-      (prismaService.user.findUnique as jest.Mock).mockRejectedValue(dbError);
+      prismaService.user.findUnique.mockRejectedValue(dbError);
 
-      // Act & Assert
       await expect(strategy.validate(mockPayload)).rejects.toThrow(dbError);
-      expect(jest.spyOn(prismaService.user, 'findUnique')).toHaveBeenCalledWith(
-        {
-          where: { id: mockPayload.sub },
-          include: {
-            roles: {
-              include: {
-                permissions: true,
-              },
-            },
-          },
-        },
-      );
-    });
-
-    it('should handle payload with different user ID', async () => {
-      // Arrange
-      const differentPayload: AccessTokenPayloadDto = {
-        ...mockPayload,
-        sub: 999,
-      };
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(null);
-
-      // Act & Assert
-      await expect(strategy.validate(differentPayload)).rejects.toThrow(
-        UnauthorizedException,
-      );
-      expect(jest.spyOn(prismaService.user, 'findUnique')).toHaveBeenCalledWith(
-        {
-          where: { id: 999 },
-          include: {
-            roles: {
-              include: {
-                permissions: true,
-              },
-            },
-          },
-        },
-      );
     });
   });
 });

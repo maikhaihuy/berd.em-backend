@@ -5,7 +5,6 @@ import {
   Body,
   Param,
   Query,
-  UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -20,19 +19,19 @@ import { AttendanceHistoryService } from './attendance-history.service';
 import { CreateAttendanceHistoryDto } from './dto/create-attendance-history.dto';
 import { AttendanceHistoryResponseDto } from './dto/attendance-history-response.dto';
 import { AttendanceHistoryFilterDto } from './dto/attendance-history-filter.dto';
-import { JwtAccessGuard } from '@common/guards/jwt-access.guard';
+import { RequirePermissions } from '@common/decorators/permissions.decorator';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
 
 @ApiTags('attendance-history')
 @ApiBearerAuth()
-@UseGuards(JwtAccessGuard)
 @Controller('attendance-history')
 export class AttendanceHistoryController {
   constructor(
     private readonly attendanceHistoryService: AttendanceHistoryService,
   ) {}
 
+  @RequirePermissions({ action: 'create', subject: 'attendance-history' })
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create attendance history record' })
@@ -49,6 +48,7 @@ export class AttendanceHistoryController {
     return this.attendanceHistoryService.create(createDto, user.userId);
   }
 
+  @RequirePermissions({ action: 'read', subject: 'attendance-history' })
   @Get('assignment/:assignmentId')
   @ApiOperation({ summary: 'Get all attendance history for an assignment' })
   @ApiResponse({
@@ -62,6 +62,7 @@ export class AttendanceHistoryController {
     return this.attendanceHistoryService.findByAssignment(+assignmentId);
   }
 
+  @RequirePermissions({ action: 'read', subject: 'attendance-history' })
   @Get(':id')
   @ApiOperation({ summary: 'Get attendance history record by ID' })
   @ApiResponse({
@@ -76,6 +77,7 @@ export class AttendanceHistoryController {
     return this.attendanceHistoryService.findOne(+id);
   }
 
+  @RequirePermissions({ action: 'read', subject: 'attendance-history' })
   @Get()
   @ApiOperation({ summary: 'Get all attendance history records with filters' })
   @ApiResponse({

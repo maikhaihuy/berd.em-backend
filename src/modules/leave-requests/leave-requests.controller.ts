@@ -6,7 +6,6 @@ import {
   Delete,
   Body,
   Param,
-  UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -22,7 +21,7 @@ import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
 import { UpdateLeaveRequestDto } from './dto/update-leave-request.dto';
 import { ApproveLeaveRequestDto } from './dto/approve-leave-request.dto';
 import { LeaveRequestResponseDto } from './dto/leave-request-response.dto';
-import { JwtAccessGuard } from '@common/guards/jwt-access.guard';
+import { RequirePermissions } from '@common/decorators/permissions.decorator';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
 import { LeaveStatus } from '@prisma/client';
@@ -30,10 +29,10 @@ import { LeaveStatus } from '@prisma/client';
 @ApiTags('leave-requests')
 @ApiBearerAuth()
 @Controller('leave-requests')
-@UseGuards(JwtAccessGuard)
 export class LeaveRequestsController {
   constructor(private readonly leaveRequestsService: LeaveRequestsService) {}
 
+  @RequirePermissions({ action: 'create', subject: 'leave-requests' })
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new leave request' })
@@ -50,6 +49,7 @@ export class LeaveRequestsController {
     return this.leaveRequestsService.create(createDto, user.userId);
   }
 
+  @RequirePermissions({ action: 'read', subject: 'leave-requests' })
   @Get()
   @ApiOperation({ summary: 'Get all leave requests' })
   @ApiResponse({
@@ -61,6 +61,7 @@ export class LeaveRequestsController {
     return this.leaveRequestsService.findAll();
   }
 
+  @RequirePermissions({ action: 'read', subject: 'leave-requests' })
   @Get(':id')
   @ApiOperation({ summary: 'Get leave request by ID' })
   @ApiResponse({
@@ -73,6 +74,7 @@ export class LeaveRequestsController {
     return this.leaveRequestsService.findOne(+id);
   }
 
+  @RequirePermissions({ action: 'read', subject: 'leave-requests' })
   @Get('status/:status')
   @ApiOperation({ summary: 'Get leave requests by status' })
   @ApiResponse({
@@ -86,6 +88,7 @@ export class LeaveRequestsController {
     return this.leaveRequestsService.findByStatus(status);
   }
 
+  @RequirePermissions({ action: 'read', subject: 'leave-requests' })
   @Get('employee/:employeeId')
   @ApiOperation({ summary: 'Get leave requests for an employee' })
   @ApiResponse({
@@ -99,6 +102,7 @@ export class LeaveRequestsController {
     return this.leaveRequestsService.findByEmployee(+employeeId);
   }
 
+  @RequirePermissions({ action: 'update', subject: 'leave-requests' })
   @Put(':id')
   @ApiOperation({ summary: 'Update a leave request' })
   @ApiResponse({
@@ -116,6 +120,7 @@ export class LeaveRequestsController {
     return this.leaveRequestsService.update(+id, updateDto, user.userId);
   }
 
+  @RequirePermissions({ action: 'update', subject: 'leave-requests' })
   @Put(':id/approve')
   @ApiOperation({ summary: 'Approve or reject a leave request' })
   @ApiResponse({
@@ -133,6 +138,7 @@ export class LeaveRequestsController {
     return this.leaveRequestsService.approve(+id, approveDto, user.userId);
   }
 
+  @RequirePermissions({ action: 'update', subject: 'leave-requests' })
   @Put(':id/cancel')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancel a leave request' })
@@ -149,6 +155,7 @@ export class LeaveRequestsController {
     return this.leaveRequestsService.cancel(+id, user.userId);
   }
 
+  @RequirePermissions({ action: 'delete', subject: 'leave-requests' })
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a leave request' })

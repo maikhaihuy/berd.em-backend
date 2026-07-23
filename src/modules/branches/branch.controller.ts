@@ -7,7 +7,6 @@ import {
   Delete,
   HttpCode,
   HttpStatus,
-  UseGuards,
   Put,
 } from '@nestjs/common';
 import { BranchesService } from './branch.service';
@@ -15,16 +14,16 @@ import { CreateBranchDto } from './dto/create-branch.dto';
 import { UpdateBranchDto } from './dto/update-branch.dto';
 import { BranchResponseDto } from './dto/branch-response.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
-import { JwtAccessGuard } from '../../common/guards/jwt-access.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 
 @ApiTags('branches')
-@UseGuards(JwtAccessGuard)
 @Controller('branches')
 export class BranchesController {
   constructor(private readonly branchesService: BranchesService) {}
 
+  @RequirePermissions({ action: 'create', subject: 'branches' })
   @Post()
   @ApiOperation({ summary: 'Create a new branch' })
   @ApiResponse({
@@ -43,6 +42,7 @@ export class BranchesController {
     );
   }
 
+  @RequirePermissions({ action: 'read', subject: 'branches' })
   @Get()
   @ApiOperation({ summary: 'Retrieve a list of all branches' })
   @ApiResponse({
@@ -54,6 +54,7 @@ export class BranchesController {
     return await this.branchesService.findAll();
   }
 
+  @RequirePermissions({ action: 'read', subject: 'branches' })
   @Get(':id')
   @ApiOperation({ summary: 'Retrieve a branch by ID' })
   @ApiResponse({
@@ -66,6 +67,7 @@ export class BranchesController {
     return await this.branchesService.findOne(+id);
   }
 
+  @RequirePermissions({ action: 'update', subject: 'branches' })
   @Put(':id')
   @ApiOperation({ summary: 'Update a branch by ID' })
   @ApiResponse({
@@ -87,6 +89,7 @@ export class BranchesController {
     );
   }
 
+  @RequirePermissions({ action: 'delete', subject: 'branches' })
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a branch by ID' })

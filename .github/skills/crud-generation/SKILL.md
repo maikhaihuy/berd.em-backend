@@ -127,10 +127,7 @@ import { UpdateDepartmentDto } from './dto/update-department.dto';
 export class DepartmentService {
   constructor(private prisma: PrismaService) {}
 
-  async create(
-    dto: CreateDepartmentDto,
-    userId: string,
-  ): Promise<Department> {
+  async create(dto: CreateDepartmentDto, userId: string): Promise<Department> {
     return this.prisma.department.create({
       data: {
         ...dto,
@@ -165,10 +162,7 @@ export class DepartmentService {
     });
   }
 
-  async update(
-    id: string,
-    dto: UpdateDepartmentDto,
-  ): Promise<Department> {
+  async update(id: string, dto: UpdateDepartmentDto): Promise<Department> {
     return this.prisma.department.update({
       where: { id },
       data: dto,
@@ -189,6 +183,7 @@ export class DepartmentService {
 ```
 
 **Key patterns:**
+
 - Always `.include()` relations to avoid N+1 queries
 - Use `where: { deletedAt: null }` for soft deletes
 - Return domain object, let controller handle DTO transformation
@@ -258,7 +253,7 @@ export class DepartmentController {
   })
   async findAll(): Promise<DepartmentResponseDto[]> {
     const departments = await this.service.findAll();
-    return departments.map(d => new DepartmentResponseDto(d));
+    return departments.map((d) => new DepartmentResponseDto(d));
   }
 
   @Get(':id')
@@ -297,6 +292,7 @@ export class DepartmentController {
 ```
 
 **Key patterns:**
+
 - `@UseGuards(JwtAccessGuard)` for authentication
 - `@ApiTags()`, `@ApiOperation()`, `@ApiResponse()` for Swagger docs
 - `@AuthenticatedUser()` to inject current user
@@ -374,9 +370,7 @@ describe('DepartmentService', () => {
         description: 'Building software',
       };
 
-      jest
-        .spyOn(prisma.department, 'create')
-        .mockResolvedValue(mockDepartment);
+      jest.spyOn(prisma.department, 'create').mockResolvedValue(mockDepartment);
 
       const result = await service.create(createDto, 'user-123');
 
@@ -393,7 +387,9 @@ describe('DepartmentService', () => {
 
   describe('findAll', () => {
     it('should return all departments excluding soft deleted', async () => {
-      jest.spyOn(prisma.department, 'findMany').mockResolvedValue([mockDepartment]);
+      jest
+        .spyOn(prisma.department, 'findMany')
+        .mockResolvedValue([mockDepartment]);
 
       const result = await service.findAll();
 
@@ -487,11 +483,13 @@ describe('Departments (E2E)', () => {
 ### Phase 8: Migrate & Test
 
 1. **Run migration** (if entity is new):
+
    ```bash
    pnpm db:dev --name "add_department_entity"
    ```
 
 2. **Run tests**:
+
    ```bash
    pnpm test department
    pnpm test:e2e
@@ -504,14 +502,14 @@ describe('Departments (E2E)', () => {
 
 ## Troubleshooting Guide
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| 404 on new endpoints | Module not imported in app.module.ts | Check `app.module.ts` imports array |
-| Validation errors | DTO missing validators or bad decorators | Check `class-validator` + `class-transformer` imports |
-| N+1 queries in tests | Missing `.include()` in service | Add all required relations to `.include()` |
-| Swagger docs missing | Missing `@ApiOperation()` or `@ApiResponse()` | Add Swagger decorators to controller methods |
-| Soft delete not working | Queries not filtering `deletedAt: null` | Add `where: { deletedAt: null }` to all find operations |
-| Test fails with Prisma mock | Mock not matching method signature | Verify mock has correct structure (include, select, etc.) |
+| Issue                       | Cause                                         | Solution                                                  |
+| --------------------------- | --------------------------------------------- | --------------------------------------------------------- |
+| 404 on new endpoints        | Module not imported in app.module.ts          | Check `app.module.ts` imports array                       |
+| Validation errors           | DTO missing validators or bad decorators      | Check `class-validator` + `class-transformer` imports     |
+| N+1 queries in tests        | Missing `.include()` in service               | Add all required relations to `.include()`                |
+| Swagger docs missing        | Missing `@ApiOperation()` or `@ApiResponse()` | Add Swagger decorators to controller methods              |
+| Soft delete not working     | Queries not filtering `deletedAt: null`       | Add `where: { deletedAt: null }` to all find operations   |
+| Test fails with Prisma mock | Mock not matching method signature            | Verify mock has correct structure (include, select, etc.) |
 
 ## Key Principles
 

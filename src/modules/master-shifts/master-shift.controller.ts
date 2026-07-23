@@ -8,10 +8,9 @@ import {
   Patch,
   Post,
   Query,
-  UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { JwtAccessGuard } from '@common/guards/jwt-access.guard';
+import { RequirePermissions } from '@common/decorators/permissions.decorator';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
 import { CreateMasterShiftDto } from './dto/create-master-shift.dto';
@@ -20,11 +19,11 @@ import { MasterShiftsService } from './master-shift.service';
 
 @ApiTags('master-shifts')
 @ApiBearerAuth()
-@UseGuards(JwtAccessGuard)
 @Controller('master-shifts')
 export class MasterShiftsController {
   constructor(private readonly service: MasterShiftsService) {}
 
+  @RequirePermissions({ action: 'create', subject: 'master-shifts' })
   @Post()
   create(
     @Body() dto: CreateMasterShiftDto,
@@ -33,6 +32,7 @@ export class MasterShiftsController {
     return this.service.create(dto, user.userId);
   }
 
+  @RequirePermissions({ action: 'update', subject: 'master-shifts' })
   @Post('generate')
   @ApiOperation({
     summary: 'Generate master shift, sub shifts, and tasks from a template',
@@ -49,6 +49,7 @@ export class MasterShiftsController {
     );
   }
 
+  @RequirePermissions({ action: 'read', subject: 'master-shifts' })
   @Get()
   findAll(
     @Query('branchId') branchId?: string,
@@ -62,11 +63,13 @@ export class MasterShiftsController {
     );
   }
 
+  @RequirePermissions({ action: 'read', subject: 'master-shifts' })
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.service.findOne(id);
   }
 
+  @RequirePermissions({ action: 'update', subject: 'master-shifts' })
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -76,6 +79,7 @@ export class MasterShiftsController {
     return this.service.update(id, dto, user.userId);
   }
 
+  @RequirePermissions({ action: 'delete', subject: 'master-shifts' })
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.service.remove(id);

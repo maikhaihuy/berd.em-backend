@@ -78,16 +78,16 @@ model Department {
 
 **Key design principles:**
 
-| Principle | Example | Why |
-|-----------|---------|-----|
-| **Always use UUID for IDs** | `id String @id @default(uuid())` | Database-agnostic, globally unique, auto-generated |
-| **Required FK for ownership** | `companyId String` (no `?`) | Ensures data integrity, prevents orphan records |
-| **Soft deletes** | `deletedAt DateTime?` | Maintains audit trail, supports recovery, no permanent data loss |
-| **Audit fields** | `createdAt`, `createdBy`, `updatedAt` | Tracks who/when, supports compliance, debugging |
-| **Index foreign keys** | `@@index([companyId])` | Speeds up JOIN queries, prevents sequential scans |
-| **Unique constraints** | `@@unique([companyId, code])` | Prevents duplicates, enables efficient lookups |
-| **Composite keys for join tables** | `@@id([userId, branchId])` | Prevents duplicate relationships, optimizes queries |
-| **Correct relations** | `@relation(onDelete: Cascade)` | Data integrity, prevents FK constraint violations |
+| Principle                          | Example                               | Why                                                              |
+| ---------------------------------- | ------------------------------------- | ---------------------------------------------------------------- |
+| **Always use UUID for IDs**        | `id String @id @default(uuid())`      | Database-agnostic, globally unique, auto-generated               |
+| **Required FK for ownership**      | `companyId String` (no `?`)           | Ensures data integrity, prevents orphan records                  |
+| **Soft deletes**                   | `deletedAt DateTime?`                 | Maintains audit trail, supports recovery, no permanent data loss |
+| **Audit fields**                   | `createdAt`, `createdBy`, `updatedAt` | Tracks who/when, supports compliance, debugging                  |
+| **Index foreign keys**             | `@@index([companyId])`                | Speeds up JOIN queries, prevents sequential scans                |
+| **Unique constraints**             | `@@unique([companyId, code])`         | Prevents duplicates, enables efficient lookups                   |
+| **Composite keys for join tables** | `@@id([userId, branchId])`            | Prevents duplicate relationships, optimizes queries              |
+| **Correct relations**              | `@relation(onDelete: Cascade)`        | Data integrity, prevents FK constraint violations                |
 
 ### Phase 3: Validate Relationships
 
@@ -134,7 +134,7 @@ model UserBranch {
   branchId          String
   isPrimaryBranch   Boolean @default(false)
   assignedAt        DateTime @default(now())
-  
+
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   branch            Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
@@ -166,11 +166,11 @@ model User {
 model Employee {
   id          String       @id @default(uuid())
   name        String
-  
+
   // Reports to manager (nullable: CEO has no manager)
   managerId   String?
   manager     Employee?    @relation("ManagerReports", fields: [managerId], references: [id], onDelete: SetNull)
-  
+
   // Employees reporting to this employee
   reports     Employee[]   @relation("ManagerReports")
 
@@ -224,16 +224,17 @@ model TimeLog {
 
 **Index strategy:**
 
-| Pattern | Index | Cost | Benefit |
-|---------|-------|------|---------|
-| Filter by FK | `@@index([employeeId])` | Small | Required for most queries |
-| Filter by enum | `@@index([status])` | Medium | Useful for status-based queries |
-| Range queries | `@@index([createdAt])` | Medium | Essential for date range queries |
-| Multi-column filters | `@@index([employeeId, status])` | Larger | Optimizes common combinations |
-| Full-text search | `@@fulltext([name, description])` | Large | Enables text search |
-| Unique constraint | `@@unique([email])` | Small | Prevents duplicates, enables lookups |
+| Pattern              | Index                             | Cost   | Benefit                              |
+| -------------------- | --------------------------------- | ------ | ------------------------------------ |
+| Filter by FK         | `@@index([employeeId])`           | Small  | Required for most queries            |
+| Filter by enum       | `@@index([status])`               | Medium | Useful for status-based queries      |
+| Range queries        | `@@index([createdAt])`            | Medium | Essential for date range queries     |
+| Multi-column filters | `@@index([employeeId, status])`   | Larger | Optimizes common combinations        |
+| Full-text search     | `@@fulltext([name, description])` | Large  | Enables text search                  |
+| Unique constraint    | `@@unique([email])`               | Small  | Prevents duplicates, enables lookups |
 
 **Avoid over-indexing:**
+
 - Too many indexes slow down INSERT/UPDATE (must maintain all indexes)
 - Target indexes to actual query patterns
 - Use composite indexes for frequently combined filters
@@ -268,17 +269,17 @@ model Employee {
 
 **Constraint types:**
 
-| Constraint | SQL | Purpose | Example |
-|-----------|-----|---------|---------|
-| `@unique` | UNIQUE | Single column uniqueness | `email @unique` |
-| `@@unique([a, b])` | UNIQUE(a, b) | Composite uniqueness | `@@unique([branchId, code])` |
-| `@id` | PRIMARY KEY | Entity identity | `id @id @default(uuid())` |
-| `@@id([a, b])` | PRIMARY KEY(a, b) | Composite identity | Join table PKs |
-| Nullable (`?`) | NOT NULL violation | Allow nulls | `managerId String?` |
-| Required (no `?`) | NOT NULL | Disallow nulls | `email String` |
-| `@db.VarChar(n)` | VARCHAR(n) | Length limit | Names, codes |
-| Default values | DEFAULT | Fallback value | `@default(uuid())`, `@default(now())` |
-| Foreign keys | FOREIGN KEY | Referential integrity | `@relation(onDelete: Cascade)` |
+| Constraint         | SQL                | Purpose                  | Example                               |
+| ------------------ | ------------------ | ------------------------ | ------------------------------------- |
+| `@unique`          | UNIQUE             | Single column uniqueness | `email @unique`                       |
+| `@@unique([a, b])` | UNIQUE(a, b)       | Composite uniqueness     | `@@unique([branchId, code])`          |
+| `@id`              | PRIMARY KEY        | Entity identity          | `id @id @default(uuid())`             |
+| `@@id([a, b])`     | PRIMARY KEY(a, b)  | Composite identity       | Join table PKs                        |
+| Nullable (`?`)     | NOT NULL violation | Allow nulls              | `managerId String?`                   |
+| Required (no `?`)  | NOT NULL           | Disallow nulls           | `email String`                        |
+| `@db.VarChar(n)`   | VARCHAR(n)         | Length limit             | Names, codes                          |
+| Default values     | DEFAULT            | Fallback value           | `@default(uuid())`, `@default(now())` |
+| Foreign keys       | FOREIGN KEY        | Referential integrity    | `@relation(onDelete: Cascade)`        |
 
 ### Phase 6: Detect Query Patterns
 
@@ -411,7 +412,7 @@ model Task {
 
   // Step 3: Make required
   priority    Int  // Now required with default
-  
+
   @@default(1)
 }
 ```
@@ -439,6 +440,7 @@ pnpm prisma db pull
 Use this checklist when reviewing a schema change:
 
 ### Structure
+
 - ✅ All entities have UUID primary keys
 - ✅ All entities have audit fields (createdAt, createdBy, updatedAt, deletedAt)
 - ✅ Required foreign keys have no `?` (null not allowed)
@@ -446,6 +448,7 @@ Use this checklist when reviewing a schema change:
 - ✅ Each model has appropriate comments
 
 ### Relationships
+
 - ✅ One-to-many: Parent model has no FK, child model has FK
 - ✅ Many-to-many: Explicit join table with composite PK
 - ✅ One-to-one: One side has `@unique` on FK
@@ -454,6 +457,7 @@ Use this checklist when reviewing a schema change:
 - ✅ No circular dependencies without explicit `name`
 
 ### Indexes
+
 - ✅ All foreign keys have `@@index()`
 - ✅ Common filter columns have `@@index()`
 - ✅ Composite indexes for frequently combined filters
@@ -461,6 +465,7 @@ Use this checklist when reviewing a schema change:
 - ✅ Index names are descriptive (optional but recommended)
 
 ### Constraints
+
 - ✅ Email/username/code have `@unique`
 - ✅ Composite uniqueness constraints where needed
 - ✅ Required fields don't have `?`
@@ -468,18 +473,21 @@ Use this checklist when reviewing a schema change:
 - ✅ Decimal/currency fields use `@db.Decimal(precision, scale)`
 
 ### Data Integrity
+
 - ✅ Cascading behavior won't cause unexpected data loss
 - ✅ Soft deletes (`deletedAt`) used for audit trails
 - ✅ No orphan records possible (required FKs or CASCADE)
 - ✅ Backward compatible with existing data
 
 ### Query Performance
+
 - ✅ N+1 patterns identified and documented
 - ✅ Common query patterns have supporting indexes
 - ✅ Full-text search indexes for text-heavy queries
 - ✅ Composite indexes match actual filter patterns
 
 ### Documentation
+
 - ✅ Complex relationships explained in comments
 - ✅ Enum values documented with examples
 - ✅ Custom constraints documented
@@ -487,15 +495,15 @@ Use this checklist when reviewing a schema change:
 
 ## Common Schema Issues & Fixes
 
-| Issue | Cause | Fix |
-|-------|-------|-----|
-| N+1 queries | Missing `.include()` | Review service files, add indexes for FK columns |
-| FK constraint violation | Parent deleted, children orphaned | Change `onDelete: Cascade` or add soft delete |
-| Slow searches | No index on filter columns | Add `@@index([columnName])` for common filters |
-| Duplicate records | Missing `@unique` constraint | Add `@unique` or `@@unique([col1, col2])` |
-| Performance regression | Too many indexes on write-heavy table | Profile queries, remove unused indexes |
-| Data loss on migration | Not using soft deletes | Add `deletedAt` field before hard delete operations |
-| Circular foreign keys | Relations not named | Use `@relation(name: "...")` to distinguish |
+| Issue                   | Cause                                 | Fix                                                 |
+| ----------------------- | ------------------------------------- | --------------------------------------------------- |
+| N+1 queries             | Missing `.include()`                  | Review service files, add indexes for FK columns    |
+| FK constraint violation | Parent deleted, children orphaned     | Change `onDelete: Cascade` or add soft delete       |
+| Slow searches           | No index on filter columns            | Add `@@index([columnName])` for common filters      |
+| Duplicate records       | Missing `@unique` constraint          | Add `@unique` or `@@unique([col1, col2])`           |
+| Performance regression  | Too many indexes on write-heavy table | Profile queries, remove unused indexes              |
+| Data loss on migration  | Not using soft deletes                | Add `deletedAt` field before hard delete operations |
+| Circular foreign keys   | Relations not named                   | Use `@relation(name: "...")` to distinguish         |
 
 ## Key Principles
 
