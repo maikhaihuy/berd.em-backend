@@ -110,17 +110,17 @@ modules/example/
 
 ```typescript
 @ApiTags('examples')
-@UseGuards(JwtAccessGuard)          // Require authentication
+@UseGuards(JwtAccessGuard) // Require authentication
 @Controller('examples')
 export class ExamplesController {
   constructor(private readonly service: ExamplesService) {}
 
   @Post()
-  @CheckAbility((ability, subject) => ability.can('create', subject))  // Optional CASL
+  @CheckAbility((ability, subject) => ability.can('create', subject)) // Optional CASL
   @ApiOperation({ summary: 'Create example' })
   async create(
     @Body() dto: CreateExampleDto,
-    @AuthenticatedUser() user: AuthenticatedUserDto,  // Current user
+    @AuthenticatedUser() user: AuthenticatedUserDto, // Current user
   ): Promise<ExampleResponseDto> {
     return this.service.create(dto, user.userId);
   }
@@ -155,7 +155,7 @@ export class ExamplesService {
 
   async findAll(): Promise<Example[]> {
     return this.prisma.example.findMany({
-      include: { creator: true },  // Avoid N+1 queries
+      include: { creator: true }, // Avoid N+1 queries
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -192,6 +192,7 @@ See [prisma/schema.prisma](prisma/schema.prisma) for full schema.
 3. **JWT Refresh Token**: Longer-lived token stored in DB for token rotation
 
 **Relevant Files:**
+
 - [src/modules/auth/auth.service.ts](src/modules/auth/auth.service.ts) - Main auth logic
 - [src/modules/auth/zalo-auth.service.ts](src/modules/auth/zalo-auth.service.ts) - Zalo integration
 - [src/modules/auth/jwt-token.service.ts](src/modules/auth/jwt-token.service.ts) - Token generation
@@ -206,12 +207,13 @@ CASL provides role-based + dynamic ability rules. Example:
 ability.can('update', 'Employee', { branchId: user.primaryBranchId });
 
 // Admins can do anything
-if (user.roles.some(r => r.name === 'Admin')) {
-  ability.manage('all');  // Can do anything to any subject
+if (user.roles.some((r) => r.name === 'Admin')) {
+  ability.manage('all'); // Can do anything to any subject
 }
 ```
 
 **Relevant Files:**
+
 - [src/modules/casl/casl-ability.factory.ts](src/modules/casl/casl-ability.factory.ts) - Define ability rules
 - [src/common/guards/abilities.guard.ts](src/common/guards/abilities.guard.ts) - Enforce in endpoints
 - [src/common/decorators/abilities.decorator.ts](src/common/decorators/abilities.decorator.ts) - Mark protected endpoints
@@ -229,6 +231,7 @@ All exceptions are caught by exception filters and returned in a standardized fo
 ```
 
 Custom Prisma exceptions are mapped to appropriate HTTP codes. See:
+
 - [src/common/filters/global-exception.filter.ts](src/common/filters/global-exception.filter.ts)
 - [src/common/filters/prisma-exception.filter.ts](src/common/filters/prisma-exception.filter.ts)
 
@@ -264,12 +267,14 @@ pnpm db:dev --name "descriptive_change_name"
 ```
 
 This:
+
 1. Detects your schema changes from `prisma/schema.prisma`
 2. Generates a migration file in `prisma/migrations/`
 3. Applies it to your dev database
 4. Regenerates Prisma client
 
 **Best Practices:**
+
 - Always provide descriptive migration names
 - Run migrations locally first
 - Test with `pnpm db:seed` to verify seeding still works
@@ -289,7 +294,10 @@ describe('FeatureService', () => {
     const module = await Test.createTestingModule({
       providers: [
         FeatureService,
-        { provide: PrismaService, useValue: { feature: { create: jest.fn() } } },
+        {
+          provide: PrismaService,
+          useValue: { feature: { create: jest.fn() } },
+        },
       ],
     }).compile();
 
@@ -349,13 +357,13 @@ See [.github/skills/database-lifecycle/SKILL.md](.github/skills/database-lifecyc
 
 ## Common Pitfalls & Solutions
 
-| Issue | Root Cause | Fix |
-|-------|-----------|-----|
-| N+1 queries in responses | Missing `.include()` in service | Add `.include()` with all required relations |
-| 404 on endpoints | Module not imported in app.module.ts | Check app.module.ts imports array |
-| "User not authenticated" | Missing `@UseGuards(JwtAccessGuard)` | Add guard to controller class or method |
-| Seed fails with FK error | Parent created after child | Check seed.ts creation order (parents first) |
-| Prisma type mismatch | Schema changed, client not regenerated | Run `pnpm db:dev` or `pnpm prisma generate` |
+| Issue                           | Root Cause                                    | Fix                                                  |
+| ------------------------------- | --------------------------------------------- | ---------------------------------------------------- |
+| N+1 queries in responses        | Missing `.include()` in service               | Add `.include()` with all required relations         |
+| 404 on endpoints                | Module not imported in app.module.ts          | Check app.module.ts imports array                    |
+| "User not authenticated"        | Missing `@UseGuards(JwtAccessGuard)`          | Add guard to controller class or method              |
+| Seed fails with FK error        | Parent created after child                    | Check seed.ts creation order (parents first)         |
+| Prisma type mismatch            | Schema changed, client not regenerated        | Run `pnpm db:dev` or `pnpm prisma generate`          |
 | Test fails with database locked | Running multiple migrations/seeds in parallel | Use `pnpm prisma migrate resolve` or `pnpm db:reset` |
 
 ## Environment Variables

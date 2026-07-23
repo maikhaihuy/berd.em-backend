@@ -11,8 +11,9 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags, ApiBody } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RefreshTokenService } from './refresh-token.service';
-import { JwtAccessGuard } from '@common/guards/jwt-access.guard';
 import { JwtRefreshGuard } from '@common/guards/jwt-refresh.guard';
+import { Public } from '@common/decorators/public.decorator';
+import { SkipPermissions } from '@common/decorators/skip-permissions.decorator';
 // Deprecated imports removed: LoginDto, RegisterDto, ForgotPasswordDto, ResetPasswordDto
 // These are no longer used since Zalo authentication is now the primary method
 import { RefreshSession } from './decorators/refresh-session.decorator';
@@ -32,6 +33,7 @@ export class AuthController {
     private readonly refreshTokenService: RefreshTokenService,
   ) {}
 
+  @Public()
   @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 attempts per minute for Zalo
   @Post('login/zalo')
   @ApiOperation({
@@ -45,6 +47,7 @@ export class AuthController {
     return this.authService.loginWithZalo(zaloLoginDto);
   }
 
+  @Public()
   @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 attempts per minute
   @UseGuards(LocalAuthGuard)
   @Post('login')
@@ -57,6 +60,7 @@ export class AuthController {
     return this.authService.login(user);
   }
 
+  @Public()
   @UseGuards(JwtRefreshGuard)
   @Post('refresh')
   @ApiBearerAuth('jwt-refresh')
@@ -66,7 +70,7 @@ export class AuthController {
     return await this.authService.refreshToken(refreshSession);
   }
 
-  @UseGuards(JwtAccessGuard)
+  @SkipPermissions()
   @Post('logout')
   @ApiOperation({ summary: 'Logout and invalidate refresh token' })
   @HttpCode(HttpStatus.OK)
@@ -75,6 +79,7 @@ export class AuthController {
     return { message: 'Logout successful' };
   }
 
+  @Public()
   @UseGuards(JwtRefreshGuard)
   @Post('logout-device')
   @ApiBearerAuth('jwt-refresh')
@@ -85,7 +90,7 @@ export class AuthController {
     return { message: 'Device logout successful' };
   }
 
-  @UseGuards(JwtAccessGuard)
+  @SkipPermissions()
   @Post('logout-all')
   @ApiOperation({ summary: 'Logout from all devices' })
   @HttpCode(HttpStatus.OK)
@@ -94,7 +99,7 @@ export class AuthController {
     return { message: 'Logged out from all devices' };
   }
 
-  @UseGuards(JwtAccessGuard)
+  @SkipPermissions()
   @Get('active-sessions')
   @ApiOperation({ summary: 'Get active sessions for current user' })
   @HttpCode(HttpStatus.OK)

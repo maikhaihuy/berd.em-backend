@@ -7,7 +7,6 @@ import {
   Delete,
   HttpCode,
   HttpStatus,
-  UseGuards,
   Put,
 } from '@nestjs/common';
 import { EmployeeHourlyRatesService } from './employee-hourly-rates.service';
@@ -15,18 +14,18 @@ import { CreateEmployeeHourlyRateDto } from './dto/create-employee-hourly-rate.d
 import { UpdateEmployeeHourlyRateDto } from './dto/update-employee-hourly-rate.dto';
 import { EmployeeHourlyRateResponseDto } from './dto/employee-hourly-rate-response.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
-import { JwtAccessGuard } from '../../common/guards/jwt-access.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 
 @ApiTags('employee-hourly-rates')
-@UseGuards(JwtAccessGuard)
 @Controller('employee-hourly-rates')
 export class EmployeeHourlyRatesController {
   constructor(
     private readonly employeeHourlyRatesService: EmployeeHourlyRatesService,
   ) {}
 
+  @RequirePermissions({ action: 'create', subject: 'employee-hourly-rates' })
   @Post()
   @ApiOperation({ summary: 'Create a new employee hourly rate' })
   @ApiResponse({
@@ -45,6 +44,7 @@ export class EmployeeHourlyRatesController {
     );
   }
 
+  @RequirePermissions({ action: 'read', subject: 'employee-hourly-rates' })
   @Get()
   @ApiOperation({ summary: 'Retrieve a list of all employee hourly rates' })
   @ApiResponse({
@@ -56,6 +56,7 @@ export class EmployeeHourlyRatesController {
     return await this.employeeHourlyRatesService.findAll();
   }
 
+  @RequirePermissions({ action: 'read', subject: 'employee-hourly-rates' })
   @Get(':id')
   @ApiOperation({ summary: 'Retrieve an employee hourly rate by ID' })
   @ApiResponse({
@@ -70,6 +71,7 @@ export class EmployeeHourlyRatesController {
     return await this.employeeHourlyRatesService.findOne(+id);
   }
 
+  @RequirePermissions({ action: 'update', subject: 'employee-hourly-rates' })
   @Put(':id')
   @ApiOperation({ summary: 'Update an employee hourly rate by ID' })
   @ApiResponse({
@@ -91,6 +93,7 @@ export class EmployeeHourlyRatesController {
     );
   }
 
+  @RequirePermissions({ action: 'delete', subject: 'employee-hourly-rates' })
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete an employee hourly rate by ID' })

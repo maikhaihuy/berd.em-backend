@@ -133,6 +133,7 @@ model Permission {
   updatedAt DateTime @updatedAt
   updatedBy Int
 
+  @@unique([action, subject])
   @@map("permissions")
 }
 

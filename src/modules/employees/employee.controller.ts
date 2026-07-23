@@ -6,7 +6,6 @@ import {
   Patch,
   Param,
   Delete,
-  UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -15,18 +14,18 @@ import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { EmployeeResponseDto } from './dto/employee-response.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
-import { JwtAccessGuard } from '../../common/guards/jwt-access.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { EmployeeHourlyRateResponseDto } from '@modules/employee-hourly-rates/dto/employee-hourly-rate-response.dto';
 import { UpsertEmployeeHourlyRateDto } from '@modules/employee-hourly-rates/dto/upsert-employee-hourly-rate.dto';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 
 @ApiTags('employees')
-@UseGuards(JwtAccessGuard)
 @Controller('employees')
 export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) {}
 
+  @RequirePermissions({ action: 'create', subject: 'employees' })
   @Post()
   @ApiOperation({
     summary:
@@ -48,6 +47,7 @@ export class EmployeesController {
     );
   }
 
+  @RequirePermissions({ action: 'read', subject: 'employees' })
   @Get()
   @ApiOperation({ summary: 'Retrieve a list of all employees' })
   @ApiResponse({
@@ -59,6 +59,7 @@ export class EmployeesController {
     return await this.employeesService.findAll();
   }
 
+  @RequirePermissions({ action: 'read', subject: 'employees' })
   @Get(':id')
   @ApiOperation({ summary: 'Retrieve an employee by ID' })
   @ApiResponse({
@@ -71,6 +72,7 @@ export class EmployeesController {
     return await this.employeesService.findOne(+id);
   }
 
+  @RequirePermissions({ action: 'update', subject: 'employees' })
   @Patch(':id')
   @ApiOperation({ summary: 'Update an employee by ID' })
   @ApiResponse({
@@ -92,6 +94,7 @@ export class EmployeesController {
     );
   }
 
+  @RequirePermissions({ action: 'delete', subject: 'employees' })
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete an employee by ID' })
@@ -107,6 +110,7 @@ export class EmployeesController {
     await this.employeesService.remove(+id, currentUser.userId);
   }
 
+  @RequirePermissions({ action: 'update', subject: 'employees' })
   @Post(':id/hourly-rates')
   @ApiOperation({ summary: 'Bulk upsert employee hourly rates' })
   @ApiResponse({

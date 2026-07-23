@@ -31,18 +31,21 @@ Comprehensive patterns for writing unit and E2E tests in BERD.EM following Jest 
 ### Phase 1: Choose Test Type
 
 **Unit Tests** (Fast, isolated):
+
 - Test a single service method or controller endpoint
 - Mock all dependencies (Prisma, other services)
 - Run in milliseconds
 - Good for business logic, edge cases
 
 **Integration Tests** (Moderate speed):
+
 - Test service + controller together
 - Mock only external dependencies
 - Test real request/response cycle
 - Good for guards, middleware, transformations
 
 **E2E Tests** (Slow, full stack):
+
 - Test full request → controller → service → database → response
 - Use real database (test DB)
 - Test real authentication flows
@@ -113,9 +116,7 @@ describe('DepartmentService', () => {
         description: 'Building software',
       };
 
-      jest
-        .spyOn(prisma.department, 'create')
-        .mockResolvedValue(mockDepartment);
+      jest.spyOn(prisma.department, 'create').mockResolvedValue(mockDepartment);
 
       const result = await service.create(createDto, mockUser.id);
 
@@ -260,6 +261,7 @@ describe('DepartmentService', () => {
 ```
 
 **Key patterns:**
+
 - Mock Prisma methods before testing
 - Test happy path and error cases
 - Use `jest.clearAllMocks()` after each test
@@ -406,6 +408,7 @@ describe('DepartmentController', () => {
 ```
 
 **Key patterns:**
+
 - Override guards in `overrideGuard()` to bypass authentication in tests
 - Mock service methods
 - Test controller logic (transformation, injection), not service logic
@@ -691,6 +694,7 @@ describe('Department E2E', () => {
 ```
 
 **Key patterns:**
+
 - Real HTTP requests via supertest
 - Real database operations
 - Test complete workflows (create → read → update → delete)
@@ -718,9 +722,7 @@ describe('JWT Access Guard (E2E)', () => {
 
   describe('Endpoints with @UseGuards(JwtAccessGuard)', () => {
     it('should reject request without token', async () => {
-      await request(app.getHttpServer())
-        .get('/api/employees')
-        .expect(401); // Unauthorized
+      await request(app.getHttpServer()).get('/api/employees').expect(401); // Unauthorized
     });
 
     it('should reject request with invalid token', async () => {
@@ -874,15 +876,15 @@ describe('Async Operations', () => {
 
 ## Troubleshooting Guide
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| "Cannot find module" in tests | Jest can't resolve imports | Check `tsconfig.json` paths, verify `ts-jest` config |
-| Mock not being used | spy created after module instantiation | Create mock in `beforeEach`, before service initialization |
-| Prisma mock returning undefined | Mock not returning expected structure | Return object matching actual Prisma response (include relations) |
-| Guard not being overridden | Override happens before module instantiation | Call `.overrideGuard()` before `.compile()` |
-| Tests passing locally, failing in CI | Database state differs | Clean up after each test, use transactions, reset seed |
-| Timeout errors in E2E tests | Database operations taking too long | Increase Jest timeout: `jest.setTimeout(30000)` |
-| Token not valid in E2E tests | Login not returning valid token | Check auth module is working, verify test user exists in seed |
+| Issue                                | Cause                                        | Solution                                                          |
+| ------------------------------------ | -------------------------------------------- | ----------------------------------------------------------------- |
+| "Cannot find module" in tests        | Jest can't resolve imports                   | Check `tsconfig.json` paths, verify `ts-jest` config              |
+| Mock not being used                  | spy created after module instantiation       | Create mock in `beforeEach`, before service initialization        |
+| Prisma mock returning undefined      | Mock not returning expected structure        | Return object matching actual Prisma response (include relations) |
+| Guard not being overridden           | Override happens before module instantiation | Call `.overrideGuard()` before `.compile()`                       |
+| Tests passing locally, failing in CI | Database state differs                       | Clean up after each test, use transactions, reset seed            |
+| Timeout errors in E2E tests          | Database operations taking too long          | Increase Jest timeout: `jest.setTimeout(30000)`                   |
+| Token not valid in E2E tests         | Login not returning valid token              | Check auth module is working, verify test user exists in seed     |
 
 ## Key Principles
 

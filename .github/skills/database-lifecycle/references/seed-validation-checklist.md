@@ -54,7 +54,9 @@ Use this checklist when reviewing or writing Prisma seed scripts.
 ```typescript
 await prisma.user.upsert({
   where: { email: 'admin@example.com' },
-  update: { /* optional updates */ },
+  update: {
+    /* optional updates */
+  },
   create: {
     email: 'admin@example.com',
     name: 'Admin User',

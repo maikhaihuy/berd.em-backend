@@ -6,7 +6,6 @@ import {
   Delete,
   Body,
   Param,
-  UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -16,14 +15,14 @@ import { CreateTimeLogDto } from './dto/create-time-log.dto';
 import { UpdateTimeLogDto } from './dto/update-time-log.dto';
 import { VerifyTimeLogDto } from './dto/verify-time-log.dto';
 import { TimeLogResponseDto } from './dto/time-log-response.dto';
-import { JwtAccessGuard } from '@common/guards/jwt-access.guard';
+import { RequirePermissions } from '@common/decorators/permissions.decorator';
 
 @ApiTags('time-tracking')
 @Controller('time-tracking')
-@UseGuards(JwtAccessGuard)
 export class TimeTrackingController {
   constructor(private readonly timeTrackingService: TimeTrackingService) {}
 
+  @RequirePermissions({ action: 'create', subject: 'time-logs' })
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new time log' })
@@ -41,6 +40,7 @@ export class TimeTrackingController {
     return this.timeTrackingService.create(createDto, currentUserId);
   }
 
+  @RequirePermissions({ action: 'read', subject: 'time-logs' })
   @Get()
   @ApiOperation({ summary: 'Get all time logs' })
   @ApiResponse({
@@ -52,6 +52,7 @@ export class TimeTrackingController {
     return this.timeTrackingService.findAll();
   }
 
+  @RequirePermissions({ action: 'read', subject: 'time-logs' })
   @Get('employee/:employeeId')
   @ApiOperation({ summary: 'Get time logs for an employee' })
   @ApiResponse({
@@ -65,6 +66,7 @@ export class TimeTrackingController {
     return this.timeTrackingService.findByEmployee(+employeeId);
   }
 
+  @RequirePermissions({ action: 'read', subject: 'time-logs' })
   @Get('assignment/:assignmentId')
   @ApiOperation({ summary: 'Get time logs for an assignment' })
   @ApiResponse({
@@ -78,6 +80,7 @@ export class TimeTrackingController {
     return this.timeTrackingService.findByAssignment(+assignmentId);
   }
 
+  @RequirePermissions({ action: 'read', subject: 'time-logs' })
   @Get(':id')
   @ApiOperation({ summary: 'Get time log by ID' })
   @ApiResponse({
@@ -90,6 +93,7 @@ export class TimeTrackingController {
     return this.timeTrackingService.findOne(+id);
   }
 
+  @RequirePermissions({ action: 'update', subject: 'time-logs' })
   @Put(':id')
   @ApiOperation({ summary: 'Update a time log' })
   @ApiResponse({
@@ -108,6 +112,7 @@ export class TimeTrackingController {
     return this.timeTrackingService.update(+id, updateDto, currentUserId);
   }
 
+  @RequirePermissions({ action: 'update', subject: 'time-logs' })
   @Put(':id/verify')
   @ApiOperation({ summary: 'Verify or reject a time log' })
   @ApiResponse({
@@ -126,6 +131,7 @@ export class TimeTrackingController {
     return this.timeTrackingService.verify(+id, verifyDto, verifierId);
   }
 
+  @RequirePermissions({ action: 'delete', subject: 'time-logs' })
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a time log' })

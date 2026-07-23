@@ -32,6 +32,7 @@ pnpm prisma migrate dev --name "add_user_status_field"
 ```
 
 This automatically:
+
 - Detects schema changes
 - Generates SQL migration
 - Applies migration to dev database
@@ -63,16 +64,19 @@ git push
 ### Issue: Adding NOT NULL Column Without Default
 
 #### Error
+
 ```
 Error: You are about to run migrations that may result in data loss.
 ```
 
 #### Cause
+
 Adding a `NOT NULL` column to a table with existing rows requires existing values.
 
 #### Solution
 
 **Option 1: Add Default Value**
+
 ```prisma
 model User {
   status String @default("ACTIVE") // Provides default for new rows
@@ -82,12 +86,14 @@ model User {
 **Option 2: Two-Step Migration** (For existing data)
 
 Step 1: Add nullable column
+
 ```bash
 pnpm prisma migrate dev --name "add_user_status_nullable"
 # Manually add data: UPDATE users SET status = 'ACTIVE' WHERE status IS NULL
 ```
 
 Step 2: Make NOT NULL
+
 ```prisma
 model User {
   status String // Make NOT NULL in schema
@@ -98,11 +104,13 @@ pnpm prisma migrate dev --name "make_user_status_required"
 ### Issue: Rollback Failures
 
 #### Error
+
 ```
 Could not apply this migration. Error: ERROR: column "x" does not exist
 ```
 
 #### Cause
+
 Rolling back a migration that deleted data or made breaking changes.
 
 #### Solution
@@ -114,16 +122,19 @@ Rolling back a migration that deleted data or made breaking changes.
 ### Issue: Schema Drift (Database & Schema Mismatch)
 
 #### Error
+
 ```
 The migrations have not yet been applied to the database
 ```
 
 #### Cause
+
 Database schema doesn't match migration history (manual SQL changes, skipped migrations, etc.)
 
 #### Solution
 
 **For Development**:
+
 ```bash
 pnpm prisma migrate reset --force
 # This:
@@ -134,6 +145,7 @@ pnpm prisma migrate reset --force
 ```
 
 **For Production** (Careful!):
+
 ```bash
 # 1. Backup database first
 # 2. Check which migration is missing: pnpm prisma migrate status
@@ -143,16 +155,19 @@ pnpm prisma migrate reset --force
 ### Issue: Circular Foreign Key Dependencies
 
 #### Error
+
 ```
 Error creating foreign key constraint
 ```
 
 #### Cause
+
 Two tables reference each other, but neither can be created first.
 
 #### Solution
 
 **Option 1: Remove one reference** (if logically possible)
+
 ```prisma
 // Before: Circular
 model User {
@@ -180,6 +195,7 @@ model Post {
 ```
 
 **Option 2: Use Explicit Relation Names**
+
 ```prisma
 model User {
   id      Int
@@ -197,9 +213,11 @@ model Post {
 ### Issue: Renaming Fields/Tables Causes Data Loss
 
 #### Error
+
 Migration appears to work but data is lost.
 
 #### Cause
+
 Prisma generates `DROP COLUMN` + `ADD COLUMN` instead of `RENAME`.
 
 #### Solution
@@ -216,6 +234,7 @@ ALTER TABLE "User" RENAME COLUMN "oldName" TO "newName";
 ```
 
 Then apply:
+
 ```bash
 pnpm prisma migrate deploy
 ```
@@ -223,14 +242,17 @@ pnpm prisma migrate deploy
 ### Issue: Changing Column Type Requires Coercion
 
 #### Error
+
 ```
 ERROR: column "x" cannot be cast automatically to type y
 ```
 
 #### Cause
+
 PostgreSQL can't implicitly convert existing data to the new type.
 
 #### Example
+
 ```prisma
 // Before: createdAt as String
 // After:  createdAt as DateTime

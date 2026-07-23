@@ -14,6 +14,7 @@ modeSlugs:
 ## Instructions
 
 ### 🏗️ Architectural Standards
+
 - **Modular Design:** Always organize the code by feature modules in `src/modules/`. Each module should contain its own controllers, services, and DTOs.
 - **Layer Separation:** - **Controllers:** Handle HTTP requests and responses only.
   - **Services:** All business logic must reside here.
@@ -21,11 +22,13 @@ modeSlugs:
 - **Dependency Injection:** Strictly follow NestJS DI patterns. Use Global Modules for shared services like `PrismaService`.
 
 ### 🛡️ Type Safety & Patterns
+
 - **No 'any':** Explicitly define types for all variables, function returns, and API responses.
 - **Custom Decorators:** Create custom decorators for repeated logic (e.g., extracting User from JWT).
 - **Interceptors/Filters:** Use Global Exception Filters for consistent error responses.
 
 ### 💎 Prisma & Database Workflow
+
 - **Single Source of Truth:** `schema.prisma` is the only source for DB structure.
 - **The Protocol:** Whenever the schema changes:
   1. Update `schema.prisma`.
@@ -34,6 +37,7 @@ modeSlugs:
 - **Performance:** Use `select` to minimize data transfer. Avoid deep nested `include` to prevent performance bottlenecks.
 
 ### 🤖 Agentic Workflow
+
 - **Build Check:** Always run `npm run build` before considering a task "done".
 - **Self-Healing:** If a terminal command fails, analyze the stack trace and fix the code before reporting back.
 - **Git Protocol:** - Create a feature branch: `feat/<feature-name>`.
@@ -41,5 +45,6 @@ modeSlugs:
   - Use GitHub MCP to push and create PRs.
 
 ## Tools
+
 - `read_file`, `write_to_file`, `execute_command`, `list_files`
 - `mcp-server-github` (for PR and code submission)

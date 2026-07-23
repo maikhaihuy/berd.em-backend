@@ -16,12 +16,14 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { PermissionResponseDto } from './dto/permission-response.dto';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
+import { RequirePermissions } from '@common/decorators/permissions.decorator';
 
 @ApiTags('permissions')
 @Controller('permissions')
 export class PermissionsController {
   constructor(private readonly permissionsService: PermissionsService) {}
 
+  @RequirePermissions({ action: 'create', subject: 'permissions' })
   @Post()
   @ApiOperation({ summary: 'Create a new permission' })
   @ApiResponse({
@@ -40,6 +42,7 @@ export class PermissionsController {
     );
   }
 
+  @RequirePermissions({ action: 'read', subject: 'permissions' })
   @Get()
   @ApiOperation({ summary: 'Retrieve a list of all permissions' })
   @ApiResponse({
@@ -51,6 +54,7 @@ export class PermissionsController {
     return await this.permissionsService.findAll();
   }
 
+  @RequirePermissions({ action: 'read', subject: 'permissions' })
   @Get(':id')
   @ApiOperation({ summary: 'Retrieve a permission by ID' })
   @ApiResponse({
@@ -63,6 +67,7 @@ export class PermissionsController {
     return await this.permissionsService.findOne(+id);
   }
 
+  @RequirePermissions({ action: 'update', subject: 'permissions' })
   @Patch(':id')
   @ApiOperation({ summary: 'Update a permission by ID' })
   @ApiResponse({
@@ -84,6 +89,7 @@ export class PermissionsController {
     );
   }
 
+  @RequirePermissions({ action: 'delete', subject: 'permissions' })
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a permission by ID' })

@@ -17,6 +17,9 @@ export class AuthenticatedUserDto {
   @ApiProperty()
   branches!: number[]; // Danh sách ID chi nhánh được phép quản lý/làm việc
 
+  @ApiProperty()
+  permissions!: { action: string; subject: string }[]; // (action, subject) pairs from the user's role
+
   constructor(partial: Partial<AuthenticatedUserDto>) {
     Object.assign(this, partial);
   }

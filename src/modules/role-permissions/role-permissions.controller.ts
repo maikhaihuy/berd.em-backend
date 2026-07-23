@@ -13,6 +13,7 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { RolePermissionsService } from './role-permissions.service';
 import { AssignPermissionsDto } from './dto/assign-permission.dto';
 import { RolePermissionResponseDto } from './dto/role-permission-response.dto';
+import { RequirePermissions } from '@common/decorators/permissions.decorator';
 
 @ApiTags('Role Permissions')
 @Controller('role-permissions')
@@ -21,6 +22,7 @@ export class RolePermissionsController {
     private readonly rolePermissionsService: RolePermissionsService,
   ) {}
 
+  @RequirePermissions({ action: 'create', subject: 'role-permissions' })
   @Post()
   @ApiOperation({ summary: 'Assign permissions to a role' })
   @ApiResponse({
@@ -34,6 +36,7 @@ export class RolePermissionsController {
     return this.rolePermissionsService.assignPermissions(dto);
   }
 
+  @RequirePermissions({ action: 'read', subject: 'role-permissions' })
   @Get('role/:roleId')
   @ApiOperation({ summary: 'Get all permissions for a role' })
   @ApiResponse({
@@ -47,6 +50,7 @@ export class RolePermissionsController {
     return this.rolePermissionsService.getRolePermissions(roleId);
   }
 
+  @RequirePermissions({ action: 'delete', subject: 'role-permissions' })
   @Delete('role/:roleId/permission/:permissionId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove a permission from a role' })
@@ -58,6 +62,7 @@ export class RolePermissionsController {
     return this.rolePermissionsService.removePermission(roleId, permissionId);
   }
 
+  @RequirePermissions({ action: 'delete', subject: 'role-permissions' })
   @Delete('role/:roleId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove all permissions from a role' })

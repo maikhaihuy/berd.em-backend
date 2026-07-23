@@ -8,10 +8,9 @@ import {
   Patch,
   Post,
   Query,
-  UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { JwtAccessGuard } from '@common/guards/jwt-access.guard';
+import { RequirePermissions } from '@common/decorators/permissions.decorator';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
 import { CreateTaskTemplateDto } from './dto/create-task-template.dto';
@@ -20,11 +19,11 @@ import { TaskTemplatesService } from './task-template.service';
 
 @ApiTags('task-templates')
 @ApiBearerAuth()
-@UseGuards(JwtAccessGuard)
 @Controller('task-templates')
 export class TaskTemplatesController {
   constructor(private readonly service: TaskTemplatesService) {}
 
+  @RequirePermissions({ action: 'create', subject: 'task-templates' })
   @Post()
   create(
     @Body() dto: CreateTaskTemplateDto,
@@ -33,16 +32,19 @@ export class TaskTemplatesController {
     return this.service.create(dto, user.userId);
   }
 
+  @RequirePermissions({ action: 'read', subject: 'task-templates' })
   @Get()
   findAll(@Query('branchId') branchId?: string) {
     return this.service.findAll(branchId ? Number(branchId) : undefined);
   }
 
+  @RequirePermissions({ action: 'read', subject: 'task-templates' })
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.service.findOne(id);
   }
 
+  @RequirePermissions({ action: 'update', subject: 'task-templates' })
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -52,6 +54,7 @@ export class TaskTemplatesController {
     return this.service.update(id, dto, user.userId);
   }
 
+  @RequirePermissions({ action: 'delete', subject: 'task-templates' })
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.service.remove(id);

@@ -4,29 +4,24 @@ import {
   Put,
   Param,
   Body,
-  // UseGuards,
   Post,
   Delete,
   HttpStatus,
   HttpCode,
-  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { UsersService } from './user.service';
-// import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-// import { AbilitiesGuard } from '../../common/guards/abilities.guard';
-// import { CheckAbilities } from '../../common/decorators/abilities.decorator';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { CreateUserDto } from './dto/create-user.dto';
-import { JwtAccessGuard } from '@common/guards/jwt-access.guard';
+import { RequirePermissions } from '@common/decorators/permissions.decorator';
 
 @ApiTags('users')
 @Controller('users')
-@UseGuards(JwtAccessGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  @RequirePermissions({ action: 'create', subject: 'users' })
   @Post()
   @ApiOperation({ summary: 'Create a new user' })
   @ApiResponse({
@@ -39,8 +34,8 @@ export class UsersController {
     return await this.usersService.create(createUserDto);
   }
 
+  @RequirePermissions({ action: 'read', subject: 'users' })
   @Get()
-  // @CheckAbilities({ action: 'manage', subject: 'all' })
   @ApiOperation({ summary: 'Retrieve a list of all users' })
   @ApiResponse({
     status: 200,
@@ -51,6 +46,7 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+  @RequirePermissions({ action: 'read', subject: 'users' })
   @Get(':id')
   @ApiOperation({ summary: 'Retrieve a user by ID' })
   @ApiResponse({
@@ -63,6 +59,7 @@ export class UsersController {
     return await this.usersService.findOne(+id);
   }
 
+  @RequirePermissions({ action: 'update', subject: 'users' })
   @Put(':id')
   @ApiOperation({ summary: 'Update a user by ID' })
   @ApiResponse({
@@ -79,6 +76,7 @@ export class UsersController {
   // Note: Role update is now handled via PUT /users/:id with roleId field
   // since User now has single roleId instead of many-to-many relationship
 
+  @RequirePermissions({ action: 'delete', subject: 'users' })
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a user by ID' })
