@@ -7,14 +7,20 @@ import { TaskType } from '@prisma/client';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { CreateTaskTemplateDto } from './dto/create-task-template.dto';
 import { UpdateTaskTemplateDto } from './dto/update-task-template.dto';
+import { TaskTemplateResponseDto } from './dto/task-template-response.dto';
+import { TaskTemplateMapper } from './task-template.mapper';
+import { taskTemplateInclude } from './task-template.types';
 
 @Injectable()
 export class TaskTemplatesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateTaskTemplateDto, currentUserId: number) {
+  async create(
+    dto: CreateTaskTemplateDto,
+    currentUserId: number,
+  ): Promise<TaskTemplateResponseDto> {
     await this.validateScope(dto);
-    return this.prisma.taskTemplate.create({
+    const template = await this.prisma.taskTemplate.create({
       data: {
         branchId: dto.branchId,
         masterShiftTemplateId: dto.masterShiftTemplateId,
@@ -28,28 +34,34 @@ export class TaskTemplatesService {
         createdBy: currentUserId,
         updatedBy: currentUserId,
       },
-      include: this.include,
+      include: taskTemplateInclude,
     });
+    return TaskTemplateMapper.toDto(template);
   }
 
-  findAll(branchId?: number) {
-    return this.prisma.taskTemplate.findMany({
+  async findAll(branchId?: number): Promise<TaskTemplateResponseDto[]> {
+    const templates = await this.prisma.taskTemplate.findMany({
       where: branchId ? { branchId } : undefined,
-      include: this.include,
+      include: taskTemplateInclude,
       orderBy: [{ branchId: 'asc' }, { sortOrder: 'asc' }],
     });
+    return TaskTemplateMapper.toDtos(templates);
   }
 
-  async findOne(id: number) {
+  async findOne(id: number): Promise<TaskTemplateResponseDto> {
     const template = await this.prisma.taskTemplate.findUnique({
       where: { id },
-      include: this.include,
+      include: taskTemplateInclude,
     });
     if (!template) throw new NotFoundException('Task template not found');
-    return template;
+    return TaskTemplateMapper.toDto(template);
   }
 
-  async update(id: number, dto: UpdateTaskTemplateDto, currentUserId: number) {
+  async update(
+    id: number,
+    dto: UpdateTaskTemplateDto,
+    currentUserId: number,
+  ): Promise<TaskTemplateResponseDto> {
     const existing = await this.findOne(id);
     await this.validateScope({
       branchId: dto.branchId ?? existing.branchId,
@@ -63,11 +75,12 @@ export class TaskTemplatesService {
       title: dto.title ?? existing.title,
     });
 
-    return this.prisma.taskTemplate.update({
+    const template = await this.prisma.taskTemplate.update({
       where: { id },
       data: { ...dto, updatedBy: currentUserId },
-      include: this.include,
+      include: taskTemplateInclude,
     });
+    return TaskTemplateMapper.toDto(template);
   }
 
   async remove(id: number) {
@@ -75,12 +88,6 @@ export class TaskTemplatesService {
     await this.prisma.taskTemplate.delete({ where: { id } });
     return { message: 'Task template deleted successfully' };
   }
-
-  private include = {
-    branch: { select: { id: true, name: true, abbreviation: true } },
-    masterShiftTemplate: { select: { id: true, name: true } },
-    subShiftTemplate: { select: { id: true, name: true, type: true } },
-  };
 
   private async validateScope(dto: {
     branchId: number;

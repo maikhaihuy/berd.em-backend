@@ -7,12 +7,18 @@ import { Prisma, ShiftStatus, TaskType } from '@prisma/client';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { CreateMasterShiftDto } from './dto/create-master-shift.dto';
 import { UpdateMasterShiftDto } from './dto/update-master-shift.dto';
+import { MasterShiftResponseDto } from './dto/master-shift-response.dto';
+import { MasterShiftMapper } from './master-shift.mapper';
+import { masterShiftInclude } from './master-shift.types';
 
 @Injectable()
 export class MasterShiftsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateMasterShiftDto, currentUserId: number) {
+  async create(
+    dto: CreateMasterShiftDto,
+    currentUserId: number,
+  ): Promise<MasterShiftResponseDto> {
     if (dto.masterShiftTemplateId) {
       await this.ensureTemplateMatchesBranch(
         dto.masterShiftTemplateId,
@@ -24,7 +30,7 @@ export class MasterShiftsService {
     this.validateTimeRange(dto.startTime, dto.endTime);
 
     try {
-      return await this.prisma.masterShift.create({
+      const shift = await this.prisma.masterShift.create({
         data: {
           branchId: dto.branchId,
           masterShiftTemplateId: dto.masterShiftTemplateId,
@@ -37,8 +43,9 @@ export class MasterShiftsService {
           createdBy: currentUserId,
           updatedBy: currentUserId,
         },
-        include: this.include,
+        include: masterShiftInclude,
       });
+      return MasterShiftMapper.toDto(shift);
     } catch (error) {
       this.handleKnownError(error);
       throw error;
@@ -49,7 +56,7 @@ export class MasterShiftsService {
     masterShiftTemplateId: number,
     workDate: string,
     currentUserId: number,
-  ) {
+  ): Promise<MasterShiftResponseDto> {
     const template = await this.prisma.masterShiftTemplate.findUnique({
       where: { id: masterShiftTemplateId },
       include: { subShiftTemplates: true, taskTemplates: true },
@@ -138,15 +145,23 @@ export class MasterShiftsService {
         }),
       );
 
-      return tx.masterShift.findUnique({
+      const created = await tx.masterShift.findUnique({
         where: { id: masterShift.id },
-        include: this.include,
+        include: masterShiftInclude,
       });
+      if (!created) {
+        throw new NotFoundException('Master shift not found after creation');
+      }
+      return MasterShiftMapper.toDto(created);
     });
   }
 
-  findAll(branchId?: number, from?: string, to?: string) {
-    return this.prisma.masterShift.findMany({
+  async findAll(
+    branchId?: number,
+    from?: string,
+    to?: string,
+  ): Promise<MasterShiftResponseDto[]> {
+    const shifts = await this.prisma.masterShift.findMany({
       where: {
         ...(branchId ? { branchId } : {}),
         ...(from || to
@@ -158,21 +173,26 @@ export class MasterShiftsService {
             }
           : {}),
       },
-      include: this.include,
+      include: masterShiftInclude,
       orderBy: [{ workDate: 'asc' }, { startTime: 'asc' }],
     });
+    return MasterShiftMapper.toDtos(shifts);
   }
 
-  async findOne(id: number) {
+  async findOne(id: number): Promise<MasterShiftResponseDto> {
     const shift = await this.prisma.masterShift.findUnique({
       where: { id },
-      include: this.include,
+      include: masterShiftInclude,
     });
     if (!shift) throw new NotFoundException('Master shift not found');
-    return shift;
+    return MasterShiftMapper.toDto(shift);
   }
 
-  async update(id: number, dto: UpdateMasterShiftDto, currentUserId: number) {
+  async update(
+    id: number,
+    dto: UpdateMasterShiftDto,
+    currentUserId: number,
+  ): Promise<MasterShiftResponseDto> {
     const existing = await this.findOne(id);
     const branchId = dto.branchId ?? existing.branchId;
     if (dto.masterShiftTemplateId) {
@@ -188,7 +208,7 @@ export class MasterShiftsService {
       dto.endTime ?? existing.endTime.toISOString(),
     );
 
-    return this.prisma.masterShift.update({
+    const shift = await this.prisma.masterShift.update({
       where: { id },
       data: {
         ...dto,
@@ -197,8 +217,9 @@ export class MasterShiftsService {
         endTime: dto.endTime ? new Date(dto.endTime) : undefined,
         updatedBy: currentUserId,
       },
-      include: this.include,
+      include: masterShiftInclude,
     });
+    return MasterShiftMapper.toDto(shift);
   }
 
   async remove(id: number) {
@@ -206,13 +227,6 @@ export class MasterShiftsService {
     await this.prisma.masterShift.delete({ where: { id } });
     return { message: 'Master shift deleted successfully' };
   }
-
-  private include = {
-    branch: { select: { id: true, name: true, abbreviation: true } },
-    masterShiftTemplate: { select: { id: true, name: true } },
-    subShifts: true,
-    tasks: { include: { completion: true } },
-  };
 
   private async ensureBranch(branchId: number) {
     const branch = await this.prisma.branch.findUnique({
