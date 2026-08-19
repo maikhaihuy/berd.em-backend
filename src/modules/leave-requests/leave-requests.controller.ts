@@ -120,7 +120,7 @@ export class LeaveRequestsController {
     return this.leaveRequestsService.update(+id, updateDto, user.userId);
   }
 
-  @RequirePermissions({ action: 'update', subject: 'leave-requests' })
+  @RequirePermissions({ action: 'approve', subject: 'leave-requests' })
   @Put(':id/approve')
   @ApiOperation({ summary: 'Approve or reject a leave request' })
   @ApiResponse({
@@ -138,7 +138,7 @@ export class LeaveRequestsController {
     return this.leaveRequestsService.approve(+id, approveDto, user.userId);
   }
 
-  @RequirePermissions({ action: 'update', subject: 'leave-requests' })
+  @RequirePermissions({ action: 'cancel', subject: 'leave-requests' })
   @Put(':id/cancel')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancel a leave request' })

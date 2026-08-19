@@ -1,74 +1,76 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { JwtRefreshStrategy } from './jwt-refresh.strategy';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '@modules/prisma/prisma.service';
 import { UnauthorizedException } from '@nestjs/common';
-import { RefreshTokenPayloadDto } from '../dto/refresh-token-payload.dto';
-import { RefreshSessionDto } from '../dto/refresh-session.dto';
 import { Request } from 'express';
+import { JwtRefreshStrategy } from './jwt-refresh.strategy';
+import { PrismaService } from '@modules/prisma/prisma.service';
+import { RefreshSessionDto } from '../dto/refresh-session.dto';
+import { RefreshTokenPayloadDto } from '../dto/refresh-token-payload.dto';
+import { InvalidTokenException } from '../exceptions/auth.exceptions';
 import { UserStatus } from '@prisma/client';
-import bcrypt from 'bcrypt';
+import * as bcrypt from 'bcrypt';
 
-// Mock bcrypt module
 jest.mock('bcrypt', () => ({
   compare: jest.fn(),
 }));
 
+const mockedCompare = bcrypt.compare as unknown as jest.Mock;
+
+const firstCallArg = (mock: jest.Mock): unknown =>
+  (mock.mock.calls[0] as unknown[])[0];
+
 describe('JwtRefreshStrategy', () => {
   let strategy: JwtRefreshStrategy;
-  let prismaService: PrismaService;
+  let prismaService: {
+    user: { findUnique: jest.Mock };
+    refreshToken: { deleteMany: jest.Mock };
+  };
+
+  const future = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
   const mockUser = {
     id: 1,
-    username: 'testuser',
-    password: 'hashedPassword',
+    phoneNumber: '0900000001',
     status: UserStatus.ACTIVE,
-    employeeId: 123,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    roles: [{ name: 'employee' }],
+    role: { name: 'Employee' },
     refreshTokens: [
-      {
-        id: 'token-1',
-        hashedToken: 'hashed-token-1',
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
-      {
-        id: 'token-2',
-        hashedToken: 'hashed-token-2',
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
+      { id: 'token-1', hashedToken: 'hashed-token-1', expiresAt: future },
+      { id: 'token-2', hashedToken: 'hashed-token-2', expiresAt: future },
     ],
   };
 
+  const mockRequest = {
+    body: { refreshToken: 'test-refresh-token' },
+  } as unknown as Request;
+
+  const mockPayload: RefreshTokenPayloadDto = {
+    sub: 1,
+    phone: '0900000001',
+    role: 'Employee',
+    branches: [],
+  };
+
   beforeEach(async () => {
+    prismaService = {
+      user: { findUnique: jest.fn() },
+      refreshToken: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         JwtRefreshStrategy,
         {
           provide: ConfigService,
           useValue: {
-            get: jest.fn().mockImplementation((key: string) => {
-              const config: Record<string, string> = {
-                JWT_REFRESH_SECRET: 'test-refresh-secret',
-              };
-              return config[key];
-            }),
+            getOrThrow: jest.fn().mockReturnValue('test-refresh-secret'),
+            get: jest.fn().mockReturnValue('test-refresh-secret'),
           },
         },
-        {
-          provide: PrismaService,
-          useValue: {
-            user: {
-              findUnique: jest.fn(),
-            },
-          },
-        },
+        { provide: PrismaService, useValue: prismaService },
       ],
     }).compile();
 
     strategy = module.get<JwtRefreshStrategy>(JwtRefreshStrategy);
-    prismaService = module.get<PrismaService>(PrismaService);
   });
 
   afterEach(() => {
@@ -80,146 +82,90 @@ describe('JwtRefreshStrategy', () => {
   });
 
   describe('validate', () => {
-    const mockRequest = {
-      body: { refresh_token: 'test-refresh-token' },
-    } as unknown as Request;
+    it('should call done with the session when the token matches the first record', async () => {
+      prismaService.user.findUnique.mockResolvedValue(mockUser);
+      mockedCompare.mockResolvedValueOnce(true);
+      const done = jest.fn();
 
-    const mockPayload: RefreshTokenPayloadDto = {
-      sub: 1,
-      email: 'testuser@example.com',
-      roles: ['employee'],
-    };
+      await strategy.validate(mockRequest, mockPayload, done);
 
-    it('should validate and return user session when token matches first record', async () => {
-      const findUniqueSpy = jest
-        .spyOn(prismaService.user, 'findUnique')
-        .mockResolvedValue(mockUser);
-      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
-
-      const result = await strategy.validate(mockRequest, mockPayload);
-
-      expect(result).toBeInstanceOf(RefreshSessionDto);
-      expect(result.id).toBe(mockUser.id);
-      expect(result.username).toBe(mockUser.username);
-      expect(result.roles).toEqual(['employee']);
-      expect(result.tokenId).toBe('token-1');
-
-      expect(findUniqueSpy).toHaveBeenCalledWith({
-        where: { id: mockPayload.sub },
-        include: {
-          roles: true,
-          refreshTokens: {
-            where: {
-              expiresAt: { gte: new Date() },
-            },
-          },
-        },
-      });
-
-      expect(bcrypt.compare).toHaveBeenCalledWith(
+      expect(done).toHaveBeenCalledTimes(1);
+      const [err, session] = done.mock.calls[0] as [
+        Error | null,
+        RefreshSessionDto,
+      ];
+      expect(err).toBeNull();
+      expect(session).toBeInstanceOf(RefreshSessionDto);
+      expect(session.userId).toBe(mockUser.id);
+      expect(session.phone).toBe(mockUser.phoneNumber);
+      expect(session.role).toBe(mockUser.role.name);
+      expect(session.tokenId).toBe('token-1');
+      expect(mockedCompare).toHaveBeenCalledWith(
         'test-refresh-token',
         'hashed-token-1',
       );
     });
 
-    it('should validate and return user session when token matches second record', async () => {
-      jest.spyOn(prismaService.user, 'findUnique').mockResolvedValue(mockUser);
-      (bcrypt.compare as jest.Mock)
-        .mockResolvedValueOnce(false)
-        .mockResolvedValueOnce(true);
+    it('should call done with the session when the token matches the second record', async () => {
+      prismaService.user.findUnique.mockResolvedValue(mockUser);
+      mockedCompare.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+      const done = jest.fn();
 
-      const result = await strategy.validate(mockRequest, mockPayload);
+      await strategy.validate(mockRequest, mockPayload, done);
 
-      expect(result).toBeInstanceOf(RefreshSessionDto);
-      expect(result.tokenId).toBe('token-2');
-
-      expect(bcrypt.compare).toHaveBeenCalledTimes(2);
-      expect(bcrypt.compare).toHaveBeenNthCalledWith(
-        1,
-        'test-refresh-token',
-        'hashed-token-1',
-      );
-      expect(bcrypt.compare).toHaveBeenNthCalledWith(
-        2,
-        'test-refresh-token',
-        'hashed-token-2',
-      );
+      const [, session] = done.mock.calls[0] as [
+        Error | null,
+        RefreshSessionDto,
+      ];
+      expect(session.tokenId).toBe('token-2');
+      expect(mockedCompare).toHaveBeenCalledTimes(2);
     });
 
-    it('should throw UnauthorizedException when user not found', async () => {
-      const findUniqueSpy = jest
-        .spyOn(prismaService.user, 'findUnique')
-        .mockResolvedValue(null);
+    it('should call done with UnauthorizedException when the refresh token is missing', async () => {
+      const done = jest.fn();
 
-      await expect(strategy.validate(mockRequest, mockPayload)).rejects.toThrow(
-        UnauthorizedException,
+      await strategy.validate(
+        { body: {} } as unknown as Request,
+        mockPayload,
+        done,
       );
 
-      expect(findUniqueSpy).toHaveBeenCalledWith({
-        where: { id: mockPayload.sub },
-        include: {
-          roles: true,
-          refreshTokens: {
-            where: {
-              expiresAt: { gte: new Date() },
-            },
-          },
-        },
-      });
+      expect(done).toHaveBeenCalledTimes(1);
+      expect(firstCallArg(done)).toBeInstanceOf(UnauthorizedException);
+      expect(prismaService.user.findUnique).not.toHaveBeenCalled();
     });
 
-    it('should throw UnauthorizedException when no refresh token matches', async () => {
-      jest.spyOn(prismaService.user, 'findUnique').mockResolvedValue(mockUser);
-      (bcrypt.compare as jest.Mock)
-        .mockResolvedValueOnce(false)
-        .mockResolvedValueOnce(false);
+    it('should call done with UnauthorizedException when the user is not found', async () => {
+      prismaService.user.findUnique.mockResolvedValue(null);
+      const done = jest.fn();
 
-      await expect(strategy.validate(mockRequest, mockPayload)).rejects.toThrow(
-        new UnauthorizedException('Invalid refresh token'),
-      );
+      await strategy.validate(mockRequest, mockPayload, done);
 
-      expect(bcrypt.compare).toHaveBeenCalledTimes(2);
+      expect(firstCallArg(done)).toBeInstanceOf(UnauthorizedException);
     });
 
-    it('should throw UnauthorizedException when user has no refresh tokens', async () => {
-      const userWithNoTokens = {
+    it('should call done with InvalidTokenException when no refresh token matches', async () => {
+      prismaService.user.findUnique.mockResolvedValue(mockUser);
+      mockedCompare.mockResolvedValue(false);
+      const done = jest.fn();
+
+      await strategy.validate(mockRequest, mockPayload, done);
+
+      expect(firstCallArg(done)).toBeInstanceOf(InvalidTokenException);
+      expect(mockedCompare).toHaveBeenCalledTimes(2);
+    });
+
+    it('should call done with InvalidTokenException when the user has no refresh tokens', async () => {
+      prismaService.user.findUnique.mockResolvedValue({
         ...mockUser,
         refreshTokens: [],
-      };
+      });
+      const done = jest.fn();
 
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(
-        userWithNoTokens,
-      );
+      await strategy.validate(mockRequest, mockPayload, done);
 
-      await expect(strategy.validate(mockRequest, mockPayload)).rejects.toThrow(
-        new UnauthorizedException('Invalid refresh token'),
-      );
-
-      expect(bcrypt.compare).not.toHaveBeenCalled();
-    });
-
-    it('should handle missing refresh_token in request body', async () => {
-      const requestWithoutToken = {
-        body: {},
-      } as unknown as Request;
-
-      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
-
-      await expect(
-        strategy.validate(requestWithoutToken, mockPayload),
-      ).rejects.toThrow(UnauthorizedException);
-    });
-
-    it('should return first matching token when multiple tokens match', async () => {
-      jest.spyOn(prismaService.user, 'findUnique').mockResolvedValue(mockUser);
-      (bcrypt.compare as jest.Mock)
-        .mockResolvedValueOnce(true)
-        .mockResolvedValueOnce(true);
-
-      const result = await strategy.validate(mockRequest, mockPayload);
-
-      expect(result.tokenId).toBe('token-1');
-      expect(bcrypt.compare).toHaveBeenCalledTimes(1);
+      expect(firstCallArg(done)).toBeInstanceOf(InvalidTokenException);
+      expect(mockedCompare).not.toHaveBeenCalled();
     });
   });
 });

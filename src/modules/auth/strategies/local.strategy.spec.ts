@@ -1,49 +1,40 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, UnauthorizedException } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
 import { LocalStrategy } from './local.strategy';
 import { PrismaService } from '@modules/prisma/prisma.service';
+import { PasswordService } from '../../../common/services/password.service';
 import { AuthenticatedUserDto } from '../dto/authenticated-user.dto';
 import { UserStatus } from '@prisma/client';
 
-// Mock bcrypt
-jest.mock('bcrypt');
-const mockedBcrypt = bcrypt as jest.Mocked<typeof bcrypt>;
-
 describe('LocalStrategy', () => {
   let strategy: LocalStrategy;
-  let prismaService: jest.Mocked<PrismaService>;
+  let prismaService: { user: { findUnique: jest.Mock } };
+  let passwordService: { compare: jest.Mock };
+
+  const phoneNumber = '0900000001';
+  const password = 'plainPassword';
 
   const mockUser = {
     id: 1,
-    username: 'testuser',
+    phoneNumber,
     password: 'hashedPassword',
-    employeeId: null,
     status: UserStatus.ACTIVE,
-    roles: [{ name: 'employee' }],
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    role: { name: 'Employee' },
   };
 
   beforeEach(async () => {
-    const mockPrismaService = {
-      user: {
-        findUnique: jest.fn(),
-      },
-    };
+    prismaService = { user: { findUnique: jest.fn() } };
+    passwordService = { compare: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         LocalStrategy,
-        {
-          provide: PrismaService,
-          useValue: mockPrismaService,
-        },
+        { provide: PrismaService, useValue: prismaService },
+        { provide: PasswordService, useValue: passwordService },
       ],
     }).compile();
 
     strategy = module.get<LocalStrategy>(LocalStrategy);
-    prismaService = module.get(PrismaService);
   });
 
   afterEach(() => {
@@ -56,121 +47,77 @@ describe('LocalStrategy', () => {
 
   describe('validate', () => {
     it('should return authenticated user when credentials are valid', async () => {
-      // Arrange
-      const username = 'testuser';
-      const password = 'plainPassword';
+      prismaService.user.findUnique.mockResolvedValue(mockUser);
+      passwordService.compare.mockResolvedValue(true);
 
-      const jestFindUnique = jest
-        .spyOn(prismaService.user, 'findUnique')
-        .mockResolvedValue(mockUser);
-      mockedBcrypt.compare.mockResolvedValue(true as never);
+      const result = await strategy.validate(phoneNumber, password);
 
-      // Act
-      const result = await strategy.validate(username, password);
-
-      // Assert
-      expect(jestFindUnique).toHaveBeenCalledWith({
-        where: { username },
-        include: {
-          roles: true,
-        },
-      });
-      expect(bcrypt.compare).toHaveBeenCalledWith(password, mockUser.password);
+      expect(prismaService.user.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { phoneNumber } }),
+      );
+      expect(passwordService.compare).toHaveBeenCalledWith(
+        password,
+        mockUser.password,
+      );
       expect(result).toBeInstanceOf(AuthenticatedUserDto);
       expect(result.userId).toBe(mockUser.id);
-      expect(result.username).toBe(mockUser.username);
+      expect(result.phone).toBe(mockUser.phoneNumber);
     });
 
     it('should throw NotFoundException when user does not exist', async () => {
-      // Arrange
-      const username = 'nonexistentuser';
-      const password = 'plainPassword';
+      prismaService.user.findUnique.mockResolvedValue(null);
 
-      const jestFindUnique = jest
-        .spyOn(prismaService.user, 'findUnique')
-        .mockResolvedValue(null);
-
-      // Act & Assert
-      await expect(strategy.validate(username, password)).rejects.toThrow(
-        new NotFoundException(`User with username ${username} not found.`),
+      await expect(strategy.validate(phoneNumber, password)).rejects.toThrow(
+        NotFoundException,
       );
-      expect(jestFindUnique).toHaveBeenCalledWith({
-        where: { username },
-        include: {
-          roles: true,
-        },
+      expect(passwordService.compare).not.toHaveBeenCalled();
+    });
+
+    it('should throw UnauthorizedException when account is not active', async () => {
+      prismaService.user.findUnique.mockResolvedValue({
+        ...mockUser,
+        status: UserStatus.INACTIVE,
       });
-      expect(bcrypt.compare).not.toHaveBeenCalled();
+
+      await expect(strategy.validate(phoneNumber, password)).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(passwordService.compare).not.toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException when user has no password (3rd party login)', async () => {
+      prismaService.user.findUnique.mockResolvedValue({
+        ...mockUser,
+        password: null,
+      });
+
+      await expect(strategy.validate(phoneNumber, password)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(passwordService.compare).not.toHaveBeenCalled();
     });
 
     it('should throw UnauthorizedException when password is invalid', async () => {
-      // Arrange
-      const username = 'testuser';
-      const password = 'wrongPassword';
+      prismaService.user.findUnique.mockResolvedValue(mockUser);
+      passwordService.compare.mockResolvedValue(false);
 
-      const jestFindUnique = jest
-        .spyOn(prismaService.user, 'findUnique')
-        .mockResolvedValue(mockUser);
-      mockedBcrypt.compare.mockResolvedValue(false as never);
-
-      // Act & Assert
-      await expect(strategy.validate(username, password)).rejects.toThrow(
-        new UnauthorizedException('Username or password are not match.'),
+      await expect(strategy.validate(phoneNumber, password)).rejects.toThrow(
+        UnauthorizedException,
       );
-      expect(jestFindUnique).toHaveBeenCalledWith({
-        where: { username },
-        include: {
-          roles: true,
-        },
-      });
-      expect(bcrypt.compare).toHaveBeenCalledWith(password, mockUser.password);
+      expect(passwordService.compare).toHaveBeenCalledWith(
+        password,
+        mockUser.password,
+      );
     });
 
-    it('should handle bcrypt comparison error', async () => {
-      // Arrange
-      const username = 'testuser';
-      const password = 'plainPassword';
-      const bcryptError = new Error('Bcrypt error');
-
-      const jestFindUnique = jest
-        .spyOn(prismaService.user, 'findUnique')
-        .mockResolvedValue(mockUser);
-      mockedBcrypt.compare.mockRejectedValue(bcryptError as never);
-
-      // Act & Assert
-      await expect(strategy.validate(username, password)).rejects.toThrow(
-        bcryptError,
-      );
-      expect(jestFindUnique).toHaveBeenCalledWith({
-        where: { username },
-        include: {
-          roles: true,
-        },
-      });
-      expect(bcrypt.compare).toHaveBeenCalledWith(password, mockUser.password);
-    });
-
-    it('should handle database error', async () => {
-      // Arrange
-      const username = 'testuser';
-      const password = 'plainPassword';
+    it('should propagate database errors', async () => {
       const dbError = new Error('Database connection error');
+      prismaService.user.findUnique.mockRejectedValue(dbError);
 
-      const jestFindUnique = jest
-        .spyOn(prismaService.user, 'findUnique')
-        .mockRejectedValue(dbError);
-
-      // Act & Assert
-      await expect(strategy.validate(username, password)).rejects.toThrow(
+      await expect(strategy.validate(phoneNumber, password)).rejects.toThrow(
         dbError,
       );
-      expect(jestFindUnique).toHaveBeenCalledWith({
-        where: { username },
-        include: {
-          roles: true,
-        },
-      });
-      expect(bcrypt.compare).not.toHaveBeenCalled();
+      expect(passwordService.compare).not.toHaveBeenCalled();
     });
   });
 });

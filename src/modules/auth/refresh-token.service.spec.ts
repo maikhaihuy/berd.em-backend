@@ -15,14 +15,15 @@ describe('RefreshTokenService', () => {
 
   const mockRefreshTokenPayload: RefreshTokenPayloadDto = {
     sub: 1,
-    email: 'test@example.com',
-    roles: ['employee'],
-    jti: undefined, // Will be set by the service
+    phone: '0900000001',
+    role: 'Employee',
+    branches: [],
   };
 
   const mockTokenRecord: RefreshToken = {
     id: 'test-token-id',
     userId: 1,
+    source: null,
     device: 'test-device',
     ipAddress: 'test-ip',
     hashedToken: 'hashed-token',
@@ -59,6 +60,7 @@ describe('RefreshTokenService', () => {
           provide: ConfigService,
           useValue: {
             get: jest.fn(),
+            getOrThrow: jest.fn(),
           },
         },
       ],
@@ -84,7 +86,7 @@ describe('RefreshTokenService', () => {
       const mockHashedToken = 'hashed-token';
       const mockExpirationTime = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
 
-      jest.spyOn(configService, 'get').mockReturnValue('7d');
+      jest.spyOn(configService, 'getOrThrow').mockReturnValue('7d');
       jest
         .spyOn(jwtTokenService, 'parseExpirationTime')
         .mockReturnValue(mockExpirationTime);
@@ -105,23 +107,21 @@ describe('RefreshTokenService', () => {
         tokenRecord: mockTokenRecord,
       });
 
-      expect(configService.get).toHaveBeenCalledWith(
+      expect(configService.getOrThrow).toHaveBeenCalledWith(
         'JWT_REFRESH_EXPIRATION',
-        '7d',
       );
       expect(jwtTokenService.parseExpirationTime).toHaveBeenCalledWith('7d');
       expect(jwtTokenService.generateRefreshToken).toHaveBeenCalledWith(
         expect.objectContaining({
-          ...mockRefreshTokenPayload,
+          sub: mockRefreshTokenPayload.sub,
           jti: expect.any(String),
         }),
       );
       expect(jwtTokenService.hashToken).toHaveBeenCalledWith(mockToken);
+      // No context passed -> no device/ipAddress/source in the create data
       expect(prismaService.refreshToken.create).toHaveBeenCalledWith({
         data: {
           id: expect.any(String),
-          device: expect.any(String),
-          ipAddress: expect.any(String),
           userId: mockRefreshTokenPayload.sub,
           hashedToken: mockHashedToken,
           expiresAt: expect.any(Date),
@@ -129,22 +129,42 @@ describe('RefreshTokenService', () => {
       });
     });
 
-    it('should handle database errors during token creation', async () => {
+    it('should persist session context when provided', async () => {
       const mockToken = 'generated-refresh-token';
-      const mockHashedToken = 'hashed-token';
-      const mockExpirationTime = 7 * 24 * 60 * 60 * 1000;
-      const dbError = new Error('Database connection failed');
-
-      jest.spyOn(configService, 'get').mockReturnValue('7d');
-      jest
-        .spyOn(jwtTokenService, 'parseExpirationTime')
-        .mockReturnValue(mockExpirationTime);
+      jest.spyOn(configService, 'getOrThrow').mockReturnValue('7d');
+      jest.spyOn(jwtTokenService, 'parseExpirationTime').mockReturnValue(1000);
       jest
         .spyOn(jwtTokenService, 'generateRefreshToken')
         .mockReturnValue(mockToken);
+      jest.spyOn(jwtTokenService, 'hashToken').mockResolvedValue('hashed');
       jest
-        .spyOn(jwtTokenService, 'hashToken')
-        .mockResolvedValue(mockHashedToken);
+        .spyOn(prismaService.refreshToken, 'create')
+        .mockResolvedValue(mockTokenRecord);
+
+      await service.createRefreshToken(mockRefreshTokenPayload, {
+        source: 'zalo',
+        userAgent: 'jest-agent',
+        ipAddress: '127.0.0.1',
+      });
+
+      expect(prismaService.refreshToken.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          source: 'zalo',
+          device: 'jest-agent',
+          ipAddress: '127.0.0.1',
+        }),
+      });
+    });
+
+    it('should handle database errors during token creation', async () => {
+      const dbError = new Error('Database connection failed');
+
+      jest.spyOn(configService, 'getOrThrow').mockReturnValue('7d');
+      jest.spyOn(jwtTokenService, 'parseExpirationTime').mockReturnValue(1000);
+      jest
+        .spyOn(jwtTokenService, 'generateRefreshToken')
+        .mockReturnValue('token');
+      jest.spyOn(jwtTokenService, 'hashToken').mockResolvedValue('hashed');
       jest
         .spyOn(prismaService.refreshToken, 'create')
         .mockRejectedValue(dbError);
@@ -174,11 +194,10 @@ describe('RefreshTokenService', () => {
   describe('revokeAllUserTokens', () => {
     it('should revoke all user tokens', async () => {
       const userId = 1;
-      const mockDeleteResult = { count: 3 };
 
       jest
         .spyOn(prismaService.refreshToken, 'deleteMany')
-        .mockResolvedValue(mockDeleteResult);
+        .mockResolvedValue({ count: 3 });
 
       await service.revokeAllUserTokens(userId);
 
@@ -192,24 +211,8 @@ describe('RefreshTokenService', () => {
     it('should return active tokens for user', async () => {
       const userId = 1;
       const mockTokens: RefreshToken[] = [
-        {
-          id: 'token-1',
-          userId: userId,
-          device: 'test-device',
-          ipAddress: 'test-ip',
-          hashedToken: 'hash-1',
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          createdAt: new Date(),
-        },
-        {
-          id: 'token-2',
-          userId: userId,
-          device: 'test-device',
-          ipAddress: 'test-ip',
-          hashedToken: 'hash-2',
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          createdAt: new Date(),
-        },
+        { ...mockTokenRecord, id: 'token-1', hashedToken: 'hash-1' },
+        { ...mockTokenRecord, id: 'token-2', hashedToken: 'hash-2' },
       ];
 
       jest
@@ -234,18 +237,12 @@ describe('RefreshTokenService', () => {
       const oldTokenId = 'old-token-id';
       const mockToken = 'new-refresh-token';
       const mockHashedToken = 'new-hashed-token';
-      const mockExpirationTime = 7 * 24 * 60 * 60 * 1000;
 
-      // Mock the revoke operation
       jest
         .spyOn(prismaService.refreshToken, 'delete')
         .mockResolvedValue(mockTokenRecord);
-
-      // Mock the create operation
-      jest.spyOn(configService, 'get').mockReturnValue('7d');
-      jest
-        .spyOn(jwtTokenService, 'parseExpirationTime')
-        .mockReturnValue(mockExpirationTime);
+      jest.spyOn(configService, 'getOrThrow').mockReturnValue('7d');
+      jest.spyOn(jwtTokenService, 'parseExpirationTime').mockReturnValue(1000);
       jest
         .spyOn(jwtTokenService, 'generateRefreshToken')
         .mockReturnValue(mockToken);
@@ -265,18 +262,12 @@ describe('RefreshTokenService', () => {
         token: mockToken,
         tokenRecord: mockTokenRecord,
       });
-
-      // Verify old token was deleted
       expect(prismaService.refreshToken.delete).toHaveBeenCalledWith({
         where: { id: oldTokenId },
       });
-
-      // Verify new token was created
       expect(prismaService.refreshToken.create).toHaveBeenCalledWith({
         data: {
           id: expect.any(String),
-          device: expect.any(String),
-          ipAddress: expect.any(String),
           userId: mockRefreshTokenPayload.sub,
           hashedToken: mockHashedToken,
           expiresAt: expect.any(Date),

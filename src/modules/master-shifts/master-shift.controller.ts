@@ -32,7 +32,7 @@ export class MasterShiftsController {
     return this.service.create(dto, user.userId);
   }
 
-  @RequirePermissions({ action: 'update', subject: 'master-shifts' })
+  @RequirePermissions({ action: 'generate', subject: 'master-shifts' })
   @Post('generate')
   @ApiOperation({
     summary: 'Generate master shift, sub shifts, and tasks from a template',
