@@ -10,14 +10,23 @@ import { userWithEmployeeInclude } from '@modules/users/user.types';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { CompleteTaskDto } from './dto/complete-task.dto';
+import {
+  TaskCompletionResponseDto,
+  TaskResponseDto,
+} from './dto/task-response.dto';
+import { TaskMapper } from './task.mapper';
+import { taskCompletionInclude, taskInclude } from './task.types';
 
 @Injectable()
 export class TasksService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateTaskDto, currentUserId: number) {
+  async create(
+    dto: CreateTaskDto,
+    currentUserId: number,
+  ): Promise<TaskResponseDto> {
     await this.validateScope(dto);
-    return this.prisma.task.create({
+    const task = await this.prisma.task.create({
       data: {
         taskTemplateId: dto.taskTemplateId,
         masterShiftId: dto.masterShiftId,
@@ -32,31 +41,40 @@ export class TasksService {
         createdBy: currentUserId,
         updatedBy: currentUserId,
       },
-      include: this.include,
+      include: taskInclude,
     });
+    return TaskMapper.toDto(task);
   }
 
-  findAll(masterShiftId?: number, subShiftId?: number) {
-    return this.prisma.task.findMany({
+  async findAll(
+    masterShiftId?: number,
+    subShiftId?: number,
+  ): Promise<TaskResponseDto[]> {
+    const tasks = await this.prisma.task.findMany({
       where: {
         ...(masterShiftId ? { masterShiftId } : {}),
         ...(subShiftId ? { subShiftId } : {}),
       },
-      include: this.include,
+      include: taskInclude,
       orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
     });
+    return TaskMapper.toDtos(tasks);
   }
 
-  async findOne(id: number) {
+  async findOne(id: number): Promise<TaskResponseDto> {
     const task = await this.prisma.task.findUnique({
       where: { id },
-      include: this.include,
+      include: taskInclude,
     });
     if (!task) throw new NotFoundException('Task not found');
-    return task;
+    return TaskMapper.toDto(task);
   }
 
-  async update(id: number, dto: UpdateTaskDto, currentUserId: number) {
+  async update(
+    id: number,
+    dto: UpdateTaskDto,
+    currentUserId: number,
+  ): Promise<TaskResponseDto> {
     const existing = await this.findOne(id);
     await this.validateScope({
       taskTemplateId:
@@ -67,18 +85,23 @@ export class TasksService {
       type: dto.type ?? existing.type,
     });
 
-    return this.prisma.task.update({
+    const task = await this.prisma.task.update({
       where: { id },
       data: {
         ...dto,
         dueAt: dto.dueAt ? new Date(dto.dueAt) : undefined,
         updatedBy: currentUserId,
       },
-      include: this.include,
+      include: taskInclude,
     });
+    return TaskMapper.toDto(task);
   }
 
-  async complete(id: number, dto: CompleteTaskDto, currentUserId: number) {
+  async complete(
+    id: number,
+    dto: CompleteTaskDto,
+    currentUserId: number,
+  ): Promise<TaskCompletionResponseDto> {
     const task = await this.findOne(id);
     const employeeId =
       dto.completedByEmployeeId ??
@@ -91,7 +114,7 @@ export class TasksService {
         where: { id },
         data: { status: TaskStatus.COMPLETED, updatedBy: currentUserId },
       });
-      return tx.taskCompletion.upsert({
+      const completion = await tx.taskCompletion.upsert({
         where: { taskId: id },
         create: {
           taskId: id,
@@ -108,8 +131,9 @@ export class TasksService {
           note: dto.note,
           updatedBy: currentUserId,
         },
-        include: { task: true, completedByEmployee: true },
+        include: taskCompletionInclude,
       });
+      return TaskMapper.toCompletionDto(completion);
     });
   }
 
@@ -118,13 +142,6 @@ export class TasksService {
     await this.prisma.task.delete({ where: { id } });
     return { message: 'Task deleted successfully' };
   }
-
-  private include = {
-    taskTemplate: true,
-    masterShift: { select: { id: true, title: true, workDate: true } },
-    subShift: { select: { id: true, title: true, masterShiftId: true } },
-    completion: true,
-  };
 
   private async validateScope(dto: {
     masterShiftId?: number;

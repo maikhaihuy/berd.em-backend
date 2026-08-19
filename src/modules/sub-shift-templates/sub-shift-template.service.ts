@@ -7,19 +7,25 @@ import { ShiftStatus } from '@prisma/client';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { CreateSubShiftTemplateDto } from './dto/create-sub-shift-template.dto';
 import { UpdateSubShiftTemplateDto } from './dto/update-sub-shift-template.dto';
+import { SubShiftTemplateResponseDto } from './dto/sub-shift-template-response.dto';
+import { SubShiftTemplateMapper } from './sub-shift-template.mapper';
+import { subShiftTemplateInclude } from './sub-shift-template.types';
 
 @Injectable()
 export class SubShiftTemplatesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateSubShiftTemplateDto, currentUserId: number) {
+  async create(
+    dto: CreateSubShiftTemplateDto,
+    currentUserId: number,
+  ): Promise<SubShiftTemplateResponseDto> {
     await this.ensureBranchAndMasterTemplate(
       dto.branchId,
       dto.masterShiftTemplateId,
     );
     this.validateTimeRange(dto.startTime, dto.endTime);
 
-    return this.prisma.subShiftTemplate.create({
+    const template = await this.prisma.subShiftTemplate.create({
       data: {
         branchId: dto.branchId,
         masterShiftTemplateId: dto.masterShiftTemplateId,
@@ -34,39 +40,44 @@ export class SubShiftTemplatesService {
         createdBy: currentUserId,
         updatedBy: currentUserId,
       },
-      include: this.include,
+      include: subShiftTemplateInclude,
     });
+    return SubShiftTemplateMapper.toDto(template);
   }
 
-  findAll(branchId?: number, masterShiftTemplateId?: number) {
-    return this.prisma.subShiftTemplate.findMany({
+  async findAll(
+    branchId?: number,
+    masterShiftTemplateId?: number,
+  ): Promise<SubShiftTemplateResponseDto[]> {
+    const templates = await this.prisma.subShiftTemplate.findMany({
       where: {
         ...(branchId ? { branchId } : {}),
         ...(masterShiftTemplateId ? { masterShiftTemplateId } : {}),
       },
-      include: this.include,
+      include: subShiftTemplateInclude,
       orderBy: [
         { branchId: 'asc' },
         { sortOrder: 'asc' },
         { startTime: 'asc' },
       ],
     });
+    return SubShiftTemplateMapper.toDtos(templates);
   }
 
-  async findOne(id: number) {
+  async findOne(id: number): Promise<SubShiftTemplateResponseDto> {
     const template = await this.prisma.subShiftTemplate.findUnique({
       where: { id },
-      include: this.include,
+      include: subShiftTemplateInclude,
     });
     if (!template) throw new NotFoundException('Sub shift template not found');
-    return template;
+    return SubShiftTemplateMapper.toDto(template);
   }
 
   async update(
     id: number,
     dto: UpdateSubShiftTemplateDto,
     currentUserId: number,
-  ) {
+  ): Promise<SubShiftTemplateResponseDto> {
     const existing = await this.findOne(id);
     const branchId = dto.branchId ?? existing.branchId;
     const masterShiftTemplateId =
@@ -77,7 +88,7 @@ export class SubShiftTemplatesService {
     const endTime = dto.endTime ?? existing.endTime.toISOString();
     this.validateTimeRange(startTime, endTime);
 
-    return this.prisma.subShiftTemplate.update({
+    const template = await this.prisma.subShiftTemplate.update({
       where: { id },
       data: {
         ...dto,
@@ -85,8 +96,9 @@ export class SubShiftTemplatesService {
         endTime: dto.endTime ? new Date(dto.endTime) : undefined,
         updatedBy: currentUserId,
       },
-      include: this.include,
+      include: subShiftTemplateInclude,
     });
+    return SubShiftTemplateMapper.toDto(template);
   }
 
   async remove(id: number) {
@@ -94,12 +106,6 @@ export class SubShiftTemplatesService {
     await this.prisma.subShiftTemplate.delete({ where: { id } });
     return { message: 'Sub shift template deleted successfully' };
   }
-
-  private include = {
-    branch: { select: { id: true, name: true, abbreviation: true } },
-    masterShiftTemplate: { select: { id: true, name: true } },
-    taskTemplates: true,
-  };
 
   private async ensureBranchAndMasterTemplate(
     branchId: number,

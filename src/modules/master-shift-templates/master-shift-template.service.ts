@@ -7,17 +7,23 @@ import { Prisma, ShiftStatus } from '@prisma/client';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { CreateMasterShiftTemplateDto } from './dto/create-master-shift-template.dto';
 import { UpdateMasterShiftTemplateDto } from './dto/update-master-shift-template.dto';
+import { MasterShiftTemplateResponseDto } from './dto/master-shift-template-response.dto';
+import { MasterShiftTemplateMapper } from './master-shift-template.mapper';
+import { masterShiftTemplateInclude } from './master-shift-template.types';
 
 @Injectable()
 export class MasterShiftTemplatesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateMasterShiftTemplateDto, currentUserId: number) {
+  async create(
+    dto: CreateMasterShiftTemplateDto,
+    currentUserId: number,
+  ): Promise<MasterShiftTemplateResponseDto> {
     await this.ensureBranch(dto.branchId);
     this.validateTimeRange(dto.startTime, dto.endTime);
 
     try {
-      return await this.prisma.masterShiftTemplate.create({
+      const template = await this.prisma.masterShiftTemplate.create({
         data: {
           branchId: dto.branchId,
           name: dto.name,
@@ -29,37 +35,41 @@ export class MasterShiftTemplatesService {
           createdBy: currentUserId,
           updatedBy: currentUserId,
         },
-        include: this.include,
+        include: masterShiftTemplateInclude,
       });
+      return MasterShiftTemplateMapper.toDto(template);
     } catch (error) {
       this.handleKnownError(error);
       throw error;
     }
   }
 
-  findAll(branchId?: number) {
-    return this.prisma.masterShiftTemplate.findMany({
+  async findAll(
+    branchId?: number,
+  ): Promise<MasterShiftTemplateResponseDto[]> {
+    const templates = await this.prisma.masterShiftTemplate.findMany({
       where: branchId ? { branchId } : undefined,
       orderBy: [{ branchId: 'asc' }, { startTime: 'asc' }],
-      include: this.include,
+      include: masterShiftTemplateInclude,
     });
+    return MasterShiftTemplateMapper.toDtos(templates);
   }
 
-  async findOne(id: number) {
+  async findOne(id: number): Promise<MasterShiftTemplateResponseDto> {
     const template = await this.prisma.masterShiftTemplate.findUnique({
       where: { id },
-      include: this.include,
+      include: masterShiftTemplateInclude,
     });
     if (!template)
       throw new NotFoundException('Master shift template not found');
-    return template;
+    return MasterShiftTemplateMapper.toDto(template);
   }
 
   async update(
     id: number,
     dto: UpdateMasterShiftTemplateDto,
     currentUserId: number,
-  ) {
+  ): Promise<MasterShiftTemplateResponseDto> {
     const existing = await this.findOne(id);
     if (dto.branchId) await this.ensureBranch(dto.branchId);
     const startTime = dto.startTime ?? existing.startTime.toISOString();
@@ -67,7 +77,7 @@ export class MasterShiftTemplatesService {
     this.validateTimeRange(startTime, endTime);
 
     try {
-      return await this.prisma.masterShiftTemplate.update({
+      const template = await this.prisma.masterShiftTemplate.update({
         where: { id },
         data: {
           ...dto,
@@ -75,8 +85,9 @@ export class MasterShiftTemplatesService {
           endTime: dto.endTime ? new Date(dto.endTime) : undefined,
           updatedBy: currentUserId,
         },
-        include: this.include,
+        include: masterShiftTemplateInclude,
       });
+      return MasterShiftTemplateMapper.toDto(template);
     } catch (error) {
       this.handleKnownError(error);
       throw error;
@@ -88,12 +99,6 @@ export class MasterShiftTemplatesService {
     await this.prisma.masterShiftTemplate.delete({ where: { id } });
     return { message: 'Master shift template deleted successfully' };
   }
-
-  private include = {
-    branch: { select: { id: true, name: true, abbreviation: true } },
-    subShiftTemplates: true,
-    taskTemplates: true,
-  };
 
   private async ensureBranch(branchId: number) {
     const branch = await this.prisma.branch.findUnique({

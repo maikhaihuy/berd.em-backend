@@ -7,19 +7,25 @@ import { ShiftStatus } from '@prisma/client';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { CreateSubShiftDto } from './dto/create-sub-shift.dto';
 import { UpdateSubShiftDto } from './dto/update-sub-shift.dto';
+import { SubShiftResponseDto } from './dto/sub-shift-response.dto';
+import { SubShiftMapper } from './sub-shift.mapper';
+import { subShiftInclude } from './sub-shift.types';
 
 @Injectable()
 export class SubShiftsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateSubShiftDto, currentUserId: number) {
+  async create(
+    dto: CreateSubShiftDto,
+    currentUserId: number,
+  ): Promise<SubShiftResponseDto> {
     await this.ensureMasterAndTemplate(
       dto.masterShiftId,
       dto.subShiftTemplateId,
     );
     this.validateTimeRange(dto.startTime, dto.endTime);
 
-    return this.prisma.subShift.create({
+    const subShift = await this.prisma.subShift.create({
       data: {
         masterShiftId: dto.masterShiftId,
         subShiftTemplateId: dto.subShiftTemplateId,
@@ -33,28 +39,34 @@ export class SubShiftsService {
         createdBy: currentUserId,
         updatedBy: currentUserId,
       },
-      include: this.include,
+      include: subShiftInclude,
     });
+    return SubShiftMapper.toDto(subShift);
   }
 
-  findAll(masterShiftId?: number) {
-    return this.prisma.subShift.findMany({
+  async findAll(masterShiftId?: number): Promise<SubShiftResponseDto[]> {
+    const subShifts = await this.prisma.subShift.findMany({
       where: masterShiftId ? { masterShiftId } : undefined,
-      include: this.include,
+      include: subShiftInclude,
       orderBy: [{ startTime: 'asc' }],
     });
+    return SubShiftMapper.toDtos(subShifts);
   }
 
-  async findOne(id: number) {
+  async findOne(id: number): Promise<SubShiftResponseDto> {
     const subShift = await this.prisma.subShift.findUnique({
       where: { id },
-      include: this.include,
+      include: subShiftInclude,
     });
     if (!subShift) throw new NotFoundException('Sub shift not found');
-    return subShift;
+    return SubShiftMapper.toDto(subShift);
   }
 
-  async update(id: number, dto: UpdateSubShiftDto, currentUserId: number) {
+  async update(
+    id: number,
+    dto: UpdateSubShiftDto,
+    currentUserId: number,
+  ): Promise<SubShiftResponseDto> {
     const existing = await this.findOne(id);
     await this.ensureMasterAndTemplate(
       dto.masterShiftId ?? existing.masterShiftId,
@@ -65,7 +77,7 @@ export class SubShiftsService {
       dto.endTime ?? existing.endTime.toISOString(),
     );
 
-    return this.prisma.subShift.update({
+    const subShift = await this.prisma.subShift.update({
       where: { id },
       data: {
         ...dto,
@@ -73,8 +85,9 @@ export class SubShiftsService {
         endTime: dto.endTime ? new Date(dto.endTime) : undefined,
         updatedBy: currentUserId,
       },
-      include: this.include,
+      include: subShiftInclude,
     });
+    return SubShiftMapper.toDto(subShift);
   }
 
   async remove(id: number) {
@@ -82,19 +95,6 @@ export class SubShiftsService {
     await this.prisma.subShift.delete({ where: { id } });
     return { message: 'Sub shift deleted successfully' };
   }
-
-  private include = {
-    masterShift: {
-      select: {
-        id: true,
-        title: true,
-        branchId: true,
-        workDate: true,
-      },
-    },
-    subShiftTemplate: { select: { id: true, name: true, type: true } },
-    tasks: { include: { completion: true } },
-  };
 
   private async ensureMasterAndTemplate(
     masterShiftId: number,
