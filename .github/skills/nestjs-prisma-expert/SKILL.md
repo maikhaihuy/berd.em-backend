@@ -1,10 +1,6 @@
 ---
 name: nestjs-prisma-expert
 description: Advanced guidance for building scalable NestJS applications using Prisma ORM and PostgreSQL.
-modeSlugs:
-  - code
-  - architect
-  - orchestrator
 ---
 
 # NestJS & Prisma Expert Skill
@@ -23,28 +19,21 @@ modeSlugs:
 
 ### 🛡️ Type Safety & Patterns
 
-- **No 'any':** Explicitly define types for all variables, function returns, and API responses.
-- **Custom Decorators:** Create custom decorators for repeated logic (e.g., extracting User from JWT).
-- **Interceptors/Filters:** Use Global Exception Filters for consistent error responses.
+- **`any` is allowed but should be avoided:** `eslint.config.mjs` turns `@typescript-eslint/no-explicit-any` off in this repo, so it won't fail lint — but still prefer explicit types for variables, function returns, and API responses; only reach for `any` when a Prisma/third-party type genuinely can't be expressed cleanly.
+- **Custom Decorators:** Create custom decorators for repeated logic (e.g., `@AuthenticatedUser()` for extracting the user from the JWT payload, `@RequirePermissions()` for authorization — see `src/common/decorators/` and `src/modules/auth/decorators/`).
+- **Interceptors/Filters:** Global exception filters (`PrismaExceptionFilter`, `GlobalExceptionFilter`, registered in `src/common/exception.module.ts`) already give consistent error responses — don't add per-controller try/catch for the same errors they handle.
 
 ### 💎 Prisma & Database Workflow
 
 - **Single Source of Truth:** `schema.prisma` is the only source for DB structure.
 - **The Protocol:** Whenever the schema changes:
   1. Update `schema.prisma`.
-  2. Run `npx prisma migrate dev --name <description>`.
-  3. Run `npx prisma generate` to sync the client.
+  2. Run `pnpm db:dev --name <description>` (wraps `prisma migrate dev`, which also regenerates the client).
 - **Performance:** Use `select` to minimize data transfer. Avoid deep nested `include` to prevent performance bottlenecks.
+- **Conventions:** `Int` autoincrement ids, no soft deletes, `createdAt/createdBy/updatedAt/updatedBy` audit columns on every mutable model — see the `schema-review` skill for the full checklist.
 
 ### 🤖 Agentic Workflow
 
-- **Build Check:** Always run `npm run build` before considering a task "done".
+- **Build Check:** Run `pnpm build` (and `pnpm lint`) before considering a task "done".
 - **Self-Healing:** If a terminal command fails, analyze the stack trace and fix the code before reporting back.
-- **Git Protocol:** - Create a feature branch: `feat/<feature-name>`.
-  - Use Conventional Commits: `type(scope): message`.
-  - Use GitHub MCP to push and create PRs.
-
-## Tools
-
-- `read_file`, `write_to_file`, `execute_command`, `list_files`
-- `mcp-server-github` (for PR and code submission)
+- **Git Protocol:** Match this repo's actual branch naming (e.g. `feature/<name>`, see `git branch`/`git log`) rather than assuming a fixed prefix; use clear, descriptive commit messages. Only push or open PRs if the user explicitly asks.

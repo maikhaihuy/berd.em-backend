@@ -1,30 +1,30 @@
 ---
 name: test-writing
-description: 'Write comprehensive unit and E2E tests for NestJS services and controllers. Use when: adding test coverage, fixing failing tests, testing new features, ensuring CASL/auth guards work. Patterns for mocking Prisma, testing guards, async operations, and database transactions.'
+description: 'Write comprehensive unit and E2E tests for NestJS services and controllers. Use when: adding test coverage, fixing failing tests, testing new features, ensuring the JWT/permission guards work. Patterns for mocking Prisma, overriding global guards, testing async operations.'
 argument-hint: 'Ask "Write tests for the employee service" or "Add E2E tests for auth endpoints"'
 ---
 
 # Test Writing Guide
 
-Comprehensive patterns for writing unit and E2E tests in BERD.EM following Jest + Supertest conventions.
+Comprehensive patterns for writing unit and E2E tests in StaffHub following Jest + Supertest conventions.
 
 ## When to Use
 
 - **New features**: Add test coverage before/after implementation (TDD)
 - **Bug fixes**: Write tests that demonstrate the bug, then fix it
 - **Refactoring**: Ensure tests pass before and after refactoring
-- **Guard testing**: Verify JWT access, refresh, and CASL ability guards work
+- **Guard testing**: Verify `JwtAccessGuard` and `PermissionsGuard` work as expected
 - **Database testing**: Mock Prisma for unit tests, real DB for E2E
 - **Integration**: Test multiple services/controllers together
-- **Coverage**: Aim for >80% coverage on critical paths
+- **Coverage**: Aim for high coverage on critical paths
 
 ## Prerequisites
 
-- Jest configured (`jest.config.json` or in `package.json`)
+- Jest configured (unit tests: `package.json` `jest` block, `rootDir: src`, `*.spec.ts`; E2E: `test/jest-e2e.json`, `rootDir: .`, `*.e2e-spec.ts`)
 - `@nestjs/testing` module available
 - Supertest for E2E tests
 - Understanding of Prisma mocking patterns
-- Test database setup for E2E (can reuse dev DB)
+- A reachable Postgres database for E2E tests — there's no separate test-DB config, E2E tests run against whatever `DATABASE_URL` points at
 
 ## Core Workflow
 
@@ -47,38 +47,34 @@ Comprehensive patterns for writing unit and E2E tests in BERD.EM following Jest 
 **E2E Tests** (Slow, full stack):
 
 - Test full request → controller → service → database → response
-- Use real database (test DB)
-- Test real authentication flows
+- Use the real (dev) database
+- Test real authentication flows (via `/api/auth/dev/login`, see Phase 5)
 - Good for complete workflows, edge case scenarios
 
 ### Phase 2: Unit Test Pattern (Services)
 
-**Setup and structure:**
+**Setup and structure** — note `id`/`createdBy` are `number`, and there's no `deletedAt`:
 
 ```typescript
 // department.service.spec.ts
 import { Test, TestingModule } from '@nestjs/testing';
 import { DepartmentService } from './department.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '@modules/prisma/prisma.service';
 
 describe('DepartmentService', () => {
   let service: DepartmentService;
   let prisma: PrismaService;
 
-  // Mock data
-  const mockUser = {
-    id: 'user-123',
-    email: 'user@example.com',
-  };
+  const mockUser = { id: 1, phoneNumber: '0900000001' };
 
   const mockDepartment = {
-    id: 'dept-123',
+    id: 1,
     name: 'Engineering',
     description: 'Building software',
     createdAt: new Date('2026-05-01'),
     createdBy: mockUser.id,
-    deletedAt: null,
-    creator: mockUser,
+    updatedAt: new Date('2026-05-01'),
+    updatedBy: mockUser.id,
   };
 
   beforeEach(async () => {
@@ -91,7 +87,6 @@ describe('DepartmentService', () => {
             department: {
               create: jest.fn(),
               findMany: jest.fn(),
-              findFirst: jest.fn(),
               findUnique: jest.fn(),
               update: jest.fn(),
               delete: jest.fn(),
@@ -110,58 +105,44 @@ describe('DepartmentService', () => {
   });
 
   describe('create', () => {
-    it('should create a department with createdBy', async () => {
-      const createDto = {
-        name: 'Engineering',
-        description: 'Building software',
-      };
+    it('should create a department with createdBy/updatedBy', async () => {
+      const createDto = { name: 'Engineering', description: 'Building software' };
 
       jest.spyOn(prisma.department, 'create').mockResolvedValue(mockDepartment);
 
       const result = await service.create(createDto, mockUser.id);
 
-      expect(result).toEqual(mockDepartment);
+      expect(result).toEqual(expect.objectContaining({ id: 1, name: 'Engineering' }));
       expect(prisma.department.create).toHaveBeenCalledWith({
-        data: {
-          ...createDto,
-          createdBy: mockUser.id,
-        },
-        include: {
-          creator: { select: { id: true, email: true } },
-        },
+        data: { ...createDto, createdBy: mockUser.id, updatedBy: mockUser.id },
+        include: expect.any(Object),
       });
     });
 
-    it('should throw on invalid input', async () => {
-      const createDto = {
-        name: '', // Invalid: empty name
-        description: 'Building software',
-      };
+    it('should map a P2002 unique conflict to BadRequestException', async () => {
+      const { Prisma } = await import('@prisma/client');
+      jest.spyOn(prisma.department, 'create').mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '6.13.0',
+        }),
+      );
 
-      // Note: validation happens in DTO, so service assumes valid input
-      // But test for business logic errors here
-      jest
-        .spyOn(prisma.department, 'create')
-        .mockRejectedValue(new Error('Unique constraint failed'));
-
-      await expect(service.create(createDto, mockUser.id)).rejects.toThrow();
+      await expect(
+        service.create({ name: 'dup' }, mockUser.id),
+      ).rejects.toThrow('already in use');
     });
   });
 
   describe('findAll', () => {
-    it('should return all non-deleted departments', async () => {
-      jest
-        .spyOn(prisma.department, 'findMany')
-        .mockResolvedValue([mockDepartment]);
+    it('should return all departments', async () => {
+      jest.spyOn(prisma.department, 'findMany').mockResolvedValue([mockDepartment]);
 
       const result = await service.findAll();
 
-      expect(result).toEqual([mockDepartment]);
+      expect(result).toHaveLength(1);
       expect(prisma.department.findMany).toHaveBeenCalledWith({
-        where: { deletedAt: null },
-        include: {
-          creator: { select: { id: true, email: true } },
-        },
+        include: expect.any(Object),
         orderBy: { createdAt: 'desc' },
       });
     });
@@ -175,86 +156,33 @@ describe('DepartmentService', () => {
     });
   });
 
-  describe('findById', () => {
-    it('should return department by id', async () => {
-      jest
-        .spyOn(prisma.department, 'findFirst')
-        .mockResolvedValue(mockDepartment);
+  describe('findOne', () => {
+    it('should throw NotFoundException if department does not exist', async () => {
+      jest.spyOn(prisma.department, 'findUnique').mockResolvedValue(null);
 
-      const result = await service.findById('dept-123');
+      await expect(service.findOne(999)).rejects.toThrow('not found');
+    });
+  });
 
-      expect(result).toEqual(mockDepartment);
-      expect(prisma.department.findFirst).toHaveBeenCalledWith({
-        where: {
-          id: 'dept-123',
-          deletedAt: null,
-        },
-        include: {
-          creator: { select: { id: true, email: true } },
-        },
-      });
+  describe('remove', () => {
+    it('should hard-delete a department', async () => {
+      jest.spyOn(prisma.department, 'delete').mockResolvedValue(mockDepartment);
+
+      await service.remove(1);
+
+      expect(prisma.department.delete).toHaveBeenCalledWith({ where: { id: 1 } });
     });
 
-    it('should return null if department not found', async () => {
-      jest.spyOn(prisma.department, 'findFirst').mockResolvedValue(null);
-
-      const result = await service.findById('nonexistent');
-
-      expect(result).toBeNull();
-    });
-
-    it('should not return deleted department', async () => {
-      jest.spyOn(prisma.department, 'findFirst').mockResolvedValue(null);
-
-      const result = await service.findById('dept-123');
-
-      expect(result).toBeNull();
-      // Verify deletedAt: null in where clause
-      expect(prisma.department.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ deletedAt: null }),
+    it('should map a P2025 not-found to NotFoundException', async () => {
+      const { Prisma } = await import('@prisma/client');
+      jest.spyOn(prisma.department, 'delete').mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Record not found', {
+          code: 'P2025',
+          clientVersion: '6.13.0',
         }),
       );
-    });
-  });
 
-  describe('update', () => {
-    it('should update department and return updated record', async () => {
-      const updateDto = { name: 'Engineering (Updated)' };
-      const updatedDepartment = { ...mockDepartment, name: updateDto.name };
-
-      jest
-        .spyOn(prisma.department, 'update')
-        .mockResolvedValue(updatedDepartment);
-
-      const result = await service.update('dept-123', updateDto);
-
-      expect(result).toEqual(updatedDepartment);
-      expect(prisma.department.update).toHaveBeenCalledWith({
-        where: { id: 'dept-123' },
-        data: updateDto,
-        include: {
-          creator: { select: { id: true, email: true } },
-        },
-      });
-    });
-  });
-
-  describe('delete', () => {
-    it('should soft delete department', async () => {
-      const deletedDepartment = { ...mockDepartment, deletedAt: new Date() };
-
-      jest
-        .spyOn(prisma.department, 'update')
-        .mockResolvedValue(deletedDepartment);
-
-      const result = await service.delete('dept-123');
-
-      expect(result).toEqual(deletedDepartment);
-      expect(prisma.department.update).toHaveBeenCalledWith({
-        where: { id: 'dept-123' },
-        data: { deletedAt: expect.any(Date) },
-      });
+      await expect(service.remove(999)).rejects.toThrow('not found');
     });
   });
 });
@@ -263,42 +191,39 @@ describe('DepartmentService', () => {
 **Key patterns:**
 
 - Mock Prisma methods before testing
-- Test happy path and error cases
+- Test happy path, `P2002`/`P2025` error-mapping, and edge cases
 - Use `jest.clearAllMocks()` after each test
-- Test the exact Prisma call arguments
-- Use `expect.any(Date)` for timestamps
+- Test the exact Prisma call arguments (`createdBy`/`updatedBy`, `include`, `orderBy`)
+- `id`/`createdBy`/`updatedBy` are numbers — don't use string/UUID fixtures
 
 ### Phase 3: Unit Test Pattern (Controllers)
 
-**Test guards, decorators, and request/response:**
+Controllers in this codebase do **not** carry `@UseGuards(JwtAccessGuard)` — both guards are registered globally in `AuthzModule`. A controller-level `TestingModule` (without booting the full app) simply never runs those guards, so there's usually nothing to override here; only override them when the `TestingModule` also imports `AppModule` or otherwise pulls in the global providers.
 
 ```typescript
 // department.controller.spec.ts
 import { Test, TestingModule } from '@nestjs/testing';
 import { DepartmentController } from './department.controller';
 import { DepartmentService } from './department.service';
-import { JwtAccessGuard } from '../../common/guards/jwt-access.guard';
-import { AuthenticatedUserDto } from '../../modules/auth/dto/authenticated-user.dto';
+import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
 
 describe('DepartmentController', () => {
   let controller: DepartmentController;
   let service: DepartmentService;
 
   const mockUser: AuthenticatedUserDto = {
-    userId: 'user-123',
-    email: 'user@example.com',
-    roles: [{ id: 'role-1', name: 'Employee' }],
-    primaryBranchId: 'branch-1',
+    userId: 1,
+    phone: '0900000001',
+    role: 'Employee',
+    branches: [1],
   };
 
   const mockDepartment = {
-    id: 'dept-123',
+    id: 1,
     name: 'Engineering',
     description: 'Building software',
     createdAt: new Date('2026-05-01'),
     createdBy: mockUser.userId,
-    deletedAt: null,
-    creator: { id: mockUser.userId, email: mockUser.email },
   };
 
   beforeEach(async () => {
@@ -310,18 +235,13 @@ describe('DepartmentController', () => {
           useValue: {
             create: jest.fn(),
             findAll: jest.fn(),
-            findById: jest.fn(),
+            findOne: jest.fn(),
             update: jest.fn(),
-            delete: jest.fn(),
+            remove: jest.fn(),
           },
         },
       ],
-    })
-      .overrideGuard(JwtAccessGuard)
-      .useValue({
-        canActivate: () => true, // Mock guard to always allow
-      })
-      .compile();
+    }).compile();
 
     controller = module.get<DepartmentController>(DepartmentController);
     service = module.get<DepartmentService>(DepartmentService);
@@ -333,75 +253,46 @@ describe('DepartmentController', () => {
 
   describe('create', () => {
     it('should create and return department response', async () => {
-      const createDto = {
-        name: 'Engineering',
-        description: 'Building software',
-      };
+      const createDto = { name: 'Engineering', description: 'Building software' };
 
-      jest.spyOn(service, 'create').mockResolvedValue(mockDepartment);
+      jest.spyOn(service, 'create').mockResolvedValue(mockDepartment as any);
 
       const result = await controller.create(createDto, mockUser);
 
       expect(result).toHaveProperty('id', mockDepartment.id);
-      expect(result).toHaveProperty('name', mockDepartment.name);
       expect(service.create).toHaveBeenCalledWith(createDto, mockUser.userId);
     });
   });
 
   describe('findAll', () => {
     it('should return array of department responses', async () => {
-      jest.spyOn(service, 'findAll').mockResolvedValue([mockDepartment]);
+      jest.spyOn(service, 'findAll').mockResolvedValue([mockDepartment] as any);
 
       const result = await controller.findAll();
 
       expect(result).toBeInstanceOf(Array);
       expect(result[0]).toHaveProperty('id');
-      expect(result[0]).toHaveProperty('name');
     });
   });
 
-  describe('findById', () => {
+  describe('findOne', () => {
     it('should return department by id', async () => {
-      jest.spyOn(service, 'findById').mockResolvedValue(mockDepartment);
+      jest.spyOn(service, 'findOne').mockResolvedValue(mockDepartment as any);
 
-      const result = await controller.findById('dept-123');
+      const result = await controller.findOne(1);
 
       expect(result).toHaveProperty('id', mockDepartment.id);
-      expect(service.findById).toHaveBeenCalledWith('dept-123');
-    });
-
-    it('should handle not found gracefully', async () => {
-      jest.spyOn(service, 'findById').mockResolvedValue(null);
-
-      const result = await controller.findById('nonexistent');
-
-      expect(result).toBeNull();
+      expect(service.findOne).toHaveBeenCalledWith(1);
     });
   });
 
-  describe('update', () => {
-    it('should update and return updated response', async () => {
-      const updateDto = { name: 'Engineering (Updated)' };
-      const updated = { ...mockDepartment, name: updateDto.name };
+  describe('remove', () => {
+    it('should call service.remove with numeric id', async () => {
+      jest.spyOn(service, 'remove').mockResolvedValue(undefined);
 
-      jest.spyOn(service, 'update').mockResolvedValue(updated);
+      await controller.remove(1);
 
-      const result = await controller.update('dept-123', updateDto);
-
-      expect(result).toHaveProperty('name', updateDto.name);
-      expect(service.update).toHaveBeenCalledWith('dept-123', updateDto);
-    });
-  });
-
-  describe('delete', () => {
-    it('should delete department', async () => {
-      const deletedDept = { ...mockDepartment, deletedAt: new Date() };
-
-      jest.spyOn(service, 'delete').mockResolvedValue(deletedDept);
-
-      await controller.delete('dept-123');
-
-      expect(service.delete).toHaveBeenCalledWith('dept-123');
+      expect(service.remove).toHaveBeenCalledWith(1);
     });
   });
 });
@@ -409,19 +300,18 @@ describe('DepartmentController', () => {
 
 **Key patterns:**
 
-- Override guards in `overrideGuard()` to bypass authentication in tests
-- Mock service methods
-- Test controller logic (transformation, injection), not service logic
-- Verify service was called with correct arguments
+- Mock service methods only — no guard overriding needed unless the `TestingModule` boots real global providers
+- Test controller logic (param parsing, passing `user.userId` through), not service logic
+- `ParseIntPipe` isn't exercised by calling the controller method directly (it runs at the HTTP layer) — cover it in an E2E test if it matters
 
 ### Phase 4: E2E Test Pattern
 
-**Full request/response cycle with real database:**
+**Full request/response cycle with the real database.** Both global guards run for real here, so get a token from `/api/auth/dev/login` (requires `AUTH_DEV_MODE=true`, `AUTH_DEV_SECRET` set, and `NODE_ENV !== 'production'` — see Phase 5) rather than overriding guards:
 
 ```typescript
 // test/department.e2e-spec.ts
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
@@ -429,14 +319,8 @@ import { PrismaService } from '../src/modules/prisma/prisma.service';
 describe('Department E2E', () => {
   let app: INestApplication;
   let prisma: PrismaService;
-  let validToken: string;
-  let createdDepartmentId: string;
-
-  // Test user credentials (should exist in seed or created via auth)
-  const testUser = {
-    email: 'test@example.com',
-    password: 'TestPassword123!',
-  };
+  let accessToken: string;
+  let createdDepartmentId: number;
 
   beforeAll(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -444,103 +328,53 @@ describe('Department E2E', () => {
     }).compile();
 
     app = module.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        transform: true,
-      }),
-    );
+    app.setGlobalPrefix('api');
     await app.init();
 
     prisma = module.get<PrismaService>(PrismaService);
 
-    // Login to get token (adjust based on your auth flow)
     const loginResponse = await request(app.getHttpServer())
-      .post('/api/auth/login')
-      .send(testUser);
+      .post('/api/auth/dev/login')
+      .set('x-dev-auth-secret', process.env.AUTH_DEV_SECRET ?? '')
+      .send({ phone: process.env.DEV_EMPLOYEE_PHONE ?? '0900000001' });
 
-    validToken = loginResponse.body.accessToken;
+    accessToken = loginResponse.body.accessToken;
   });
 
   afterAll(async () => {
-    // Cleanup
     if (createdDepartmentId) {
-      await prisma.department.delete({
-        where: { id: createdDepartmentId },
-      });
+      await prisma.department.delete({ where: { id: createdDepartmentId } }).catch(() => undefined);
     }
     await app.close();
   });
 
   describe('POST /api/departments', () => {
     it('should create a department', async () => {
-      const createDto = {
-        name: 'Engineering Department',
-        description: 'Builds software products',
-      };
-
       const response = await request(app.getHttpServer())
         .post('/api/departments')
-        .set('Authorization', `Bearer ${validToken}`)
-        .send(createDto)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ name: 'Engineering Department', description: 'Builds software' })
         .expect(201);
 
       expect(response.body).toHaveProperty('id');
-      expect(response.body.name).toBe(createDto.name);
-      expect(response.body.description).toBe(createDto.description);
+      expect(response.body.name).toBe('Engineering Department');
 
-      createdDepartmentId = response.body.id; // Save for cleanup
+      createdDepartmentId = response.body.id;
     });
 
     it('should fail without authentication', async () => {
-      const createDto = {
-        name: 'Engineering',
-        description: 'Building software',
-      };
-
       await request(app.getHttpServer())
         .post('/api/departments')
-        .send(createDto)
-        .expect(401); // Unauthorized
+        .send({ name: 'Engineering' })
+        .expect(401);
     });
 
     it('should fail with invalid input (validation)', async () => {
-      const invalidDto = {
-        name: '', // Empty name (invalid)
-        description: 'Building software',
-      };
-
       await request(app.getHttpServer())
         .post('/api/departments')
-        .set('Authorization', `Bearer ${validToken}`)
-        .send(invalidDto)
-        .expect(400); // Bad Request
-    });
-
-    it('should fail with duplicate name', async () => {
-      const createDto = {
-        name: 'Duplicate Department',
-        description: 'First one',
-      };
-
-      // Create first
-      const firstResponse = await request(app.getHttpServer())
-        .post('/api/departments')
-        .set('Authorization', `Bearer ${validToken}`)
-        .send(createDto)
-        .expect(201);
-
-      // Try to create duplicate
-      await request(app.getHttpServer())
-        .post('/api/departments')
-        .set('Authorization', `Bearer ${validToken}`)
-        .send(createDto)
-        .expect(400); // Should fail with unique constraint
-
-      // Cleanup
-      await prisma.department.delete({
-        where: { id: firstResponse.body.id },
-      });
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ name: '' })
+        .expect(400);
     });
   });
 
@@ -548,146 +382,28 @@ describe('Department E2E', () => {
     it('should return list of departments', async () => {
       const response = await request(app.getHttpServer())
         .get('/api/departments')
-        .set('Authorization', `Bearer ${validToken}`)
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
 
       expect(Array.isArray(response.body)).toBe(true);
-      // All items should have required fields
-      response.body.forEach((dept) => {
-        expect(dept).toHaveProperty('id');
-        expect(dept).toHaveProperty('name');
-        expect(dept).toHaveProperty('createdAt');
-      });
-    });
-
-    it('should not include deleted departments', async () => {
-      // Create a department
-      const createDto = {
-        name: 'Temporary Department',
-        description: 'To be deleted',
-      };
-
-      const createResponse = await request(app.getHttpServer())
-        .post('/api/departments')
-        .set('Authorization', `Bearer ${validToken}`)
-        .send(createDto)
-        .expect(201);
-
-      const deptId = createResponse.body.id;
-
-      // Verify it's in the list
-      let listResponse = await request(app.getHttpServer())
-        .get('/api/departments')
-        .set('Authorization', `Bearer ${validToken}`)
-        .expect(200);
-
-      let dept = listResponse.body.find((d) => d.id === deptId);
-      expect(dept).toBeDefined();
-
-      // Delete it
-      await request(app.getHttpServer())
-        .delete(`/api/departments/${deptId}`)
-        .set('Authorization', `Bearer ${validToken}`)
-        .expect(204);
-
-      // Verify it's no longer in the list
-      listResponse = await request(app.getHttpServer())
-        .get('/api/departments')
-        .set('Authorization', `Bearer ${validToken}`)
-        .expect(200);
-
-      dept = listResponse.body.find((d) => d.id === deptId);
-      expect(dept).toBeUndefined();
-    });
-  });
-
-  describe('GET /api/departments/:id', () => {
-    it('should return department by id', async () => {
-      if (!createdDepartmentId) {
-        // Create one if needed
-        const createResponse = await request(app.getHttpServer())
-          .post('/api/departments')
-          .set('Authorization', `Bearer ${validToken}`)
-          .send({
-            name: 'Get Test Department',
-            description: 'For testing GET by id',
-          })
-          .expect(201);
-
-        createdDepartmentId = createResponse.body.id;
-      }
-
-      const response = await request(app.getHttpServer())
-        .get(`/api/departments/${createdDepartmentId}`)
-        .set('Authorization', `Bearer ${validToken}`)
-        .expect(200);
-
-      expect(response.body).toHaveProperty('id', createdDepartmentId);
-      expect(response.body).toHaveProperty('name');
-    });
-
-    it('should return 404 for nonexistent id', async () => {
-      await request(app.getHttpServer())
-        .get('/api/departments/nonexistent-id')
-        .set('Authorization', `Bearer ${validToken}`)
-        .expect(404);
-    });
-  });
-
-  describe('PATCH /api/departments/:id', () => {
-    it('should update a department', async () => {
-      if (!createdDepartmentId) {
-        const createResponse = await request(app.getHttpServer())
-          .post('/api/departments')
-          .set('Authorization', `Bearer ${validToken}`)
-          .send({
-            name: 'Update Test Department',
-            description: 'Initial description',
-          })
-          .expect(201);
-
-        createdDepartmentId = createResponse.body.id;
-      }
-
-      const updateDto = {
-        description: 'Updated description',
-      };
-
-      const response = await request(app.getHttpServer())
-        .patch(`/api/departments/${createdDepartmentId}`)
-        .set('Authorization', `Bearer ${validToken}`)
-        .send(updateDto)
-        .expect(200);
-
-      expect(response.body.description).toBe(updateDto.description);
     });
   });
 
   describe('DELETE /api/departments/:id', () => {
-    it('should soft delete a department', async () => {
-      const createResponse = await request(app.getHttpServer())
+    it('should hard-delete a department (not recoverable)', async () => {
+      const created = await request(app.getHttpServer())
         .post('/api/departments')
-        .set('Authorization', `Bearer ${validToken}`)
-        .send({
-          name: 'Delete Test Department',
-          description: 'To be deleted',
-        })
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ name: 'Temp Department' })
         .expect(201);
 
-      const deptId = createResponse.body.id;
-
-      // Delete it
       await request(app.getHttpServer())
-        .delete(`/api/departments/${deptId}`)
-        .set('Authorization', `Bearer ${validToken}`)
+        .delete(`/api/departments/${created.body.id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(204);
 
-      // Verify it's deleted (soft delete)
-      const dept = await prisma.department.findFirst({
-        where: { id: deptId },
-      });
-
-      expect(dept.deletedAt).not.toBeNull();
+      const found = await prisma.department.findUnique({ where: { id: created.body.id } });
+      expect(found).toBeNull(); // real delete, not deletedAt
     });
   });
 });
@@ -695,145 +411,55 @@ describe('Department E2E', () => {
 
 **Key patterns:**
 
-- Real HTTP requests via supertest
-- Real database operations
-- Test complete workflows (create → read → update → delete)
-- Cleanup after tests
-- Test error cases (auth, validation, 404)
-- Use real tokens from auth endpoint
+- Real HTTP requests via supertest, real database operations
+- Get tokens from `/api/auth/dev/login` (gated by env vars — skip/guard these tests if `AUTH_DEV_MODE` isn't set in CI)
+- Test complete workflows (create → read → update → delete) and error cases (401 unauthenticated, 400 validation, 403 missing permission)
+- Clean up created rows in `afterAll` — deletes are permanent, there's no `deletedAt` to reset
 
-### Phase 5: Testing Guards (JWT, CASL)
+### Phase 5: Testing the Auth/Permission Guards
 
-**Test JWT Access Guard:**
+**`JwtAccessGuard`** rejects unauthenticated requests to any non-`@Public()` route:
 
 ```typescript
-// test/auth-guards.e2e-spec.ts
-describe('JWT Access Guard (E2E)', () => {
-  let app: INestApplication;
-
-  beforeAll(async () => {
-    const module = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = module.createNestApplication();
-    await app.init();
+describe('JwtAccessGuard (E2E)', () => {
+  it('should reject request without token', async () => {
+    await request(app.getHttpServer()).get('/api/employees').expect(401);
   });
 
-  describe('Endpoints with @UseGuards(JwtAccessGuard)', () => {
-    it('should reject request without token', async () => {
-      await request(app.getHttpServer()).get('/api/employees').expect(401); // Unauthorized
-    });
-
-    it('should reject request with invalid token', async () => {
-      await request(app.getHttpServer())
-        .get('/api/employees')
-        .set('Authorization', 'Bearer invalid-token')
-        .expect(401);
-    });
-
-    it('should reject request with expired token', async () => {
-      // Create an expired token (depends on your token service)
-      const expiredToken = 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
-
-      await request(app.getHttpServer())
-        .get('/api/employees')
-        .set('Authorization', expiredToken)
-        .expect(401);
-    });
-
-    it('should accept request with valid token', async () => {
-      const loginResponse = await request(app.getHttpServer())
-        .post('/api/auth/login')
-        .send({ email: 'user@example.com', password: 'password' });
-
-      const { accessToken } = loginResponse.body;
-
-      await request(app.getHttpServer())
-        .get('/api/employees')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .expect(200); // Should succeed
-    });
+  it('should reject request with invalid token', async () => {
+    await request(app.getHttpServer())
+      .get('/api/employees')
+      .set('Authorization', 'Bearer invalid-token')
+      .expect(401);
   });
 });
 ```
 
-**Test CASL Ability Guard:**
+**`PermissionsGuard`** additionally rejects authenticated requests that lack the required `(action, subject)` grant — get tokens for two different roles (e.g. via two dev-login employees on different roles, seeded ahead of time) to exercise this:
 
 ```typescript
-// test/casl-guard.e2e-spec.ts
-describe('CASL Ability Guard (E2E)', () => {
-  let app: INestApplication;
-  let adminToken: string;
-  let employeeToken: string;
-
-  beforeAll(async () => {
-    const module = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = module.createNestApplication();
-    await app.init();
-
-    // Get tokens for different roles
-    const adminLogin = await request(app.getHttpServer())
-      .post('/api/auth/login')
-      .send({ email: 'admin@example.com', password: 'password' });
-    adminToken = adminLogin.body.accessToken;
-
-    const employeeLogin = await request(app.getHttpServer())
-      .post('/api/auth/login')
-      .send({ email: 'employee@example.com', password: 'password' });
-    employeeToken = employeeLogin.body.accessToken;
+describe('PermissionsGuard (E2E)', () => {
+  it('employee without the "create employees" permission gets 403', async () => {
+    await request(app.getHttpServer())
+      .post('/api/employees')
+      .set('Authorization', `Bearer ${employeeToken}`)
+      .send({ fullName: 'Jane Doe', phoneNumber: '0900000002' })
+      .expect(403);
   });
 
-  describe('Endpoints with @CheckAbility', () => {
-    it('admin should be able to create employees', async () => {
-      const createDto = {
-        firstName: 'John',
-        lastName: 'Doe',
-        email: 'john@example.com',
-      };
-
-      await request(app.getHttpServer())
-        .post('/api/employees')
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send(createDto)
-        .expect(201);
-    });
-
-    it('employee should not be able to create employees', async () => {
-      const createDto = {
-        firstName: 'Jane',
-        lastName: 'Doe',
-        email: 'jane@example.com',
-      };
-
-      await request(app.getHttpServer())
-        .post('/api/employees')
-        .set('Authorization', `Bearer ${employeeToken}`)
-        .send(createDto)
-        .expect(403); // Forbidden
-    });
-
-    it('manager should only see employees in their branch', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/api/employees')
-        .set('Authorization', `Bearer ${managerToken}`)
-        .expect(200);
-
-      // Verify all employees have manager's branch
-      response.body.forEach((employee) => {
-        expect(employee.branchId).toBe(managerBranchId);
-      });
-    });
+  it('admin with the permission succeeds', async () => {
+    await request(app.getHttpServer())
+      .post('/api/employees')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ fullName: 'Jane Doe', phoneNumber: '0900000002' })
+      .expect(201);
   });
 });
 ```
+
+There is no CASL ability system in this project — `src/modules/casl/casl-ability.factory.ts` is commented-out dead code and `CaslModule` isn't imported anywhere. Don't write tests against it.
 
 ### Phase 6: Testing Async Operations
-
-**Test async service calls:**
 
 ```typescript
 describe('Async Operations', () => {
@@ -847,25 +473,21 @@ describe('Async Operations', () => {
     const results = await Promise.all(promises);
 
     expect(results).toHaveLength(3);
-    expect(results[0]).toHaveProperty('id');
-    expect(results[1]).toHaveProperty('id');
-    expect(results[2]).toHaveProperty('id');
+    results.forEach((r) => expect(r).toHaveProperty('id'));
   });
 
-  it('should handle errors in concurrent requests', async () => {
+  it('should handle partial failures in concurrent requests', async () => {
     jest
       .spyOn(prisma.department, 'create')
       .mockRejectedValueOnce(new Error('DB error'))
       .mockResolvedValueOnce(mockDepartment)
       .mockResolvedValueOnce(mockDepartment);
 
-    const promises = [
+    const results = await Promise.allSettled([
       service.create(createDto1, userId),
       service.create(createDto2, userId),
       service.create(createDto3, userId),
-    ];
-
-    const results = await Promise.allSettled(promises);
+    ]);
 
     expect(results[0].status).toBe('rejected');
     expect(results[1].status).toBe('fulfilled');
@@ -876,25 +498,25 @@ describe('Async Operations', () => {
 
 ## Troubleshooting Guide
 
-| Issue                                | Cause                                        | Solution                                                          |
-| ------------------------------------ | -------------------------------------------- | ----------------------------------------------------------------- |
-| "Cannot find module" in tests        | Jest can't resolve imports                   | Check `tsconfig.json` paths, verify `ts-jest` config              |
-| Mock not being used                  | spy created after module instantiation       | Create mock in `beforeEach`, before service initialization        |
-| Prisma mock returning undefined      | Mock not returning expected structure        | Return object matching actual Prisma response (include relations) |
-| Guard not being overridden           | Override happens before module instantiation | Call `.overrideGuard()` before `.compile()`                       |
-| Tests passing locally, failing in CI | Database state differs                       | Clean up after each test, use transactions, reset seed            |
-| Timeout errors in E2E tests          | Database operations taking too long          | Increase Jest timeout: `jest.setTimeout(30000)`                   |
-| Token not valid in E2E tests         | Login not returning valid token              | Check auth module is working, verify test user exists in seed     |
+| Issue                                 | Cause                                          | Solution                                                            |
+| -------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------ |
+| "Cannot find module" in tests          | Jest can't resolve `@modules/*`/`@common/*`       | Check `moduleNameMapper` in `package.json` jest config matches `tsconfig.json` paths |
+| Mock not being used                    | Spy created after module instantiation            | Create mock in `beforeEach`, before service initialization                |
+| Prisma mock returning undefined        | Mock not returning expected structure             | Return an object matching the actual Prisma response (with relations)     |
+| E2E route always 401/403 unexpectedly  | Both guards are global — a route without `@Public()`/`@SkipPermissions()`/`@RequirePermissions()` denies by default | Confirm the route declares the right decorator combination |
+| Tests passing locally, failing in CI   | Database state differs, or `AUTH_DEV_MODE` unset in CI | Clean up after each test; guard dev-login-dependent E2E specs behind an env check |
+| Timeout errors in E2E tests            | Database operations taking too long               | Increase Jest timeout: `jest.setTimeout(30000)`                           |
+| Token not valid in E2E tests           | Dev login disabled or wrong `x-dev-auth-secret`   | Verify `AUTH_DEV_MODE=true`, `AUTH_DEV_SECRET` set, `NODE_ENV !== 'production'`, header matches |
 
 ## Key Principles
 
 1. **Isolation**: Unit tests mock everything, E2E tests use real dependencies
 2. **Clarity**: Test names describe what's being tested and expected outcome
-3. **Coverage**: Test happy path, error cases, and edge cases
-4. **Cleanup**: Always cleanup test data (delete, reset, etc.)
+3. **Coverage**: Test happy path, `P2002`/`P2025` error-mapping, and permission-denied cases
+4. **Cleanup**: Always clean up test data — deletes are permanent (no `deletedAt` to reset)
 5. **Determinism**: Tests should pass/fail consistently, not randomly
-6. **Speed**: Unit tests <10ms each, E2E tests should complete in seconds
-7. **Readability**: Use descriptive variable names, helper functions for common operations
+6. **Speed**: Unit tests should run in milliseconds; E2E tests should complete in seconds
+7. **Real ids**: `id`, `createdBy`, `updatedBy` are `number` — don't fixture them as UUID strings
 
 ## Quick Reference Commands
 
@@ -906,7 +528,7 @@ pnpm test
 pnpm test:watch
 
 # Run specific test file
-pnpm test department.service.spec.ts
+pnpm test department.service.spec
 
 # Run with coverage
 pnpm test:cov
@@ -920,7 +542,7 @@ pnpm test:e2e -- department.e2e-spec.ts
 
 ## See Also
 
-- [AGENTS.md](../../../../AGENTS.md) — Project overview and testing patterns
+- [AGENTS.md](../../../../AGENTS.md) — Project overview, auth/authorization model
 - [crud-generation SKILL](../crud-generation/SKILL.md) — How to generate testable modules
 - [NestJS Testing](https://docs.nestjs.com/fundamentals/testing) — Official documentation
 - [Jest Documentation](https://jestjs.io/) — Jest matcher reference

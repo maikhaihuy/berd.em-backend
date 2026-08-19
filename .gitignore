@@ -3,6 +3,9 @@
 /node_modules
 /build
 
+# generated OpenAPI contract
+/openapi
+
 # Logs
 logs
 *.log

@@ -96,7 +96,10 @@ export class EmployeesService {
         ...employeeWithUserInclude,
       },
     });
-    return EmployeeMapper.toDtos(employees);
+    return EmployeeMapper.toDtos(employees, {
+      withBranches: true,
+      withUser: true,
+    });
   }
 
   async findOne(id: number): Promise<EmployeeResponseDto> {
@@ -110,7 +113,10 @@ export class EmployeesService {
     if (!employee) {
       throw new NotFoundException(`Employee with ID ${id} not found.`);
     }
-    return EmployeeMapper.toDto(employee);
+    return EmployeeMapper.toDto(employee, {
+      withBranches: true,
+      withUser: true,
+    });
   }
 
   async update(

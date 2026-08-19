@@ -10,11 +10,6 @@ import { ApiProperty } from '@nestjs/swagger';
 import { UserStatus } from '@prisma/client';
 
 export class CreateUserDto {
-  @ApiProperty({ description: 'Zalo unique identifier', example: 'zalo_12345' })
-  @IsString()
-  @IsNotEmpty()
-  zaloId!: string;
-
   @ApiProperty({ description: 'User phone number', example: '+84901234567' })
   @IsString()
   @IsNotEmpty()

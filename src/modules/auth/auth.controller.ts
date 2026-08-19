@@ -3,12 +3,20 @@ import {
   Post,
   Body,
   UseGuards,
-  Request,
+  Req,
   HttpCode,
   HttpStatus,
   Get,
+  Headers,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags, ApiBody } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiTags,
+  ApiBody,
+  ApiResponse,
+} from '@nestjs/swagger';
+import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { RefreshTokenService } from './refresh-token.service';
 import { JwtRefreshGuard } from '@common/guards/jwt-refresh.guard';
@@ -24,6 +32,8 @@ import { Throttle } from '@nestjs/throttler';
 import { ZaloLoginDto } from './dto/zalo-login.dto';
 import { LoginDto } from './dto/login.dto';
 import { LocalAuthGuard } from '@common/guards/local-auth.guard';
+import { DevLoginDto } from './dto/dev-login.dto';
+import { AuthSessionResponseDto } from './dto/auth-session-response.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -37,14 +47,40 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 attempts per minute for Zalo
   @Post('login/zalo')
   @ApiOperation({
-    summary: 'Login with Zalo phone number authentication',
+    summary: 'Login with Zalo Mini App authentication',
     description:
-      'Authenticate user using Zalo access token and phone token. Only pre-registered users can log in.',
+      'Authenticate user using a Zalo access token verified by the backend. Phone token is required only for first-time account linking.',
   })
   @ApiBody({ type: ZaloLoginDto })
   @HttpCode(HttpStatus.OK)
   async loginWithZalo(@Body() zaloLoginDto: ZaloLoginDto) {
     return this.authService.loginWithZalo(zaloLoginDto);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @Post('dev/login')
+  @ApiOperation({
+    summary: 'Development-only employee login',
+    description:
+      'Login as an existing employee for local/frontend development. Disabled unless AUTH_DEV_MODE=true outside production.',
+  })
+  @ApiBody({ type: DevLoginDto })
+  @ApiResponse({ status: 200, type: AuthSessionResponseDto })
+  @HttpCode(HttpStatus.OK)
+  async loginWithDev(
+    @Body() devLoginDto: DevLoginDto,
+    @Headers('x-dev-auth-secret') devAuthSecret: string | undefined,
+    @Req() req: Request,
+  ): Promise<AuthSessionResponseDto> {
+    const userAgent = Array.isArray(req.headers['user-agent'])
+      ? req.headers['user-agent'][0]
+      : req.headers['user-agent'];
+
+    return await this.authService.loginWithDev(devLoginDto, devAuthSecret, {
+      userAgent,
+      ipAddress: req.ip,
+    });
   }
 
   @Public()

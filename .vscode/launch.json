@@ -8,7 +8,7 @@
       "type": "node",
       "request": "launch",
       "name": "Debug NestJS",
-      "runtimeExecutable": "npm",
+      "runtimeExecutable": "pnpm",
       "runtimeArgs": ["run", "start:debug"],
       "port": 9229,
       "restart": true,
