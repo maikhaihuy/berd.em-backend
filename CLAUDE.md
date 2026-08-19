@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 StaffHub backend (`berd.em-backend`) is a NestJS 11 + Prisma REST API for employee shift scheduling, task assignment, time tracking, and payroll. Auth is Zalo Mini App OAuth (primary) plus a JWT access/refresh pair; authorization is a custom permission system (NOT CASL, see below).
 
-**Stale docs warning**: `AGENTS.md` and `.github/skills/*/SKILL.md` describe an earlier version of this project (CASL guards, `WorkSlot`/`Schedule` models, UUID primary keys, soft deletes via `deletedAt`). None of that matches the current codebase — schema now uses `Int` autoincrement IDs, hard deletes, and a template→generated-instance shift model. Trust `prisma/schema.prisma` and the actual `src/` code over those docs.
+**Docs note**: `AGENTS.md` covers the same ground as this file for non-Claude agents and is kept in sync — update both together. The project skills under `.claude/skills/` (`crud-generation`, `database-lifecycle`, `nestjs-prisma-expert`, `schema-review`, `test-writing`) match the current schema (`Int` autoincrement IDs, hard deletes, no CASL). If any doc ever contradicts `prisma/schema.prisma` or the actual `src/` code, the code wins.
 
 ## Commands
 
@@ -33,6 +33,10 @@ pnpm db:seed                           # run prisma/seed.ts directly
 ```
 
 There is no dev Docker/DB bootstrap script — `DATABASE_URL` in `.env` must point at a reachable Postgres instance before any `db:*` command works.
+
+## OpenSpec (spec-driven changes)
+
+Non-trivial changes go through OpenSpec (`openspec/`) before code: propose → apply → archive. Use the `/opsx:propose`, `/opsx:apply`, `/opsx:archive` slash commands (or the equivalent `openspec-*` skills — both are generated twins, either works). `openspec/project.md` holds the durable project context fed into every OpenSpec artifact; `openspec/specs/<capability>/spec.md` is the synced source of truth per capability; `openspec/changes/` holds in-progress work. See [GUIDE_LINE.md](GUIDE_LINE.md) for the full workflow.
 
 ## Architecture
 

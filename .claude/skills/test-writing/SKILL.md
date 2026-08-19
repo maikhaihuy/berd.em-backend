@@ -542,7 +542,7 @@ pnpm test:e2e -- department.e2e-spec.ts
 
 ## See Also
 
-- [AGENTS.md](../../../../AGENTS.md) — Project overview, auth/authorization model
+- [AGENTS.md](../../../AGENTS.md) — Project overview, auth/authorization model
 - [crud-generation SKILL](../crud-generation/SKILL.md) — How to generate testable modules
 - [NestJS Testing](https://docs.nestjs.com/fundamentals/testing) — Official documentation
 - [Jest Documentation](https://jestjs.io/) — Jest matcher reference
