@@ -1,14 +1,86 @@
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosError } from 'axios';
-import { ZaloPhoneDataResponse, ZaloProfileDto } from './dto/zalo-profile.dto';
+import {
+  ZaloPhoneDataResponse,
+  ZaloProfileDataResponse,
+  ZaloProfileDto,
+} from './dto/zalo-profile.dto';
 
 @Injectable()
 export class ZaloAuthService {
   private readonly logger = new Logger(ZaloAuthService.name);
-  private readonly zaloGraphApiUrl = 'https://graph.zalo.me/v2.0/me/info';
+  private readonly zaloProfileApiUrl = 'https://graph.zalo.me/v2.0/me';
+  private readonly zaloPhoneApiUrl = 'https://graph.zalo.me/v2.0/me/info';
 
   constructor(private readonly configService: ConfigService) {}
+
+  async verifyAccessToken(accessToken: string): Promise<ZaloProfileDto> {
+    try {
+      this.logger.log('Calling Zalo Graph API to verify access token');
+
+      const response = await axios.get<ZaloProfileDataResponse>(
+        this.zaloProfileApiUrl,
+        {
+          headers: {
+            access_token: accessToken,
+          },
+          params: {
+            fields: 'id,name,picture',
+          },
+        },
+      );
+
+      const profileData = response.data;
+
+      if (profileData.error) {
+        this.logger.error(
+          `Zalo profile API error: ${profileData.message || 'Failed to retrieve profile'}`,
+        );
+        throw new UnauthorizedException('Invalid Zalo access token');
+      }
+
+      const data = profileData.data;
+      const zaloUserId = profileData.id ?? data?.id;
+
+      if (!zaloUserId) {
+        this.logger.error('Zalo profile response did not include a user ID');
+        throw new UnauthorizedException('Invalid Zalo access token');
+      }
+
+      return {
+        zaloUserId,
+        fullName: profileData.name ?? data?.name ?? data?.displayName,
+        avatarUrl:
+          profileData.picture?.data?.url ??
+          data?.picture?.data?.url ??
+          profileData.avatar ??
+          data?.avatarUrl ??
+          data?.avatar,
+      };
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError;
+        this.logger.error(
+          `Zalo profile API request failed: ${axiosError.message}`,
+          axiosError.response?.data,
+        );
+
+        if ([400, 401, 403].includes(axiosError.response?.status ?? 0)) {
+          throw new UnauthorizedException('Invalid Zalo access token');
+        }
+      }
+
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+
+      this.logger.error('Unexpected error verifying Zalo access token', error);
+      throw new UnauthorizedException(
+        'Failed to authenticate with Zalo. Please try again.',
+      );
+    }
+  }
 
   /**
    * Decrypt and retrieve phone number from Zalo using access token and phone token
@@ -33,7 +105,7 @@ export class ZaloAuthService {
       this.logger.log('Calling Zalo Graph API to decrypt phone number');
 
       const response = await axios.get<ZaloPhoneDataResponse>(
-        this.zaloGraphApiUrl,
+        this.zaloPhoneApiUrl,
         {
           headers: {
             access_token: accessToken,
@@ -90,22 +162,7 @@ export class ZaloAuthService {
     }
   }
 
-  /**
-   * Optionally retrieve additional profile information from Zalo
-   * This can be extended based on available Zalo API endpoints
-   */
-  getZaloProfile(): Partial<ZaloProfileDto> {
-    try {
-      // This is a placeholder - adjust based on actual Zalo API endpoints available
-      // You may need different endpoints for name, avatar, etc.
-      this.logger.log('Retrieving Zalo profile information');
-
-      // For now, return empty profile - extend this based on your Zalo API access
-      return {};
-    } catch (error) {
-      this.logger.warn('Failed to retrieve Zalo profile information', error);
-      // Non-critical - return empty profile
-      return {};
-    }
+  getZaloProfile(accessToken: string): Promise<ZaloProfileDto> {
+    return this.verifyAccessToken(accessToken);
   }
 }

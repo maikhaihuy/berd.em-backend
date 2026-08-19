@@ -1,5 +1,7 @@
 export class RefreshTokenPayloadDto {
   sub!: number; // User ID
+  typ?: 'refresh';
+  sessionId?: string;
   empId?: number; // Employee ID (Quan trọng cho Staff/Manager)
   phone!: string; // Số điện thoại từ Zalo (Dùng thay cho email)
   role!: string; // Trong Spec 1.5, mỗi User thường chỉ có 1 role chính (ADMIN/MANAGER/STAFF)

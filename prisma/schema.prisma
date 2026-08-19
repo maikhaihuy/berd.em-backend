@@ -83,16 +83,16 @@ enum AttendanceAction {
 // ==================== AUTH & USER MANAGEMENT ====================
 
 model User {
-  id          Int        @id @default(autoincrement())
-  zaloId      String     @unique
-  phoneNumber String     @unique
-  password    String?
-  fullName    String
-  avatarUrl   String?
-  status      UserStatus
-  roleId      Int
-  role        Role       @relation(fields: [roleId], references: [id])
-  employee    Employee? // optional relation
+  id           Int           @id @default(autoincrement())
+  phoneNumber  String        @unique
+  password     String?
+  fullName     String
+  avatarUrl    String?
+  status       UserStatus
+  roleId       Int
+  role         Role          @relation(fields: [roleId], references: [id])
+  employee     Employee? // optional relation
+  zaloIdentity ZaloIdentity?
 
   refreshTokens RefreshToken[]
   resetTokens   PasswordResetToken[]
@@ -101,6 +101,21 @@ model User {
   updatedAt DateTime @updatedAt
 
   @@map("users")
+}
+
+model ZaloIdentity {
+  id             Int       @id @default(autoincrement())
+  userId         Int       @unique
+  zaloUserId     String    @unique
+  displayName    String?
+  avatarUrl      String?
+  lastVerifiedAt DateTime?
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("zalo_identities")
 }
 
 model Role {
@@ -163,6 +178,7 @@ model RefreshToken {
   userId      Int
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   hashedToken String
+  source      String?
   device      String?
   ipAddress   String?
   expiresAt   DateTime

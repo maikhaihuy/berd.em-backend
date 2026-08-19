@@ -1,7 +1,16 @@
 import { plainToInstance } from 'class-transformer';
-import { IsString, IsNotEmpty, validateSync } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  validateSync,
+} from 'class-validator';
 
 export class EnvVariables {
+  @IsString()
+  @IsOptional()
+  NODE_ENV?: string;
+
   @IsString()
   @IsNotEmpty()
   DATABASE_URL: string;
@@ -21,9 +30,26 @@ export class EnvVariables {
   @IsString()
   @IsNotEmpty()
   JWT_REFRESH_EXPIRATION: string;
+
+  @IsString()
+  @IsOptional()
+  AUTH_DEV_MODE?: string;
+
+  @IsString()
+  @IsOptional()
+  AUTH_DEV_SECRET?: string;
 }
 
 export function validate(config: Record<string, unknown>) {
+  if (
+    config.NODE_ENV === 'production' &&
+    config.AUTH_DEV_MODE === 'true'
+  ) {
+    throw new Error(
+      'Invalid auth configuration: AUTH_DEV_MODE must not be true in production.',
+    );
+  }
+
   const validatedConfig = plainToInstance(EnvVariables, config, {
     enableImplicitConversion: true,
   });

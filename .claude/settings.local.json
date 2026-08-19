@@ -7,7 +7,10 @@
       "PowerShell(git stash push -m \"authz-wip\" 2>&1)",
       "PowerShell(if \\($?\\) { \"STASHED\" })",
       "PowerShell(npx eslint src/common/guards/permissions.guard.ts src/common/guards/jwt-access.guard.ts src/common/authz.module.ts src/common/decorators/permissions.decorator.ts src/common/decorators/public.decorator.ts src/common/decorators/skip-permissions.decorator.ts src/modules/auth/strategies/jwt-access.strategy.ts src/modules/auth/auth.controller.ts src/app.controller.ts 2>&1 | Select-Object -Last 40; \"EXIT=$LASTEXITCODE\")",
-      "PowerShell(npx prettier --write \"src/common/guards/permissions.guard.ts\" \"src/common/guards/permissions.guard.spec.ts\" \"src/common/guards/jwt-access.guard.ts\" \"src/common/authz.module.ts\" \"src/common/decorators/permissions.decorator.ts\" \"src/common/decorators/public.decorator.ts\" \"src/common/decorators/skip-permissions.decorator.ts\" \"src/modules/auth/strategies/jwt-access.strategy.ts\" \"src/modules/auth/strategies/jwt-access.strategy.spec.ts\" \"src/modules/auth/dto/authenticated-user.dto.ts\" \"src/modules/auth/auth.controller.ts\" \"src/app.controller.ts\" 2>&1 | Select-Object -Last 20; \"EXIT=$LASTEXITCODE\")"
+      "PowerShell(npx prettier --write \"src/common/guards/permissions.guard.ts\" \"src/common/guards/permissions.guard.spec.ts\" \"src/common/guards/jwt-access.guard.ts\" \"src/common/authz.module.ts\" \"src/common/decorators/permissions.decorator.ts\" \"src/common/decorators/public.decorator.ts\" \"src/common/decorators/skip-permissions.decorator.ts\" \"src/modules/auth/strategies/jwt-access.strategy.ts\" \"src/modules/auth/strategies/jwt-access.strategy.spec.ts\" \"src/modules/auth/dto/authenticated-user.dto.ts\" \"src/modules/auth/auth.controller.ts\" \"src/app.controller.ts\" 2>&1 | Select-Object -Last 20; \"EXIT=$LASTEXITCODE\")",
+      "Bash(pnpm add *)",
+      "Bash(pnpm run *)",
+      "Bash(pnpm exec *)"
     ]
   }
 }

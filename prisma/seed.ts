@@ -8,10 +8,23 @@ async function main() {
   const SETTINGS_USERNAME = process.env.SETTINGS_USERNAME?.trim() || 'settings';
   const SETTINGS_PASSWORD =
     process.env.SETTINGS_PASSWORD?.trim() || 'ChangeMe!123';
+  const DEV_EMPLOYEE_PHONE =
+    process.env.DEV_EMPLOYEE_PHONE?.trim() || '0900000001';
+  const DEV_EMPLOYEE_EMAIL =
+    process.env.DEV_EMPLOYEE_EMAIL?.trim() || 'dev.employee@staffhub.local';
+  const DEV_EMPLOYEE_NAME =
+    process.env.DEV_EMPLOYEE_NAME?.trim() || 'Nhân viên Dev';
+  const DEV_EMPLOYEE_PASSWORD =
+    process.env.DEV_EMPLOYEE_PASSWORD?.trim() || 'DevLogin!123';
+  const DEV_BRANCH_NAME =
+    process.env.DEV_BRANCH_NAME?.trim() || 'Chi nhánh Dev';
+  const DEV_BRANCH_ABBREVIATION =
+    process.env.DEV_BRANCH_ABBREVIATION?.trim() || 'DEV';
 
   // 0) Create a temporary system user ID for seed operations
   // We'll use ID 1 as the SYSTEM_USER_ID, ensuring it exists before dependencies
   const SYSTEM_USER_ID = 1;
+  const DEV_USER_ID = 2; // ID for the dev employee user
 
   // 1) Seed permissions (createMany + skipDuplicates for idempotency)
   const permissionsSeed = [
@@ -150,6 +163,7 @@ async function main() {
         description: role.description,
         updatedBy: SYSTEM_USER_ID,
         rolePermissions: {
+          deleteMany: {},
           create: role.permissionIds.map((permissionId) => ({
             permission: {
               connect: {
@@ -191,7 +205,6 @@ async function main() {
     create: {
       id: SYSTEM_USER_ID,
       phoneNumber: SETTINGS_USERNAME,
-      zaloId: `zalo_${SETTINGS_USERNAME}`,
       fullName: 'Settings User',
       password: hashed,
       status: 'ACTIVE',
@@ -202,8 +215,109 @@ async function main() {
     },
   });
 
+  const employeeRole = await prisma.role.findUnique({
+    where: { name: 'Employee' },
+  });
+
+  if (!employeeRole) {
+    throw new Error('Employee role must exist before creating dev employee');
+  }
+
+  const devPasswordHash = await bcrypt.hash(DEV_EMPLOYEE_PASSWORD, 12);
+
+  const devUser = await prisma.user.upsert({
+    where: { phoneNumber: DEV_EMPLOYEE_PHONE },
+    update: {
+      fullName: DEV_EMPLOYEE_NAME,
+      password: devPasswordHash,
+      status: 'ACTIVE',
+      role: {
+        connect: { id: employeeRole.id },
+      },
+    },
+    create: {
+      id: DEV_USER_ID,
+      phoneNumber: DEV_EMPLOYEE_PHONE,
+      fullName: DEV_EMPLOYEE_NAME,
+      password: devPasswordHash,
+      status: 'ACTIVE',
+      roleId: employeeRole.id,
+    },
+  });
+
+  const existingDevBranch = await prisma.branch.findFirst({
+    where: { abbreviation: DEV_BRANCH_ABBREVIATION },
+  });
+
+  const devBranch = existingDevBranch
+    ? await prisma.branch.update({
+        where: { id: existingDevBranch.id },
+        data: {
+          name: DEV_BRANCH_NAME,
+          abbreviation: DEV_BRANCH_ABBREVIATION,
+          address: 'Địa chỉ dev',
+          phone: DEV_EMPLOYEE_PHONE,
+          email: DEV_EMPLOYEE_EMAIL,
+          updatedBy: SYSTEM_USER_ID,
+        },
+      })
+    : await prisma.branch.create({
+        data: {
+          name: DEV_BRANCH_NAME,
+          abbreviation: DEV_BRANCH_ABBREVIATION,
+          address: 'Địa chỉ dev',
+          phone: DEV_EMPLOYEE_PHONE,
+          email: DEV_EMPLOYEE_EMAIL,
+          createdBy: SYSTEM_USER_ID,
+          updatedBy: SYSTEM_USER_ID,
+        },
+      });
+
+  const devEmployee = await prisma.employee.upsert({
+    where: { phoneNumber: DEV_EMPLOYEE_PHONE },
+    update: {
+      fullName: DEV_EMPLOYEE_NAME,
+      email: DEV_EMPLOYEE_EMAIL,
+      avatar: null,
+      user: {
+        connect: { id: devUser.id },
+      },
+      updatedBy: SYSTEM_USER_ID,
+    },
+    create: {
+      fullName: DEV_EMPLOYEE_NAME,
+      phoneNumber: DEV_EMPLOYEE_PHONE,
+      email: DEV_EMPLOYEE_EMAIL,
+      user: {
+        connect: { id: devUser.id },
+      },
+      createdBy: SYSTEM_USER_ID,
+      updatedBy: SYSTEM_USER_ID,
+    },
+  });
+
+  await prisma.employeeBranch.upsert({
+    where: {
+      employeeId_branchId: {
+        employeeId: devEmployee.id,
+        branchId: devBranch.id,
+      },
+    },
+    update: {
+      isPrimary: true,
+    },
+    create: {
+      employeeId: devEmployee.id,
+      branchId: devBranch.id,
+      isPrimary: true,
+    },
+  });
+
   console.log(
-    'Seed completed: permissions, roles, and SETTINGS user upserted.',
+    'Seed completed: permissions, roles, SETTINGS user, and dev employee upserted.',
+  );
+  console.log(
+    `Dev login employee: employeeId=${devEmployee.id}, phone=${DEV_EMPLOYEE_PHONE}, email=${DEV_EMPLOYEE_EMAIL}`,
   );
 }
 

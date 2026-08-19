@@ -9,7 +9,6 @@ export class UserMapper {
   static mapBase(this: void, user: User): UserResponseDto {
     return {
       id: user.id,
-      zaloId: user.zaloId,
       phoneNumber: user.phoneNumber,
       fullName: user.fullName,
       avatarUrl: user.avatarUrl,
@@ -54,7 +53,6 @@ export class UserMapper {
   static toDtoWithPermissions(user: UserWithRolePermissions): UserResponseDto {
     return {
       id: user.id,
-      zaloId: user.zaloId,
       phoneNumber: user.phoneNumber,
       fullName: user.fullName,
       avatarUrl: user.avatarUrl,

@@ -1,5 +1,6 @@
 export class AccessTokenPayloadDto {
   sub!: number; // User ID
+  typ?: 'access';
   empId?: number; // Employee ID (Quan trọng cho Staff/Manager) Lần đầu tiên có thể null, sau đó sẽ được gán khi nhân viên được tạo
   phone!: string; // Số điện thoại từ Zalo (Dùng thay cho email)
   role!: string; // Trong Spec 1.5, mỗi User thường chỉ có 1 role chính (ADMIN/MANAGER/STAFF)

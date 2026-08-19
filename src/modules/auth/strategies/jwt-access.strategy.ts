@@ -32,7 +32,10 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException();
     }
     return new AuthenticatedUserDto({
-      ...user,
+      userId: user.id,
+      phone: user.phoneNumber,
+      employeeId: user.employee?.id,
+      branches: user.employee?.employeeBranches.map((eb) => eb.branchId) ?? [],
       role: user.role.name,
       permissions: user.role.rolePermissions.map((rp) => ({
         action: rp.permission.action,

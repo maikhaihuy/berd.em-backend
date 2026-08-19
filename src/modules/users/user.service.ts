@@ -18,14 +18,6 @@ export class UsersService {
   async create(createUserDto: CreateUserDto): Promise<UserResponseDto> {
     const { ...userData } = createUserDto;
 
-    // Check if zaloId already exists
-    const existingUser = await this.prisma.user.findUnique({
-      where: { zaloId: userData.zaloId },
-    });
-    if (existingUser) {
-      throw new BadRequestException('User with this Zalo ID already exists');
-    }
-
     // Check if phone number already exists
     const existingPhone = await this.prisma.user.findUnique({
       where: { phoneNumber: userData.phoneNumber },
@@ -99,14 +91,24 @@ export class UsersService {
     return UserMapper.toDto(user);
   }
 
-  async findByZaloId(zaloId: string): Promise<UserResponseDto | null> {
-    const user = await this.prisma.user.findUnique({
-      where: { zaloId },
+  async findByZaloUserId(zaloUserId: string): Promise<UserResponseDto | null> {
+    const zaloIdentity = await this.prisma.zaloIdentity.findUnique({
+      where: { zaloUserId },
       include: {
-        ...userWithRoleInclude,
+        user: {
+          include: {
+            ...userWithRoleInclude,
+          },
+        },
       },
     });
+
+    const user = zaloIdentity?.user;
     return user ? UserMapper.toDto(user) : null;
+  }
+
+  async findByZaloId(zaloUserId: string): Promise<UserResponseDto | null> {
+    return this.findByZaloUserId(zaloUserId);
   }
 
   async update(

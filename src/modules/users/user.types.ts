@@ -30,6 +30,11 @@ export const userWithRolePermissionsInclude = {
       },
     },
   },
+  employee: {
+    include: {
+      employeeBranches: true,
+    },
+  },
 } satisfies Prisma.UserInclude;
 
 export type UserWithRolePermissions = Prisma.UserGetPayload<{

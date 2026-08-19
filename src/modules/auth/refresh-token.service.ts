@@ -19,9 +19,17 @@ export class RefreshTokenService {
    */
   async createRefreshToken(
     payload: RefreshTokenPayloadDto,
+    context?: {
+      source?: string;
+      userAgent?: string;
+      ipAddress?: string;
+    },
   ): Promise<{ token: string; tokenRecord: RefreshToken }> {
     const uuid = uuidv4();
     payload.jti = uuid;
+    if (context?.source) {
+      payload.sessionId = uuid;
+    }
     const userId = payload.sub;
     const expiresIn = this.config.getOrThrow<string>('JWT_REFRESH_EXPIRATION');
     const expiresAt = new Date(
@@ -30,6 +38,13 @@ export class RefreshTokenService {
 
     const refreshToken = this.jwtTokenService.generateRefreshToken(payload);
     const tokenHash = await this.jwtTokenService.hashToken(refreshToken);
+    const contextData = context
+      ? {
+          source: context.source,
+          device: context.userAgent,
+          ipAddress: context.ipAddress,
+        }
+      : {};
 
     // Store the hashed token in database
     const tokenRecord = await this.prisma.refreshToken.create({
@@ -37,6 +52,7 @@ export class RefreshTokenService {
         id: uuid,
         userId,
         hashedToken: tokenHash,
+        ...contextData,
         expiresAt,
       },
     });
@@ -88,6 +104,6 @@ export class RefreshTokenService {
     await this.revokeRefreshToken(oldTokenId);
 
     // Generate a new token
-    return this.createRefreshToken(payload);
+    return await this.createRefreshToken(payload);
   }
 }

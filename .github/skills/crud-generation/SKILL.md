@@ -1,12 +1,12 @@
 ---
 name: crud-generation
-description: 'Scaffold new CRUD modules with complete structure: service, controller, DTOs, tests, and proper NestJS patterns. Use when: creating a new feature module, adding domain entities, implementing resource endpoints. Generates boilerplate following project conventions (Prisma includes, Swagger decorators, CASL guards).'
+description: 'Scaffold new CRUD modules with complete structure: service, controller, DTOs, mapper, types, tests, and proper NestJS patterns. Use when: creating a new feature module, adding domain entities, implementing resource endpoints. Generates boilerplate following project conventions (Int autoincrement ids, no soft delete, Prisma includes, Swagger decorators, the RequirePermissions guard).'
 argument-hint: 'Ask "Create a CRUD module for employees" or "Scaffold a new shifts feature"'
 ---
 
 # CRUD Module Generation
 
-Scaffolds complete, production-ready CRUD modules following BERD.EM conventions with proper structure, patterns, and tests.
+Scaffolds complete, production-ready CRUD modules following StaffHub conventions with proper structure, patterns, and tests.
 
 ## When to Use
 
@@ -19,8 +19,8 @@ Scaffolds complete, production-ready CRUD modules following BERD.EM conventions 
 ## Prerequisites
 
 - NestJS project with Prisma ORM
-- Target entity already defined in `prisma/schema.prisma`
-- Migration applied: `pnpm db:dev`
+- Target entity already defined in `prisma/schema.prisma` with an `Int @id @default(autoincrement())` primary key and `createdAt/createdBy/updatedAt/updatedBy` audit columns (project convention — see any existing model)
+- Migration applied: `pnpm db:dev --name "..."`
 - Understanding of feature requirements (fields, relationships, validation rules)
 
 ## Core Workflow
@@ -33,25 +33,25 @@ Scaffolds complete, production-ready CRUD modules following BERD.EM conventions 
 2. **Key fields** to expose in API responses
 3. **Relationships** (many-to-one, many-to-many, one-to-one)
 4. **Validation rules** (required fields, length, format constraints)
-5. **Authentication required?** (typically yes for BERD.EM)
-6. **Authorization rules** (CASL abilities, role-based restrictions)
-7. **Soft delete or hard delete?** (common: soft delete for audit trails)
+5. **Permissions**: which `(action, subject)` pairs gate each route (`create`/`read`/`update`/`delete` × the entity's plural name is the existing convention — see `prisma/seed.ts`), and which roles should be granted them
+6. **Delete semantics**: this codebase has **no soft delete anywhere in the schema** — deletes are real `prisma.<model>.delete()` calls. Only introduce a `deletedAt` field if the feature has an explicit audit/undo requirement; don't add it by default.
 
 ### Phase 2: Generate Module Structure
 
-Create the folder and standard files:
+Create the folder and standard files (mirrors `src/modules/employees/`):
 
 ```
 src/modules/department/
 ├── department.module.ts             # Module definition
 ├── department.service.ts            # Business logic
 ├── department.controller.ts         # HTTP endpoints
-├── department.mapper.ts             # Optional: Response transformation
-├── department.types.ts              # Optional: Types/enums
+├── department.mapper.ts             # Static mapper class: Prisma model -> response DTO
+├── department.types.ts              # `satisfies Prisma.DepartmentInclude` consts + GetPayload types
 └── dto/
     ├── create-department.dto.ts     # Create payload
     ├── update-department.dto.ts     # Update payload
-    └── department-response.dto.ts   # Response structure
+    ├── department.dto.ts            # Plain DTO shape(s), e.g. DepartmentDto / DepartmentLiteDto
+    └── department-response.dto.ts   # Response DTO composed by the mapper
 ```
 
 ### Phase 3: Write DTOs (Input & Output Validation)
@@ -84,114 +84,182 @@ export class CreateDepartmentDto {
 }
 ```
 
-**Response DTO with Exclude for sensitive fields:**
+**Response DTO — plain interface/class, `id`/`createdBy` are numbers, no `deletedAt`:**
 
 ```typescript
 // dto/department-response.dto.ts
-import { Exclude, Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class DepartmentResponseDto {
-  @ApiProperty({ example: 'uuid-123' })
-  id: string;
+  @ApiProperty({ example: 1 })
+  id: number;
 
   @ApiProperty({ example: 'Engineering' })
   name: string;
 
   @ApiProperty({ example: 'Building software products' })
-  description: string;
+  description: string | null;
 
   @ApiProperty({ example: '2026-05-01T10:00:00Z' })
   createdAt: Date;
 
-  @Exclude() // Don't expose in response
-  deletedAt?: Date;
-
-  @ApiProperty({ example: 'uuid-456' })
-  createdBy: string;
+  @ApiProperty({ example: 1 })
+  createdBy: number;
 }
 ```
 
-### Phase 4: Implement Service (Business Logic)
+Response DTOs in this codebase are plain data shapes returned by a mapper (see Phase 4/5) — they are **not** `class-transformer`-decorated classes constructed directly from a Prisma row.
 
-**Service patterns with Prisma and relation loading:**
+### Phase 4: Write `types.ts` + Mapper
+
+```typescript
+// department.types.ts
+import { Prisma } from '@prisma/client';
+
+export const departmentWithCreatorInclude = {
+  creator: { select: { id: true, fullName: true } },
+} satisfies Prisma.DepartmentInclude;
+
+export type DepartmentWithCreator = Prisma.DepartmentGetPayload<{
+  include: typeof departmentWithCreatorInclude;
+}>;
+```
+
+```typescript
+// department.mapper.ts
+import { Department } from '@prisma/client';
+import { DepartmentResponseDto } from './dto/department-response.dto';
+import { DepartmentWithCreator } from './department.types';
+
+export class DepartmentMapper {
+  static mapBase(department: Department): DepartmentResponseDto {
+    return {
+      id: department.id,
+      name: department.name,
+      description: department.description,
+      createdAt: department.createdAt,
+      createdBy: department.createdBy,
+    };
+  }
+
+  static toDto(department: DepartmentWithCreator): DepartmentResponseDto {
+    return { ...DepartmentMapper.mapBase(department) };
+  }
+
+  static toDtos(departments: DepartmentWithCreator[]): DepartmentResponseDto[] {
+    return departments.map((d) => DepartmentMapper.toDto(d));
+  }
+}
+```
+
+### Phase 5: Implement Service (Business Logic)
+
+**Service patterns with Prisma, relation loading, and real deletes:**
 
 ```typescript
 // department.service.ts
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { PrismaService } from '@modules/prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
+import { DepartmentResponseDto } from './dto/department-response.dto';
+import { DepartmentMapper } from './department.mapper';
+import { departmentWithCreatorInclude } from './department.types';
 
 @Injectable()
 export class DepartmentService {
   constructor(private prisma: PrismaService) {}
 
-  async create(dto: CreateDepartmentDto, userId: string): Promise<Department> {
-    return this.prisma.department.create({
-      data: {
-        ...dto,
-        createdBy: userId,
-      },
-      include: {
-        creator: { select: { id: true, email: true } },
-        // Include other relations here
-      },
-    });
+  async create(
+    dto: CreateDepartmentDto,
+    currentUserId: number,
+  ): Promise<DepartmentResponseDto> {
+    try {
+      const department = await this.prisma.department.create({
+        data: { ...dto, createdBy: currentUserId, updatedBy: currentUserId },
+        include: { ...departmentWithCreatorInclude },
+      });
+      return DepartmentMapper.toDto(department);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2002') {
+          throw new BadRequestException('Department name already in use.');
+        }
+      }
+      throw error;
+    }
   }
 
-  async findAll(): Promise<Department[]> {
-    return this.prisma.department.findMany({
-      where: { deletedAt: null }, // Soft delete filter
-      include: {
-        creator: { select: { id: true, email: true } },
-      },
+  async findAll(): Promise<DepartmentResponseDto[]> {
+    const departments = await this.prisma.department.findMany({
+      include: { ...departmentWithCreatorInclude },
       orderBy: { createdAt: 'desc' },
     });
+    return DepartmentMapper.toDtos(departments);
   }
 
-  async findById(id: string): Promise<Department | null> {
-    return this.prisma.department.findFirst({
-      where: {
-        id,
-        deletedAt: null,
-      },
-      include: {
-        creator: { select: { id: true, email: true } },
-      },
-    });
-  }
-
-  async update(id: string, dto: UpdateDepartmentDto): Promise<Department> {
-    return this.prisma.department.update({
+  async findOne(id: number): Promise<DepartmentResponseDto> {
+    const department = await this.prisma.department.findUnique({
       where: { id },
-      data: dto,
-      include: {
-        creator: { select: { id: true, email: true } },
-      },
+      include: { ...departmentWithCreatorInclude },
     });
+    if (!department) {
+      throw new NotFoundException(`Department with ID ${id} not found.`);
+    }
+    return DepartmentMapper.toDto(department);
   }
 
-  async delete(id: string): Promise<Department> {
-    // Soft delete
-    return this.prisma.department.update({
-      where: { id },
-      data: { deletedAt: new Date() },
-    });
+  async update(
+    id: number,
+    dto: UpdateDepartmentDto,
+    currentUserId: number,
+  ): Promise<DepartmentResponseDto> {
+    try {
+      const department = await this.prisma.department.update({
+        where: { id },
+        data: { ...dto, updatedBy: currentUserId },
+        include: { ...departmentWithCreatorInclude },
+      });
+      return DepartmentMapper.toDto(department);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException(`Department with ID ${id} not found.`);
+      }
+      throw error;
+    }
+  }
+
+  async remove(id: number): Promise<void> {
+    try {
+      await this.prisma.department.delete({ where: { id } }); // hard delete — no deletedAt in this schema
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException(`Department with ID ${id} not found.`);
+      }
+      throw error;
+    }
   }
 }
 ```
 
 **Key patterns:**
 
-- Always `.include()` relations to avoid N+1 queries
-- Use `where: { deletedAt: null }` for soft deletes
-- Return domain object, let controller handle DTO transformation
-- Throw meaningful errors (use global exception filters)
+- Always `.include()` relations needed by the mapper (avoid N+1 queries)
+- No `deletedAt` filter anywhere — `findMany`/`findUnique` return whatever rows actually exist
+- Set `createdBy`/`updatedBy` from the caller's `userId` on every write
+- Catch `Prisma.PrismaClientKnownRequestError`: `P2002` → `BadRequestException` (unique conflict), `P2025` → `NotFoundException` (record/relation not found)
+- Service returns the mapped response DTO directly; controllers don't do their own transformation
 
-### Phase 5: Create Controller (HTTP Endpoints)
+### Phase 6: Create Controller (HTTP Endpoints)
 
-**Controller with Swagger decorators and guards:**
+**Controller with Swagger decorators and the permission guard** — `JwtAccessGuard` and `PermissionsGuard` are registered **globally** (`src/common/authz.module.ts`), so controllers do NOT add `@UseGuards(JwtAccessGuard)`; every route is authenticated by default and must declare `@RequirePermissions()` (or `@Public()`/`@SkipPermissions()`) or it 403s:
 
 ```typescript
 // department.controller.ts
@@ -203,103 +271,87 @@ import {
   Delete,
   Body,
   Param,
-  UseGuards,
+  ParseIntPipe,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
-import { JwtAccessGuard } from '../../common/guards/jwt-access.guard';
-import { AuthenticatedUser } from '../../modules/auth/decorators/authenticated-user.decorator';
-import { AuthenticatedUserDto } from '../../modules/auth/dto/authenticated-user.dto';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { RequirePermissions } from '@common/decorators/permissions.decorator';
+import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
+import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
 import { DepartmentService } from './department.service';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { DepartmentResponseDto } from './dto/department-response.dto';
 
 @ApiTags('departments')
-@ApiBearerAuth()
-@UseGuards(JwtAccessGuard)
+@ApiBearerAuth('access-token')
 @Controller('departments')
 export class DepartmentController {
   constructor(private readonly service: DepartmentService) {}
 
   @Post()
+  @RequirePermissions({ action: 'create', subject: 'departments' })
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new department' })
-  @ApiResponse({
-    status: 201,
-    type: DepartmentResponseDto,
-    description: 'Department created successfully',
-  })
+  @ApiResponse({ status: 201, type: DepartmentResponseDto })
   async create(
     @Body() dto: CreateDepartmentDto,
     @AuthenticatedUser() user: AuthenticatedUserDto,
   ): Promise<DepartmentResponseDto> {
-    const created = await this.service.create(dto, user.userId);
-    return new DepartmentResponseDto(created);
+    return this.service.create(dto, user.userId);
   }
 
   @Get()
+  @RequirePermissions({ action: 'read', subject: 'departments' })
   @ApiOperation({ summary: 'Get all departments' })
-  @ApiResponse({
-    status: 200,
-    type: [DepartmentResponseDto],
-    description: 'List of all departments',
-  })
+  @ApiResponse({ status: 200, type: [DepartmentResponseDto] })
   async findAll(): Promise<DepartmentResponseDto[]> {
-    const departments = await this.service.findAll();
-    return departments.map((d) => new DepartmentResponseDto(d));
+    return this.service.findAll();
   }
 
   @Get(':id')
+  @RequirePermissions({ action: 'read', subject: 'departments' })
   @ApiOperation({ summary: 'Get a department by ID' })
-  @ApiResponse({
-    status: 200,
-    type: DepartmentResponseDto,
-  })
-  async findById(@Param('id') id: string): Promise<DepartmentResponseDto> {
-    const department = await this.service.findById(id);
-    return new DepartmentResponseDto(department);
+  @ApiResponse({ status: 200, type: DepartmentResponseDto })
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<DepartmentResponseDto> {
+    return this.service.findOne(id);
   }
 
   @Patch(':id')
+  @RequirePermissions({ action: 'update', subject: 'departments' })
   @ApiOperation({ summary: 'Update a department' })
-  @ApiResponse({
-    status: 200,
-    type: DepartmentResponseDto,
-  })
+  @ApiResponse({ status: 200, type: DepartmentResponseDto })
   async update(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateDepartmentDto,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
   ): Promise<DepartmentResponseDto> {
-    const updated = await this.service.update(id, dto);
-    return new DepartmentResponseDto(updated);
+    return this.service.update(id, dto, user.userId);
   }
 
   @Delete(':id')
+  @RequirePermissions({ action: 'delete', subject: 'departments' })
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete a department (soft delete)' })
+  @ApiOperation({ summary: 'Delete a department' })
   @ApiResponse({ status: 204 })
-  async delete(@Param('id') id: string): Promise<void> {
-    await this.service.delete(id);
+  async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
+    await this.service.remove(id);
   }
 }
 ```
 
 **Key patterns:**
 
-- `@UseGuards(JwtAccessGuard)` for authentication
+- `@RequirePermissions({ action, subject })` per route — not `@UseGuards(JwtAccessGuard)`, which is redundant (already global)
+- `ParseIntPipe` on `:id` params — ids are `number`, not `string`/UUID
 - `@ApiTags()`, `@ApiOperation()`, `@ApiResponse()` for Swagger docs
-- `@AuthenticatedUser()` to inject current user
-- `@HttpCode()` to set correct response codes
-- DTO transformation in controller (service returns domain object)
+- `@AuthenticatedUser()` to inject the current user (from the JWT payload)
+- Service already returns the response DTO — no `new XResponseDto(...)` wrapping in the controller
 
-### Phase 6: Register Module
+### Phase 7: Register Module + Seed Permissions
 
 Add to `src/app.module.ts`:
 
@@ -316,7 +368,9 @@ import { DepartmentModule } from './modules/department/department.module';
 export class AppModule {}
 ```
 
-### Phase 7: Write Tests
+Add the new `(action, subject)` pairs to `prisma/seed.ts`'s `permissionsSeed` list (following the existing `['branches', 'employees', ...].flatMap(...)` pattern) and grant them to the roles that need them, or `@RequirePermissions()` on the new routes will never be satisfiable. Re-run `pnpm db:seed`.
+
+### Phase 8: Write Tests
 
 **Unit test template:**
 
@@ -324,20 +378,20 @@ export class AppModule {}
 // department.service.spec.ts
 import { Test, TestingModule } from '@nestjs/testing';
 import { DepartmentService } from './department.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '@modules/prisma/prisma.service';
 
 describe('DepartmentService', () => {
   let service: DepartmentService;
   let prisma: PrismaService;
 
   const mockDepartment = {
-    id: 'uuid-123',
+    id: 1,
     name: 'Engineering',
     description: 'Building software',
     createdAt: new Date(),
-    createdBy: 'user-123',
-    deletedAt: null,
-    creator: { id: 'user-123', email: 'user@example.com' },
+    createdBy: 1,
+    updatedAt: new Date(),
+    updatedBy: 1,
   };
 
   beforeEach(async () => {
@@ -350,7 +404,7 @@ describe('DepartmentService', () => {
             department: {
               create: jest.fn(),
               findMany: jest.fn(),
-              findFirst: jest.fn(),
+              findUnique: jest.fn(),
               update: jest.fn(),
               delete: jest.fn(),
             },
@@ -365,122 +419,104 @@ describe('DepartmentService', () => {
 
   describe('create', () => {
     it('should create a department', async () => {
-      const createDto = {
-        name: 'Engineering',
-        description: 'Building software',
-      };
+      const createDto = { name: 'Engineering', description: 'Building software' };
 
       jest.spyOn(prisma.department, 'create').mockResolvedValue(mockDepartment);
 
-      const result = await service.create(createDto, 'user-123');
+      const result = await service.create(createDto, 1);
 
-      expect(result).toEqual(mockDepartment);
+      expect(result).toEqual(expect.objectContaining({ id: 1, name: 'Engineering' }));
       expect(prisma.department.create).toHaveBeenCalledWith({
-        data: {
-          ...createDto,
-          createdBy: 'user-123',
-        },
+        data: { ...createDto, createdBy: 1, updatedBy: 1 },
         include: expect.any(Object),
       });
     });
   });
 
   describe('findAll', () => {
-    it('should return all departments excluding soft deleted', async () => {
-      jest
-        .spyOn(prisma.department, 'findMany')
-        .mockResolvedValue([mockDepartment]);
+    it('should return all departments', async () => {
+      jest.spyOn(prisma.department, 'findMany').mockResolvedValue([mockDepartment]);
 
       const result = await service.findAll();
 
-      expect(result).toEqual([mockDepartment]);
+      expect(result).toHaveLength(1);
       expect(prisma.department.findMany).toHaveBeenCalledWith({
-        where: { deletedAt: null },
         include: expect.any(Object),
         orderBy: { createdAt: 'desc' },
       });
     });
   });
+
+  describe('remove', () => {
+    it('should hard-delete a department', async () => {
+      jest.spyOn(prisma.department, 'delete').mockResolvedValue(mockDepartment);
+
+      await service.remove(1);
+
+      expect(prisma.department.delete).toHaveBeenCalledWith({ where: { id: 1 } });
+    });
+  });
 });
 ```
 
-**E2E test template:**
+**E2E test template** — note guards are global, so bypass them at the module level rather than per-controller:
 
 ```typescript
 // test/department.e2e-spec.ts
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { JwtAccessGuard } from '../src/common/guards/jwt-access.guard';
+import { PermissionsGuard } from '../src/common/guards/permissions.guard';
 
 describe('Departments (E2E)', () => {
   let app: INestApplication;
-  let validToken: string;
 
   beforeAll(async () => {
     const module: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideGuard(JwtAccessGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(PermissionsGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     app = module.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        transform: true,
-      }),
-    );
+    app.setGlobalPrefix('api');
     await app.init();
-
-    // Get valid token from auth endpoint
-    // This would depend on your auth setup
-    validToken = 'Bearer <token>';
   });
 
   afterAll(async () => {
     await app.close();
   });
 
-  describe('POST /api/departments', () => {
-    it('should create a department', () => {
-      const createDto = {
-        name: 'Engineering',
-        description: 'Building software',
-      };
-
-      return request(app.getHttpServer())
-        .post('/api/departments')
-        .set('Authorization', validToken)
-        .send(createDto)
-        .expect(201)
-        .expect((res) => {
-          expect(res.body).toHaveProperty('id');
-          expect(res.body.name).toBe('Engineering');
-        });
-    });
-
-    it('should fail without authentication', () => {
-      return request(app.getHttpServer())
-        .post('/api/departments')
-        .send({ name: 'Engineering' })
-        .expect(401);
-    });
+  it('POST /api/departments should create a department', () => {
+    return request(app.getHttpServer())
+      .post('/api/departments')
+      .send({ name: 'Engineering', description: 'Building software' })
+      .expect(201)
+      .expect((res) => {
+        expect(res.body).toHaveProperty('id');
+        expect(res.body.name).toBe('Engineering');
+      });
   });
 
-  describe('GET /api/departments', () => {
-    it('should return list of departments', () => {
-      return request(app.getHttpServer())
-        .get('/api/departments')
-        .set('Authorization', validToken)
-        .expect(200)
-        .expect((res) => {
-          expect(Array.isArray(res.body)).toBe(true);
-        });
-    });
+  it('GET /api/departments should return a list', () => {
+    return request(app.getHttpServer())
+      .get('/api/departments')
+      .expect(200)
+      .expect((res) => {
+        expect(Array.isArray(res.body)).toBe(true);
+      });
   });
 });
 ```
 
-### Phase 8: Migrate & Test
+For an E2E test that actually exercises real auth/permission checks instead of overriding the guards, log in through `/api/auth/dev/login` first (see the `test-writing` skill).
+
+### Phase 9: Migrate & Test
 
 1. **Run migration** (if entity is new):
 
@@ -497,19 +533,20 @@ describe('Departments (E2E)', () => {
 
 3. **Manual testing**:
    - Start dev server: `pnpm run start:dev`
-   - Visit Swagger: http://localhost:3000/api/docs
+   - Visit Swagger: http://localhost:3001/docs (note: served without the `/api` prefix)
    - Test endpoints with sample data
 
 ## Troubleshooting Guide
 
-| Issue                       | Cause                                         | Solution                                                  |
-| --------------------------- | --------------------------------------------- | --------------------------------------------------------- |
-| 404 on new endpoints        | Module not imported in app.module.ts          | Check `app.module.ts` imports array                       |
-| Validation errors           | DTO missing validators or bad decorators      | Check `class-validator` + `class-transformer` imports     |
-| N+1 queries in tests        | Missing `.include()` in service               | Add all required relations to `.include()`                |
-| Swagger docs missing        | Missing `@ApiOperation()` or `@ApiResponse()` | Add Swagger decorators to controller methods              |
-| Soft delete not working     | Queries not filtering `deletedAt: null`       | Add `where: { deletedAt: null }` to all find operations   |
-| Test fails with Prisma mock | Mock not matching method signature            | Verify mock has correct structure (include, select, etc.) |
+| Issue                                       | Cause                                                        | Solution                                                            |
+| -------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Every request to the new route 403s          | No `@RequirePermissions()` (and not `@Public()`/`@SkipPermissions()`) | Add `@RequirePermissions({ action, subject })` and seed that permission |
+| 404 on new endpoints                        | Module not imported in `app.module.ts`                           | Check `app.module.ts` imports array                                     |
+| Validation errors                           | DTO missing validators or bad decorators                         | Check `class-validator` + `class-transformer` imports                   |
+| N+1 queries in tests                        | Missing `.include()` in service                                  | Add all required relations to `.include()`                              |
+| Swagger docs missing                        | Missing `@ApiOperation()` or `@ApiResponse()`                    | Add Swagger decorators to controller methods                            |
+| Test fails with Prisma mock                 | Mock not matching method signature                              | Verify mock has correct structure (include, select, etc.)               |
+| E2E test 401/403 despite `@Public()` route   | Forgot to override `JwtAccessGuard`/`PermissionsGuard` at the `TestingModule` level for non-public routes | Both guards are global — override them in the test module, not the controller |
 
 ## Key Principles
 
@@ -518,8 +555,8 @@ describe('Departments (E2E)', () => {
 3. **Relationships**: Always load related data (avoid N+1 queries)
 4. **Documentation**: Use Swagger decorators for self-documenting API
 5. **Testing**: Write both unit and E2E tests
-6. **Soft deletes**: Use `deletedAt` for audit trails, not hard deletes
-7. **Authorization**: Add CASL rules if role-based access is needed
+6. **No soft deletes by default**: Prisma `.delete()` is a real delete in this schema; don't add `deletedAt` unless the feature explicitly needs it
+7. **Authorization**: Add `@RequirePermissions({ action, subject })` and seed the matching `Permission` row — CASL is dead code in this project, don't use it
 
 ## Quick Reference Commands
 
@@ -537,11 +574,11 @@ pnpm test:e2e
 pnpm run start:dev
 
 # Visit Swagger docs
-# http://localhost:3000/api/docs
+# http://localhost:3001/docs
 ```
 
 ## See Also
 
 - [AGENTS.md](../../../../AGENTS.md) — Project overview and module patterns
 - [prisma/schema.prisma](../../../../prisma/schema.prisma) — Database schema definition
-- [src/modules/employees/](../../../../src/modules/employees/) — Example CRUD module
+- [src/modules/employees/](../../../../src/modules/employees/) — Reference CRUD module (branch assignment, hourly-rate sync, mapper composition)

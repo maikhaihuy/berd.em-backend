@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class ZaloLoginDto {
   @ApiProperty({
@@ -13,8 +13,9 @@ export class ZaloLoginDto {
   @ApiProperty({
     description: 'Zalo phone token from getPhoneNumber() on Mini App',
     example: 'phone_token_here',
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
-  phoneToken!: string;
+  @IsOptional()
+  phoneToken?: string;
 }

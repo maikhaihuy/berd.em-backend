@@ -16,11 +16,13 @@ import { ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { RoleResponseDto } from './dto/role-response.dto';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
+import { RequirePermissions } from '@common/decorators/permissions.decorator';
 
 @Controller('roles')
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
 
+  @RequirePermissions({ action: 'create', subject: 'roles' })
   @Post()
   @ApiOperation({ summary: 'Create a new role' })
   @ApiResponse({
@@ -36,6 +38,7 @@ export class RolesController {
     return await this.rolesService.create(createRoleDto, currentUser.userId);
   }
 
+  @RequirePermissions({ action: 'read', subject: 'roles' })
   @Get()
   @ApiOperation({ summary: 'Retrieve a list of all roles with pagination' })
   @ApiResponse({ status: 200, description: 'A list of roles.' })
@@ -44,6 +47,7 @@ export class RolesController {
     return await this.rolesService.findAll();
   }
 
+  @RequirePermissions({ action: 'read', subject: 'roles' })
   @Get(':id')
   @ApiOperation({ summary: 'Retrieve a role by ID' })
   @ApiResponse({
@@ -56,6 +60,7 @@ export class RolesController {
     return await this.rolesService.findOne(+id);
   }
 
+  @RequirePermissions({ action: 'update', subject: 'roles' })
   @Patch(':id')
   @ApiOperation({ summary: 'Update a role by ID' })
   @ApiResponse({
@@ -77,6 +82,7 @@ export class RolesController {
     );
   }
 
+  @RequirePermissions({ action: 'delete', subject: 'roles' })
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a role by ID' })

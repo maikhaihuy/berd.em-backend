@@ -54,6 +54,13 @@ describe('JwtAccessStrategy', () => {
         },
       ],
     },
+    employee: {
+      id: 42,
+      employeeBranches: [
+        { employeeId: 42, branchId: 7, isPrimary: true },
+        { employeeId: 42, branchId: 9, isPrimary: false },
+      ],
+    },
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -111,11 +118,28 @@ describe('JwtAccessStrategy', () => {
         expect.objectContaining({ where: { id: mockPayload.sub } }),
       );
       expect(result).toBeInstanceOf(AuthenticatedUserDto);
+      expect(result.userId).toBe(mockUser.id);
+      expect(result.phone).toBe(mockUser.phoneNumber);
+      expect(result.employeeId).toBe(mockUser.employee.id);
+      expect(result.branches).toEqual([7, 9]);
       expect(result.role).toBe('Employee');
       expect(result.permissions).toEqual([
         { action: 'read', subject: 'users' },
         { action: 'read', subject: 'employees' },
       ]);
+    });
+
+    it('leaves employeeId undefined and branches empty when the user has no linked employee', async () => {
+      prismaService.user.findUnique.mockResolvedValue({
+        ...mockUser,
+        employee: null,
+      });
+
+      const result = await strategy.validate(mockPayload);
+
+      expect(result.userId).toBe(mockUser.id);
+      expect(result.employeeId).toBeUndefined();
+      expect(result.branches).toEqual([]);
     });
 
     it('returns an empty permissions array when the role has none', async () => {

@@ -5,9 +5,6 @@ export class UserDto {
   @ApiProperty({ description: 'User ID' })
   id!: number;
 
-  @ApiProperty({ description: 'Zalo unique identifier' })
-  zaloId!: string;
-
   @ApiProperty({ description: 'Phone number' })
   phoneNumber!: string;
 
