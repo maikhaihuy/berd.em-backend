@@ -112,7 +112,7 @@ export class TimeTrackingController {
     return this.timeTrackingService.update(+id, updateDto, currentUserId);
   }
 
-  @RequirePermissions({ action: 'update', subject: 'time-logs' })
+  @RequirePermissions({ action: 'verify', subject: 'time-logs' })
   @Put(':id/verify')
   @ApiOperation({ summary: 'Verify or reject a time log' })
   @ApiResponse({

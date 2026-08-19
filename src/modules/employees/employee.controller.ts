@@ -110,7 +110,7 @@ export class EmployeesController {
     await this.employeesService.remove(+id, currentUser.userId);
   }
 
-  @RequirePermissions({ action: 'update', subject: 'employees' })
+  @RequirePermissions({ action: 'update', subject: 'employee-hourly-rates' })
   @Post(':id/hourly-rates')
   @ApiOperation({ summary: 'Bulk upsert employee hourly rates' })
   @ApiResponse({

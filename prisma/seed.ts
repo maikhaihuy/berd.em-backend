@@ -92,6 +92,46 @@ async function main() {
       { action: 'update', subject, description: `Update ${subject}` },
       { action: 'delete', subject, description: `Delete ${subject}` },
     ]),
+
+    // Custom (non-CRUD) actions for privileged / self-service sub-operations.
+    // These separate the sub-action from the generic `update` so a role can be
+    // granted e.g. "check in" without also being able to edit/reassign every
+    // assignment.
+    {
+      action: 'check-in',
+      subject: 'assignments',
+      description: 'Check in to an assignment',
+    },
+    {
+      action: 'check-out',
+      subject: 'assignments',
+      description: 'Check out from an assignment',
+    },
+    {
+      action: 'approve',
+      subject: 'leave-requests',
+      description: 'Approve or reject a leave request',
+    },
+    {
+      action: 'cancel',
+      subject: 'leave-requests',
+      description: 'Cancel a leave request',
+    },
+    {
+      action: 'verify',
+      subject: 'time-logs',
+      description: 'Verify or reject a time log',
+    },
+    {
+      action: 'generate',
+      subject: 'master-shifts',
+      description: 'Generate master shifts from templates',
+    },
+    {
+      action: 'complete',
+      subject: 'tasks',
+      description: 'Mark a task as complete',
+    },
   ].map((p) => ({
     ...p,
     createdBy: SYSTEM_USER_ID,
@@ -105,18 +145,99 @@ async function main() {
 
   const allPermissions = await prisma.permission.findMany();
 
-  const idsFor = (filters: { action?: string[]; subject?: string[] }) => {
-    const { action, subject } = filters;
-    return allPermissions
-      .filter((p) => (action ? action.includes(p.action) : true))
-      .filter((p) => (subject ? subject.includes(p.subject) : true))
-      .map((p) => p.id);
+  // 2) Compute role permission sets from an explicit, least-privilege policy.
+  //
+  // The previous policy was subject-blind (Manager = read+update on EVERY
+  // subject, Employee = read on EVERY subject), which (a) let a Manager edit the
+  // RBAC/admin tables — e.g. PATCH /users/:id to change their own roleId and
+  // self-promote to Admin — and (b) exposed the whole user/role/permission
+  // catalog to every employee, while simultaneously locking employees out of
+  // their own self-service writes. The map below fixes that.
+  //
+  // Custom sub-operations have dedicated actions (check-in, check-out, approve,
+  // cancel, verify, generate, complete) that are seeded separately from CRUD, so
+  // a role can be granted a self-service action (e.g. check-in) without the
+  // generic `update` that would let it edit/reassign every record. The generic
+  // `update` on assignments/leave-requests/time-logs is therefore still withheld
+  // from Employee, pending row-level ownership scoping.
+  const CRUD = ['create', 'read', 'update', 'delete'];
+
+  type Grant = { subject: string; actions: string[] };
+
+  const permIdByKey = new Map(
+    allPermissions.map((p) => [`${p.action}:${p.subject}`, p.id] as const),
+  );
+
+  const resolveIds = (grants: Grant[]): number[] => {
+    const ids = new Set<number>();
+    for (const { subject, actions } of grants) {
+      for (const action of actions) {
+        const id = permIdByKey.get(`${action}:${subject}`);
+        if (id === undefined) {
+          throw new Error(
+            `Seed: role grant references a permission that was not seeded: ${action}:${subject}`,
+          );
+        }
+        ids.add(id);
+      }
+    }
+    return [...ids];
   };
 
-  // 2) Compute role permission sets
+  // Subject groups
+  const SCHEDULING_SUBJECTS = [
+    'master-shift-templates',
+    'sub-shift-templates',
+    'task-templates',
+    'master-shifts',
+    'sub-shifts',
+    'tasks',
+  ];
+  const OPERATIONAL_SUBJECTS = [
+    'assignments',
+    'availability',
+    'attendance-history',
+    'leave-requests',
+    'time-logs',
+  ];
+
+  // Admin: everything that exists.
   const adminPermissionIds = allPermissions.map((p) => p.id);
-  const managerPermissionIds = idsFor({ action: ['read', 'update'] });
-  const employeePermissionIds = idsFor({ action: ['read'] });
+
+  // Manager: runs scheduling + day-to-day operations, edits people, but has NO
+  // access to the RBAC/admin subjects (users, roles, permissions,
+  // role-permissions) and cannot create/delete branches or pay rates.
+  const managerPermissionIds = resolveIds([
+    ...SCHEDULING_SUBJECTS.map((subject) => ({ subject, actions: CRUD })),
+    ...OPERATIONAL_SUBJECTS.map((subject) => ({ subject, actions: CRUD })),
+    { subject: 'branches', actions: ['read'] },
+    { subject: 'employees', actions: ['create', 'read', 'update'] },
+    { subject: 'employee-hourly-rates', actions: ['read'] },
+    // Custom actions: managers oversee the full operational lifecycle.
+    { subject: 'assignments', actions: ['check-in', 'check-out'] },
+    { subject: 'leave-requests', actions: ['approve', 'cancel'] },
+    { subject: 'time-logs', actions: ['verify'] },
+    { subject: 'master-shifts', actions: ['generate'] },
+    { subject: 'tasks', actions: ['complete'] },
+  ]);
+
+  // Employee: reads the schedule and does self-service writes via dedicated
+  // actions (check-in/check-out, cancel own leave, complete tasks). Withheld:
+  // employee-hourly-rates (pay privacy), the RBAC/admin subjects, the privileged
+  // actions (approve/verify/generate), and the coarse `update` on
+  // assignments/leave-requests/time-logs (which would allow editing/reassigning
+  // any record — deferred to row-level scoping).
+  const employeePermissionIds = resolveIds([
+    { subject: 'branches', actions: ['read'] },
+    { subject: 'employees', actions: ['read'] },
+    ...SCHEDULING_SUBJECTS.map((subject) => ({ subject, actions: ['read'] })),
+    { subject: 'assignments', actions: ['read', 'check-in', 'check-out'] },
+    { subject: 'availability', actions: CRUD },
+    { subject: 'attendance-history', actions: ['create', 'read'] },
+    { subject: 'leave-requests', actions: ['create', 'read', 'cancel'] },
+    { subject: 'time-logs', actions: ['create', 'read'] },
+    { subject: 'tasks', actions: ['complete'] },
+  ]);
 
   // 3) Upsert roles and assign permissions
   const rolesSeed: Array<{
@@ -131,12 +252,13 @@ async function main() {
     },
     {
       name: 'Manager',
-      description: 'Manager with read/update access',
+      description:
+        'Runs scheduling and operations; manages employees; no access to RBAC/admin subjects',
       permissionIds: managerPermissionIds,
     },
     {
       name: 'Employee',
-      description: 'Standard user with read-only access',
+      description: 'Reads the schedule and performs self-service writes',
       permissionIds: employeePermissionIds,
     },
   ];
@@ -193,7 +315,7 @@ async function main() {
 
   const hashed = await bcrypt.hash(SETTINGS_PASSWORD, 12);
 
-  const settingsUser = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { phoneNumber: SETTINGS_USERNAME },
     update: {
       password: hashed,

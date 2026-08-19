@@ -62,7 +62,7 @@ export class AssignmentsController {
     return this.service.update(id, dto, user.userId);
   }
 
-  @RequirePermissions({ action: 'update', subject: 'assignments' })
+  @RequirePermissions({ action: 'check-in', subject: 'assignments' })
   @Post(':id/check-in')
   @ApiOperation({ summary: 'Check in to an assignment' })
   checkIn(
@@ -73,7 +73,7 @@ export class AssignmentsController {
     return this.service.checkIn(id, dto, user.userId);
   }
 
-  @RequirePermissions({ action: 'update', subject: 'assignments' })
+  @RequirePermissions({ action: 'check-out', subject: 'assignments' })
   @Post(':id/check-out')
   @ApiOperation({ summary: 'Check out from an assignment' })
   checkOut(

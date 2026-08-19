@@ -61,7 +61,7 @@ export class TasksController {
     return this.service.update(id, dto, user.userId);
   }
 
-  @RequirePermissions({ action: 'update', subject: 'tasks' })
+  @RequirePermissions({ action: 'complete', subject: 'tasks' })
   @Post(':id/complete')
   @ApiOperation({ summary: 'Complete task and store audit evidence' })
   complete(
