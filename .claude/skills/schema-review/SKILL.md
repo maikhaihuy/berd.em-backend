@@ -454,8 +454,8 @@ pnpm prisma migrate diff
 
 ## See Also
 
-- [AGENTS.md](../../../../AGENTS.md) — Project overview, domain model, auth/authorization
+- [AGENTS.md](../../../AGENTS.md) — Project overview, domain model, auth/authorization
 - [database-lifecycle SKILL](../database-lifecycle/SKILL.md) — Migration workflow, seed validation
-- [prisma/schema.prisma](../../../../prisma/schema.prisma) — Current schema definition
-- [erd/](../../../../erd/) — Entity relationship diagrams
+- [prisma/schema.prisma](../../../prisma/schema.prisma) — Current schema definition
+- [erd/](../../../erd/) — Entity relationship diagrams
 - [Prisma Docs](https://www.prisma.io/docs) — Official Prisma schema documentation

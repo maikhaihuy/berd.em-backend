@@ -579,6 +579,6 @@ pnpm run start:dev
 
 ## See Also
 
-- [AGENTS.md](../../../../AGENTS.md) — Project overview and module patterns
-- [prisma/schema.prisma](../../../../prisma/schema.prisma) — Database schema definition
-- [src/modules/employees/](../../../../src/modules/employees/) — Reference CRUD module (branch assignment, hourly-rate sync, mapper composition)
+- [AGENTS.md](../../../AGENTS.md) — Project overview and module patterns
+- [prisma/schema.prisma](../../../prisma/schema.prisma) — Database schema definition
+- [src/modules/employees/](../../../src/modules/employees/) — Reference CRUD module (branch assignment, hourly-rate sync, mapper composition)

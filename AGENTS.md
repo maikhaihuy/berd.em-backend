@@ -2,7 +2,7 @@
 
 This document helps AI coding agents quickly understand the codebase structure, conventions, and workflows for the Employee Shift & Payroll Management API.
 
-> **Note**: this file was substantially rewritten to match the current codebase. Earlier versions (and the `.github/skills/*` docs) described CASL-based authorization, UUID primary keys, and a `Shift`/`WorkSlot` schema — none of that is accurate anymore. Trust `prisma/schema.prisma` and `src/` over anything that contradicts it.
+> **Note**: this file was substantially rewritten to match the current codebase and is kept in sync with `CLAUDE.md` — update both together. The project skills under `.claude/skills/` are likewise up to date with these conventions. Trust `prisma/schema.prisma` and `src/` over anything that contradicts it.
 
 ## Project Overview
 
@@ -45,6 +45,12 @@ pnpm format               # Format code with Prettier
 ```
 
 `DATABASE_URL` must point at a reachable Postgres instance before any `db:*` command works — there's no bundled Docker/DB bootstrap script.
+
+## OpenSpec Workflow (Spec-Driven Changes)
+
+This project tracks non-trivial changes through OpenSpec (`openspec/`) rather than jumping straight to code: propose → apply → archive. `openspec/project.md` carries durable project context for artifact generation; `openspec/specs/<capability>/spec.md` is the synced source of truth per capability once a change is archived; `openspec/changes/` holds work in progress.
+
+Use the Claude Code integration if available — `/opsx:propose` / `/opsx:apply` / `/opsx:archive` (`.claude/commands/opsx/`) — or fall back to the `openspec` CLI directly (`openspec new change <name>`, `openspec status`, `openspec instructions`, `openspec archive`). See [GUIDE_LINE.md](GUIDE_LINE.md) for the full walkthrough.
 
 ## Project Structure
 
@@ -91,7 +97,7 @@ prisma/
 ├── migrations/                      # Migration history — never edit applied migration files by hand
 └── seed.ts                          # Seeds permissions, roles, a SETTINGS admin user, and a dev-login employee
 
-.github/skills/                      # Slash-command-style skill docs — see "Skills & Workflows" below
+.claude/skills/                      # Project + OpenSpec skill docs — see "Skills & Workflows" below
 ```
 
 ## Module Structure Pattern
@@ -325,7 +331,7 @@ See the `test-writing` skill for detailed patterns, but note: `@UseGuards` is **
 
 ## Skills & Workflows
 
-`.github/skills/` contains additional workflow docs (`crud-generation`, `database-lifecycle`, `schema-review`, `test-writing`, `nestjs-prisma-expert`). They've been updated to match this project's actual conventions (Int ids, no soft delete, permission-guard authorization) — if anything in them still contradicts the real code, the code wins.
+`.claude/skills/` contains additional workflow docs (`crud-generation`, `database-lifecycle`, `schema-review`, `test-writing`, `nestjs-prisma-expert`), alongside the OpenSpec workflow skills (`openspec-*`). The project skills match this project's actual conventions (Int ids, no soft delete, permission-guard authorization) — if anything in them still contradicts the real code, the code wins.
 
 ## Common Pitfalls & Solutions
 
@@ -363,7 +369,7 @@ SENTRY_DSN=                                                           # optional
 - **NestJS Docs**: https://docs.nestjs.com
 - **Prisma Docs**: https://www.prisma.io/docs
 - **ERD & Architecture**: [erd/](erd/)
-- **Database Skill**: [.github/skills/database-lifecycle/SKILL.md](.github/skills/database-lifecycle/SKILL.md)
+- **Database Skill**: [.claude/skills/database-lifecycle/SKILL.md](.claude/skills/database-lifecycle/SKILL.md)
 
 ---
 
