@@ -9,6 +9,8 @@ import { UpdateTimeLogDto } from './dto/update-time-log.dto';
 import { VerifyTimeLogDto } from './dto/verify-time-log.dto';
 import { TimeLogResponseDto } from './dto/time-log-response.dto';
 import { TimeLogStatus, Prisma } from '@prisma/client';
+import { timeLogInclude } from './time-tracking.types';
+import { TimeLogMapper } from './time-tracking.mapper';
 
 @Injectable()
 export class TimeTrackingService {
@@ -66,9 +68,10 @@ export class TimeTrackingService {
         createdBy: currentUserId,
         updatedBy: currentUserId,
       },
+      include: timeLogInclude,
     });
 
-    return new TimeLogResponseDto(timeLog);
+    return TimeLogMapper.toDto(timeLog);
   }
 
   async findAll(): Promise<TimeLogResponseDto[]> {
@@ -76,21 +79,23 @@ export class TimeTrackingService {
       orderBy: {
         createdAt: 'desc',
       },
+      include: timeLogInclude,
     });
 
-    return timeLogs.map((log) => new TimeLogResponseDto(log));
+    return TimeLogMapper.toDtos(timeLogs);
   }
 
   async findOne(id: number): Promise<TimeLogResponseDto> {
     const timeLog = await this.prisma.timeLog.findUnique({
       where: { id },
+      include: timeLogInclude,
     });
 
     if (!timeLog) {
       throw new NotFoundException(`Time log with ID ${id} not found`);
     }
 
-    return new TimeLogResponseDto(timeLog);
+    return TimeLogMapper.toDto(timeLog);
   }
 
   async findByEmployee(employeeId: number): Promise<TimeLogResponseDto[]> {
@@ -99,9 +104,10 @@ export class TimeTrackingService {
       orderBy: {
         createdAt: 'desc',
       },
+      include: timeLogInclude,
     });
 
-    return timeLogs.map((log) => new TimeLogResponseDto(log));
+    return TimeLogMapper.toDtos(timeLogs);
   }
 
   async findByAssignment(assignmentId: number): Promise<TimeLogResponseDto[]> {
@@ -110,9 +116,10 @@ export class TimeTrackingService {
       orderBy: {
         createdAt: 'desc',
       },
+      include: timeLogInclude,
     });
 
-    return timeLogs.map((log) => new TimeLogResponseDto(log));
+    return TimeLogMapper.toDtos(timeLogs);
   }
 
   async update(
@@ -153,9 +160,10 @@ export class TimeTrackingService {
     const timeLog = await this.prisma.timeLog.update({
       where: { id },
       data,
+      include: timeLogInclude,
     });
 
-    return new TimeLogResponseDto(timeLog);
+    return TimeLogMapper.toDto(timeLog);
   }
 
   async verify(
@@ -184,9 +192,10 @@ export class TimeTrackingService {
         note: verifyDto.note || existingLog.note,
         updatedBy: verifierId,
       },
+      include: timeLogInclude,
     });
 
-    return new TimeLogResponseDto(timeLog);
+    return TimeLogMapper.toDto(timeLog);
   }
 
   async remove(id: number): Promise<void> {

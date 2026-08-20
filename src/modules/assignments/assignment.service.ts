@@ -17,6 +17,8 @@ import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 import { AssignmentCheckInDto } from './dto/check-in.dto';
 import { AssignmentCheckOutDto } from './dto/check-out.dto';
+import { assignmentInclude } from './assignment.types';
+import { AssignmentMapper } from './assignment.mapper';
 
 @Injectable()
 export class AssignmentsService {
@@ -26,8 +28,8 @@ export class AssignmentsService {
     await this.validateCreate(dto);
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        const assignment = await tx.assignment.create({
+      const assignment = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.assignment.create({
           data: {
             employeeId: dto.employeeId,
             subShiftId: dto.subShiftId,
@@ -38,7 +40,7 @@ export class AssignmentsService {
             createdBy: currentUserId,
             updatedBy: currentUserId,
           },
-          include: this.include,
+          include: assignmentInclude,
         });
 
         if (dto.availabilityId) {
@@ -51,8 +53,10 @@ export class AssignmentsService {
           });
         }
 
-        return assignment;
+        return created;
       });
+
+      return AssignmentMapper.toDto(assignment);
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -66,24 +70,25 @@ export class AssignmentsService {
     }
   }
 
-  findAll(employeeId?: number, subShiftId?: number) {
-    return this.prisma.assignment.findMany({
+  async findAll(employeeId?: number, subShiftId?: number) {
+    const assignments = await this.prisma.assignment.findMany({
       where: {
         ...(employeeId ? { employeeId } : {}),
         ...(subShiftId ? { subShiftId } : {}),
       },
-      include: this.include,
+      include: assignmentInclude,
       orderBy: [{ assignedAt: 'desc' }],
     });
+    return AssignmentMapper.toDtos(assignments);
   }
 
   async findOne(id: number) {
     const assignment = await this.prisma.assignment.findUnique({
       where: { id },
-      include: this.include,
+      include: assignmentInclude,
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
-    return assignment;
+    return AssignmentMapper.toDto(assignment);
   }
 
   async update(id: number, dto: UpdateAssignmentDto, currentUserId: number) {
@@ -95,15 +100,16 @@ export class AssignmentsService {
         dto.availabilityId ?? existing.availabilityId ?? undefined,
     });
 
-    return this.prisma.assignment.update({
+    const updated = await this.prisma.assignment.update({
       where: { id },
       data: {
         ...dto,
         assignedAt: dto.assignedAt ? new Date(dto.assignedAt) : undefined,
         updatedBy: currentUserId,
       },
-      include: this.include,
+      include: assignmentInclude,
     });
+    return AssignmentMapper.toDto(updated);
   }
 
   async remove(id: number) {
@@ -123,8 +129,8 @@ export class AssignmentsService {
       ? new Date(dto.actualStartTime)
       : new Date();
 
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.assignment.update({
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.assignment.update({
         where: { id },
         data: {
           actualStartTime,
@@ -132,7 +138,7 @@ export class AssignmentsService {
           note: dto.note ?? assignment.note,
           updatedBy: currentUserId,
         },
-        include: this.include,
+        include: assignmentInclude,
       });
       await tx.attendanceHistory.create({
         data: {
@@ -145,8 +151,10 @@ export class AssignmentsService {
           createdBy: currentUserId,
         },
       });
-      return updated;
+      return result;
     });
+
+    return AssignmentMapper.toDto(updated);
   }
 
   async checkOut(
@@ -184,8 +192,8 @@ export class AssignmentsService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.assignment.update({
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.assignment.update({
         where: { id },
         data: {
           actualEndTime,
@@ -193,7 +201,7 @@ export class AssignmentsService {
           note: dto.note ?? assignment.note,
           updatedBy: currentUserId,
         },
-        include: this.include,
+        include: assignmentInclude,
       });
       await tx.attendanceHistory.create({
         data: {
@@ -207,21 +215,14 @@ export class AssignmentsService {
           createdBy: currentUserId,
         },
       });
-      return { assignment: updated, warnings: taskGate.warnings };
+      return result;
     });
-  }
 
-  private include = {
-    employee: { select: { id: true, fullName: true, phoneNumber: true } },
-    availability: true,
-    subShift: {
-      include: {
-        masterShift: {
-          select: { id: true, branchId: true, title: true, workDate: true },
-        },
-      },
-    },
-  };
+    return {
+      assignment: AssignmentMapper.toDto(updated),
+      warnings: taskGate.warnings,
+    };
+  }
 
   private async validateCreate(dto: {
     employeeId: number;
