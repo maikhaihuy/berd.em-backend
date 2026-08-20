@@ -4,35 +4,8 @@ import { CreateAttendanceHistoryDto } from './dto/create-attendance-history.dto'
 import { AttendanceHistoryResponseDto } from './dto/attendance-history-response.dto';
 import { AttendanceHistoryFilterDto } from './dto/attendance-history-filter.dto';
 import { Prisma } from '@prisma/client';
-
-// Include pattern for attendance history with assignment, employee and branch details
-// Avoids N+1 queries by always loading related data
-const ATTENDANCE_HISTORY_INCLUDE = {
-  assignment: {
-    include: {
-      employee: {
-        select: {
-          id: true,
-          fullName: true,
-        },
-      },
-      subShift: {
-        include: {
-          masterShift: {
-            include: {
-              branch: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  },
-};
+import { attendanceHistoryInclude } from './attendance-history.types';
+import { AttendanceHistoryMapper } from './attendance-history.mapper';
 
 @Injectable()
 export class AttendanceHistoryService {
@@ -59,10 +32,10 @@ export class AttendanceHistoryService {
         detail: createDto.detail || Prisma.JsonNull,
         createdBy: currentUserId,
       },
-      include: ATTENDANCE_HISTORY_INCLUDE,
+      include: attendanceHistoryInclude,
     });
 
-    return new AttendanceHistoryResponseDto(attendanceHistory);
+    return AttendanceHistoryMapper.toDto(attendanceHistory);
   }
 
   async findAll(
@@ -107,25 +80,23 @@ export class AttendanceHistoryService {
       orderBy: {
         createdAt: 'desc',
       },
-      include: ATTENDANCE_HISTORY_INCLUDE,
+      include: attendanceHistoryInclude,
     });
 
-    return histories.map(
-      (history) => new AttendanceHistoryResponseDto(history),
-    );
+    return AttendanceHistoryMapper.toDtos(histories);
   }
 
   async findOne(id: number): Promise<AttendanceHistoryResponseDto> {
     const history = await this.prisma.attendanceHistory.findUnique({
       where: { id },
-      include: ATTENDANCE_HISTORY_INCLUDE,
+      include: attendanceHistoryInclude,
     });
 
     if (!history) {
       throw new NotFoundException(`Attendance history with ID ${id} not found`);
     }
 
-    return new AttendanceHistoryResponseDto(history);
+    return AttendanceHistoryMapper.toDto(history);
   }
 
   async findByAssignment(
@@ -136,12 +107,10 @@ export class AttendanceHistoryService {
       orderBy: {
         createdAt: 'desc',
       },
-      include: ATTENDANCE_HISTORY_INCLUDE,
+      include: attendanceHistoryInclude,
     });
 
-    return histories.map(
-      (history) => new AttendanceHistoryResponseDto(history),
-    );
+    return AttendanceHistoryMapper.toDtos(histories);
   }
 
   // Note: No update or delete methods - attendance history is immutable for audit integrity

@@ -84,6 +84,18 @@ export class TimeLogResponseDto {
   })
   note?: string | null;
 
+  @ApiProperty({ description: 'Timestamp when record was created' })
+  createdAt!: Date;
+
+  @ApiProperty({ description: 'User ID who created this record' })
+  createdBy!: number;
+
+  @ApiProperty({ description: 'Timestamp when record was last updated' })
+  updatedAt!: Date;
+
+  @ApiProperty({ description: 'User ID who last updated this record' })
+  updatedBy!: number;
+
   constructor(partial: Partial<TimeLog>) {
     Object.assign(this, partial);
   }
