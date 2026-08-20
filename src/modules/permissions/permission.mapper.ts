@@ -2,7 +2,7 @@ import { Permission } from '@prisma/client';
 import { PermissionResponseDto } from './dto/permission-response.dto';
 import { PermissionDto } from './dto/permission.dto';
 import { PermissionWithRoles } from './permission.types';
-import { RoleMapper } from '@modules/roles/role.mappers';
+import { RoleMapper } from '@modules/roles/role.mapper';
 
 export class PermissionMapper {
   // 🧱 Base mapper

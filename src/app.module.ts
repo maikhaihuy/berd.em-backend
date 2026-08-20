@@ -23,6 +23,9 @@ import { MasterShiftsModule } from './modules/master-shifts/master-shift.module'
 import { SubShiftsModule } from './modules/sub-shifts/sub-shift.module';
 import { AssignmentsModule } from './modules/assignments/assignment.module';
 import { TasksModule } from './modules/tasks/task.module';
+import { PayPeriodsModule } from './modules/pay-periods/pay-period.module';
+import { PayrollEntriesModule } from './modules/payroll-entries/payroll-entry.module';
+import { BranchScheduleConfigsModule } from './modules/branch-schedule-configs/branch-schedule-config.module';
 
 @Module({
   imports: [
@@ -44,6 +47,7 @@ import { TasksModule } from './modules/tasks/task.module';
     EmployeesModule,
     EmployeeHourlyRatesModule,
     BranchesModule,
+    BranchScheduleConfigsModule,
     // Shift and task domain
     MasterShiftTemplatesModule,
     SubShiftTemplatesModule,
@@ -57,8 +61,8 @@ import { TasksModule } from './modules/tasks/task.module';
     LeaveRequestsModule,
     // Payment Management
     TimeTrackingModule,
-    // TODO: Add PayPeriodsModule when created
-    // TODO: Add PayrollEntriesModule when created
+    PayPeriodsModule,
+    PayrollEntriesModule,
   ],
 })
 export class AppModule {}

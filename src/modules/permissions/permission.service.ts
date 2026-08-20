@@ -8,7 +8,7 @@ import { CreatePermissionDto } from './dto/create-permission.dto';
 import { UpdatePermissionDto } from './dto/update-permission.dto';
 import { PermissionResponseDto } from './dto/permission-response.dto';
 import { Prisma } from '@prisma/client';
-import { PermissionMapper } from './permisison.mapper';
+import { PermissionMapper } from './permission.mapper';
 import { permissionWithRolesInclude } from './permission.types';
 
 @Injectable()

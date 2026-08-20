@@ -66,7 +66,12 @@ async function main() {
     ]),
 
     // Core entities
-    ...['branches', 'employees', 'employee-hourly-rates'].flatMap((subject) => [
+    ...[
+      'branches',
+      'employees',
+      'employee-hourly-rates',
+      'branch-schedule-configs',
+    ].flatMap((subject) => [
       { action: 'create', subject, description: `Create ${subject}` },
       { action: 'read', subject, description: `Read ${subject}` },
       { action: 'update', subject, description: `Update ${subject}` },
@@ -132,6 +137,40 @@ async function main() {
       subject: 'tasks',
       description: 'Mark a task as complete',
     },
+
+    // Payroll domain
+    ...['pay-periods'].flatMap((subject) => [
+      { action: 'create', subject, description: `Create ${subject}` },
+      { action: 'read', subject, description: `Read ${subject}` },
+      { action: 'update', subject, description: `Update ${subject}` },
+      { action: 'delete', subject, description: `Delete ${subject}` },
+    ]),
+    {
+      action: 'close',
+      subject: 'pay-periods',
+      description: 'Close a pay period (OPEN -> CLOSED)',
+    },
+    {
+      action: 'finalize',
+      subject: 'pay-periods',
+      description: 'Finalize a pay period (CLOSED -> FINALIZED)',
+    },
+    // PayrollEntry has no hand-authored create/update: read/delete + generate.
+    {
+      action: 'read',
+      subject: 'payroll-entries',
+      description: 'Read payroll-entries',
+    },
+    {
+      action: 'delete',
+      subject: 'payroll-entries',
+      description: 'Delete payroll-entries',
+    },
+    {
+      action: 'generate',
+      subject: 'payroll-entries',
+      description: 'Generate payroll entries from verified time logs',
+    },
   ].map((p) => ({
     ...p,
     createdBy: SYSTEM_USER_ID,
@@ -192,6 +231,8 @@ async function main() {
     'master-shifts',
     'sub-shifts',
     'tasks',
+    // Per-branch scheduling config: Manager manages it, Employee reads it.
+    'branch-schedule-configs',
   ];
   const OPERATIONAL_SUBJECTS = [
     'assignments',
