@@ -106,8 +106,10 @@ export class AuthController {
     return await this.authService.refreshToken(refreshSession);
   }
 
-  @SkipPermissions()
+  @Public()
+  @UseGuards(JwtRefreshGuard)
   @Post('logout')
+  @ApiBearerAuth('jwt-refresh')
   @ApiOperation({ summary: 'Logout and invalidate refresh token' })
   @HttpCode(HttpStatus.OK)
   async logout(@RefreshSession() refreshSession: RefreshSessionDto) {
