@@ -9,7 +9,7 @@ import { PrismaService } from '@modules/prisma/prisma.service';
 import { RoleResponseDto } from './dto/role-response.dto';
 import { Prisma } from '@prisma/client';
 import { roleWithPermissionsInclude } from './role.types';
-import { RoleMapper } from './role.mappers';
+import { RoleMapper } from './role.mapper';
 
 @Injectable()
 export class RolesService {

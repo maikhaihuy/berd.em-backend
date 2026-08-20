@@ -1,7 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '@modules/prisma/prisma.service';
 import { AssignPermissionsDto } from './dto/assign-permission.dto';
 import { RolePermissionResponseDto } from './dto/role-permission-response.dto';
+import { rolePermissionInclude } from './role-permissions.types';
+import { RolePermissionMapper } from './role-permissions.mapper';
 
 @Injectable()
 export class RolePermissionsService {
@@ -41,21 +43,12 @@ export class RolePermissionsService {
             permissionId,
           },
           update: {},
-          include: {
-            role: { select: { name: true } },
-            permission: { select: { action: true, subject: true } },
-          },
+          include: rolePermissionInclude,
         }),
       ),
     );
 
-    return assignments.map((assignment) => ({
-      roleId: assignment.roleId,
-      permissionId: assignment.permissionId,
-      roleName: assignment.role.name,
-      action: assignment.permission.action,
-      subject: assignment.permission.subject,
-    }));
+    return RolePermissionMapper.toDtos(assignments);
   }
 
   async removePermission(roleId: number, permissionId: number): Promise<void> {
@@ -78,19 +71,10 @@ export class RolePermissionsService {
   ): Promise<RolePermissionResponseDto[]> {
     const assignments = await this.prisma.rolePermission.findMany({
       where: { roleId },
-      include: {
-        role: { select: { name: true } },
-        permission: { select: { action: true, subject: true } },
-      },
+      include: rolePermissionInclude,
     });
 
-    return assignments.map((assignment) => ({
-      roleId: assignment.roleId,
-      permissionId: assignment.permissionId,
-      roleName: assignment.role.name,
-      action: assignment.permission.action,
-      subject: assignment.permission.subject,
-    }));
+    return RolePermissionMapper.toDtos(assignments);
   }
 
   async removeAllRolePermissions(roleId: number): Promise<void> {
