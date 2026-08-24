@@ -1,8 +1,6 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { FieldValidationException } from '@common/exceptions/field-validation.exception';
+import { uniqueConstraintFields } from '@common/helpers/prisma-errors.helper';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
@@ -33,12 +31,16 @@ export class EmployeesService {
         where: { id: { in: branchIds } },
       });
       if (branches.length !== branchIds.length) {
-        throw new BadRequestException('One or more branches do not exist');
+        throw new FieldValidationException(
+          'branchIds',
+          'One or more branches do not exist',
+        );
       }
 
       // Validate primaryBranchId is in branchIds if provided
       if (primaryBranchId && !branchIds.includes(primaryBranchId)) {
-        throw new BadRequestException(
+        throw new FieldValidationException(
+          'primaryBranchId',
           'Primary branch must be in the list of assigned branches',
         );
       }
@@ -49,7 +51,8 @@ export class EmployeesService {
       where: { phoneNumber: employeeData.phoneNumber },
     });
     if (existingPhone) {
-      throw new BadRequestException(
+      throw new FieldValidationException(
+        'phoneNumber',
         'Employee with this phone number already exists',
       );
     }
@@ -79,7 +82,10 @@ export class EmployeesService {
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
-          throw new BadRequestException('Email or phone already in use.');
+          throw new FieldValidationException(
+            uniqueConstraintFields(error),
+            'Email or phone already in use.',
+          );
         }
         if (error.code === 'P2025') {
           throw new NotFoundException('One or more branches not found.');
@@ -143,7 +149,10 @@ export class EmployeesService {
         where: { phoneNumber: updateEmployeeDto.phoneNumber },
       });
       if (phoneExists) {
-        throw new BadRequestException('Phone number already in use');
+        throw new FieldValidationException(
+          'phoneNumber',
+          'Phone number already in use',
+        );
       }
     }
 

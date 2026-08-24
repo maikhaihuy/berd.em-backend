@@ -25,6 +25,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     let message = 'Internal server error';
     let source = 'Application';
     let details: unknown;
+    let errors: Record<string, string[]> | undefined;
 
     if (exception instanceof HttpException) {
       const body = exception.getResponse();
@@ -39,9 +40,20 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         details = Object.prototype.hasOwnProperty.call(payload, 'details')
           ? payload.details
           : details;
+        if (
+          typeof payload.errors === 'object' &&
+          payload.errors !== null &&
+          !Array.isArray(payload.errors)
+        ) {
+          errors = payload.errors as Record<string, string[]>;
+        }
       } else {
         message = exception.message;
       }
+    }
+
+    if (status === HttpStatus.BAD_REQUEST && !errors) {
+      errors = { _general: [message] };
     }
 
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
@@ -65,6 +77,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       message,
       source,
       details,
+      ...(errors ? { errors } : {}),
       timestamp: new Date().toISOString(),
     });
   }

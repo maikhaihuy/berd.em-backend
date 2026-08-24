@@ -7,6 +7,7 @@ import { PrismaExceptionFilter } from './filters/prisma-exception.filter';
 import { GlobalExceptionFilter } from './filters/global-exception.filter';
 import { BadRequestException } from '@nestjs/common';
 import { LoggerService } from './logger/logger.service';
+import { buildValidationErrorMap } from './helpers/validation-errors.helper';
 
 @Module({
   providers: [
@@ -20,13 +21,9 @@ import { LoggerService } from './logger/logger.service';
           transform: true,
           forbidNonWhitelisted: true,
           exceptionFactory: (errors) => {
-            const formatted = errors.map((err) => ({
-              field: err.property,
-              errors: Object.values(err.constraints || {}),
-            }));
             return new BadRequestException({
               message: 'Validation failed',
-              errors: formatted,
+              errors: buildValidationErrorMap(errors),
             });
           },
         }),

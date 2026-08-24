@@ -1,9 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  ShiftStatus,
-  SubShiftTemplate,
-  TaskTemplate,
-} from '@prisma/client';
+import { ShiftStatus, SubShiftTemplate, TaskTemplate } from '@prisma/client';
 
 export class MasterShiftTemplateBranchRefDto {
   @ApiProperty()

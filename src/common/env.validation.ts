@@ -41,10 +41,7 @@ export class EnvVariables {
 }
 
 export function validate(config: Record<string, unknown>) {
-  if (
-    config.NODE_ENV === 'production' &&
-    config.AUTH_DEV_MODE === 'true'
-  ) {
+  if (config.NODE_ENV === 'production' && config.AUTH_DEV_MODE === 'true') {
     throw new Error(
       'Invalid auth configuration: AUTH_DEV_MODE must not be true in production.',
     );

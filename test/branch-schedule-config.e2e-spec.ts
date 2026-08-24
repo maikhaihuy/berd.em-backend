@@ -83,11 +83,16 @@ describe('BranchScheduleConfig (e2e)', () => {
   });
 
   it('rejects a second config for the same branch (400)', async () => {
-    await request(app.getHttpServer())
+    const res = await request(app.getHttpServer())
       .post('/branch-schedule-configs')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ branchId })
       .expect(400);
+
+    // Business-rule rejection, not a per-field DTO failure: still reaches the
+    // client through the same `errors` channel as field-level validation.
+    expect(Array.isArray(res.body.errors._general)).toBe(true);
+    expect(res.body.errors._general[0]).toBe(res.body.message);
   });
 
   it('fetches the config by id', async () => {
