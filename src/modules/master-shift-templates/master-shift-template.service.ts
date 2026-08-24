@@ -44,9 +44,7 @@ export class MasterShiftTemplatesService {
     }
   }
 
-  async findAll(
-    branchId?: number,
-  ): Promise<MasterShiftTemplateResponseDto[]> {
+  async findAll(branchId?: number): Promise<MasterShiftTemplateResponseDto[]> {
     const templates = await this.prisma.masterShiftTemplate.findMany({
       where: branchId ? { branchId } : undefined,
       orderBy: [{ branchId: 'asc' }, { startTime: 'asc' }],

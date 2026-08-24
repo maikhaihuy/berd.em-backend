@@ -6,7 +6,6 @@ export const subShiftTemplateInclude = {
   taskTemplates: true,
 } satisfies Prisma.SubShiftTemplateInclude;
 
-export type SubShiftTemplateWithRelations =
-  Prisma.SubShiftTemplateGetPayload<{
-    include: typeof subShiftTemplateInclude;
-  }>;
+export type SubShiftTemplateWithRelations = Prisma.SubShiftTemplateGetPayload<{
+  include: typeof subShiftTemplateInclude;
+}>;

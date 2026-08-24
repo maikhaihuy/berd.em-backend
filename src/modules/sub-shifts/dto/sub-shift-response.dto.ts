@@ -1,5 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ShiftStatus, SubShiftType, Task, TaskCompletion } from '@prisma/client';
+import {
+  ShiftStatus,
+  SubShiftType,
+  Task,
+  TaskCompletion,
+} from '@prisma/client';
 
 export class SubShiftMasterShiftRefDto {
   @ApiProperty()
