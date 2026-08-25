@@ -13,6 +13,8 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RequirePermissions } from '@common/decorators/permissions.decorator';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
+import { CaslAbility } from '@modules/auth/decorators/casl-ability.decorator';
+import type { AppAbility } from '@modules/casl/casl-ability.factory';
 import { AssignmentsService } from './assignment.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
@@ -39,17 +41,22 @@ export class AssignmentsController {
   findAll(
     @Query('employeeId') employeeId?: string,
     @Query('subShiftId') subShiftId?: string,
+    @CaslAbility() ability?: AppAbility,
   ) {
     return this.service.findAll(
       employeeId ? Number(employeeId) : undefined,
       subShiftId ? Number(subShiftId) : undefined,
+      ability,
     );
   }
 
   @RequirePermissions({ action: 'read', subject: 'assignments' })
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.service.findOne(id);
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CaslAbility() ability: AppAbility,
+  ) {
+    return this.service.findOne(id, ability);
   }
 
   @RequirePermissions({ action: 'update', subject: 'assignments' })
@@ -69,8 +76,9 @@ export class AssignmentsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: AssignmentCheckInDto,
     @AuthenticatedUser() user: AuthenticatedUserDto,
+    @CaslAbility() ability: AppAbility,
   ) {
-    return this.service.checkIn(id, dto, user.userId);
+    return this.service.checkIn(id, dto, user.userId, ability);
   }
 
   @RequirePermissions({ action: 'check-out', subject: 'assignments' })
@@ -80,8 +88,9 @@ export class AssignmentsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: AssignmentCheckOutDto,
     @AuthenticatedUser() user: AuthenticatedUserDto,
+    @CaslAbility() ability: AppAbility,
   ) {
-    return this.service.checkOut(id, dto, user.userId);
+    return this.service.checkOut(id, dto, user.userId, ability);
   }
 
   @RequirePermissions({ action: 'delete', subject: 'assignments' })

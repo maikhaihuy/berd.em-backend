@@ -24,6 +24,8 @@ import { LeaveRequestResponseDto } from './dto/leave-request-response.dto';
 import { RequirePermissions } from '@common/decorators/permissions.decorator';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
+import { CaslAbility } from '@modules/auth/decorators/casl-ability.decorator';
+import type { AppAbility } from '@modules/casl/casl-ability.factory';
 import { LeaveStatus } from '@prisma/client';
 
 @ApiTags('leave-requests')
@@ -45,8 +47,14 @@ export class LeaveRequestsController {
   async create(
     @Body() createDto: CreateLeaveRequestDto,
     @AuthenticatedUser() user: AuthenticatedUserDto,
+    @CaslAbility() ability: AppAbility,
   ): Promise<LeaveRequestResponseDto> {
-    return this.leaveRequestsService.create(createDto, user.userId);
+    return this.leaveRequestsService.create(
+      createDto,
+      user.userId,
+      ability,
+      user.employeeId,
+    );
   }
 
   @RequirePermissions({ action: 'read', subject: 'leave-requests' })
@@ -57,8 +65,10 @@ export class LeaveRequestsController {
     description: 'List of leave requests',
     type: [LeaveRequestResponseDto],
   })
-  async findAll(): Promise<LeaveRequestResponseDto[]> {
-    return this.leaveRequestsService.findAll();
+  async findAll(
+    @CaslAbility() ability: AppAbility,
+  ): Promise<LeaveRequestResponseDto[]> {
+    return this.leaveRequestsService.findAll(ability);
   }
 
   @RequirePermissions({ action: 'read', subject: 'leave-requests' })
@@ -70,8 +80,11 @@ export class LeaveRequestsController {
     type: LeaveRequestResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Leave request not found' })
-  async findOne(@Param('id') id: string): Promise<LeaveRequestResponseDto> {
-    return this.leaveRequestsService.findOne(+id);
+  async findOne(
+    @Param('id') id: string,
+    @CaslAbility() ability: AppAbility,
+  ): Promise<LeaveRequestResponseDto> {
+    return this.leaveRequestsService.findOne(+id, ability);
   }
 
   @RequirePermissions({ action: 'read', subject: 'leave-requests' })
@@ -84,8 +97,9 @@ export class LeaveRequestsController {
   })
   async findByStatus(
     @Param('status') status: LeaveStatus,
+    @CaslAbility() ability: AppAbility,
   ): Promise<LeaveRequestResponseDto[]> {
-    return this.leaveRequestsService.findByStatus(status);
+    return this.leaveRequestsService.findByStatus(status, ability);
   }
 
   @RequirePermissions({ action: 'read', subject: 'leave-requests' })
@@ -98,8 +112,9 @@ export class LeaveRequestsController {
   })
   async findByEmployee(
     @Param('employeeId') employeeId: string,
+    @CaslAbility() ability: AppAbility,
   ): Promise<LeaveRequestResponseDto[]> {
-    return this.leaveRequestsService.findByEmployee(+employeeId);
+    return this.leaveRequestsService.findByEmployee(+employeeId, ability);
   }
 
   @RequirePermissions({ action: 'update', subject: 'leave-requests' })
@@ -151,8 +166,9 @@ export class LeaveRequestsController {
   async cancel(
     @Param('id') id: string,
     @AuthenticatedUser() user: AuthenticatedUserDto,
+    @CaslAbility() ability: AppAbility,
   ): Promise<LeaveRequestResponseDto> {
-    return this.leaveRequestsService.cancel(+id, user.userId);
+    return this.leaveRequestsService.cancel(+id, user.userId, ability);
   }
 
   @RequirePermissions({ action: 'delete', subject: 'leave-requests' })

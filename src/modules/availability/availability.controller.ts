@@ -24,6 +24,8 @@ import { UpdateAvailabilityDto } from './dto/update-availability.dto';
 import { AvailabilityResponseDto } from './dto/availability-response.dto';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
+import { CaslAbility } from '@modules/auth/decorators/casl-ability.decorator';
+import type { AppAbility } from '@modules/casl/casl-ability.factory';
 
 @ApiTags('availability')
 @ApiBearerAuth()
@@ -59,6 +61,7 @@ export class AvailabilityController {
   })
   findAll(
     @AuthenticatedUser() currentUser: AuthenticatedUserDto,
+    @CaslAbility() ability: AppAbility,
     @Query('date', new ParseDatePipe({ optional: true }))
     date?: string,
   ) {
@@ -84,6 +87,7 @@ export class AvailabilityController {
       startOfWeek,
       endOfWeek,
       currentUser.userId,
+      ability,
     );
   }
 
@@ -98,8 +102,9 @@ export class AvailabilityController {
   findOne(
     @Param('id', ParseIntPipe) id: number,
     @AuthenticatedUser() currentUser: AuthenticatedUserDto,
+    @CaslAbility() ability: AppAbility,
   ) {
-    return this.availabilityService.findOne(id, currentUser.userId);
+    return this.availabilityService.findOne(id, currentUser.userId, ability);
   }
 
   @RequirePermissions({ action: 'update', subject: 'availability' })

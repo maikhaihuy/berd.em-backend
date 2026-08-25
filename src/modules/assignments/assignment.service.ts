@@ -19,6 +19,11 @@ import { AssignmentCheckInDto } from './dto/check-in.dto';
 import { AssignmentCheckOutDto } from './dto/check-out.dto';
 import { assignmentInclude } from './assignment.types';
 import { AssignmentMapper } from './assignment.mapper';
+import { subject } from '@casl/ability';
+import { AppAbility } from '@modules/casl/casl-ability.factory';
+import { accessibleWhere } from '@modules/casl/accessible-where';
+
+const SUBJECT = 'assignments';
 
 @Injectable()
 export class AssignmentsService {
@@ -70,11 +75,18 @@ export class AssignmentsService {
     }
   }
 
-  async findAll(employeeId?: number, subShiftId?: number) {
+  async findAll(
+    employeeId?: number,
+    subShiftId?: number,
+    ability?: AppAbility,
+  ) {
     const assignments = await this.prisma.assignment.findMany({
       where: {
         ...(employeeId ? { employeeId } : {}),
         ...(subShiftId ? { subShiftId } : {}),
+        ...(ability
+          ? { AND: [accessibleWhere(ability, 'read', SUBJECT)] }
+          : {}),
       },
       include: assignmentInclude,
       orderBy: [{ assignedAt: 'desc' }],
@@ -82,9 +94,14 @@ export class AssignmentsService {
     return AssignmentMapper.toDtos(assignments);
   }
 
-  async findOne(id: number) {
-    const assignment = await this.prisma.assignment.findUnique({
-      where: { id },
+  async findOne(id: number, ability?: AppAbility) {
+    const assignment = await this.prisma.assignment.findFirst({
+      where: {
+        id,
+        ...(ability
+          ? { AND: [accessibleWhere(ability, 'read', SUBJECT)] }
+          : {}),
+      },
       include: assignmentInclude,
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
@@ -118,8 +135,17 @@ export class AssignmentsService {
     return { message: 'Assignment deleted successfully' };
   }
 
-  async checkIn(id: number, dto: AssignmentCheckInDto, currentUserId: number) {
-    const assignment = await this.findAssignmentOrThrow(id);
+  async checkIn(
+    id: number,
+    dto: AssignmentCheckInDto,
+    currentUserId: number,
+    ability: AppAbility,
+  ) {
+    const assignment = await this.findAssignmentOrThrow(
+      id,
+      'check-in',
+      ability,
+    );
     if (assignment.status !== WorkSlotStatus.SCHEDULED) {
       throw new BadRequestException(
         'Only scheduled assignments can be checked in',
@@ -161,8 +187,13 @@ export class AssignmentsService {
     id: number,
     dto: AssignmentCheckOutDto,
     currentUserId: number,
+    ability: AppAbility,
   ) {
-    const assignment = await this.findAssignmentOrThrow(id);
+    const assignment = await this.findAssignmentOrThrow(
+      id,
+      'check-out',
+      ability,
+    );
     if (
       assignment.status !== WorkSlotStatus.IN_PROGRESS &&
       assignment.status !== WorkSlotStatus.COMPLETED
@@ -251,12 +282,22 @@ export class AssignmentsService {
     }
   }
 
-  private async findAssignmentOrThrow(id: number) {
-    const assignment = await this.prisma.assignment.findUnique({
+  private async findAssignmentOrThrow(
+    id: number,
+    action: string,
+    ability: AppAbility,
+  ) {
+    const assignment = await this.prisma.assignment.findFirst({
       where: { id },
       include: { subShift: true },
     });
     if (!assignment) throw new NotFoundException('Assignment not found');
+    // check-in/check-out are self-only for every role (D6 in design.md):
+    // an instance-level check against the fetched row, not a query filter,
+    // since there's no list being built here.
+    if (!ability.can(action, subject(SUBJECT, assignment))) {
+      throw new NotFoundException('Assignment not found');
+    }
     return assignment;
   }
 

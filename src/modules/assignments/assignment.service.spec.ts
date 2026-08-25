@@ -9,10 +9,26 @@ import {
 } from '@prisma/client';
 import { AssignmentsService } from './assignment.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { CaslAbilityFactory } from '@modules/casl/casl-ability.factory';
 
 describe('AssignmentsService', () => {
   let prisma: Partial<PrismaService>;
   let service: AssignmentsService;
+  const caslAbilityFactory = new CaslAbilityFactory();
+  const unscopedCheckOutAbility = caslAbilityFactory.createForUser({
+    permissions: [{ action: 'check-out', subject: 'assignments' }],
+  });
+  const scopedCheckOutAbility = (employeeId: number) =>
+    caslAbilityFactory.createForUser({
+      employeeId,
+      permissions: [
+        {
+          action: 'check-out',
+          subject: 'assignments',
+          condition: { employeeId: '$self' },
+        },
+      ],
+    });
 
   beforeEach(() => {
     prisma = {
@@ -23,6 +39,7 @@ describe('AssignmentsService', () => {
         create: jest.fn(),
         findMany: jest.fn(),
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
       } as any,
@@ -70,7 +87,7 @@ describe('AssignmentsService', () => {
   });
 
   it('blocks checkout while mandatory or dedicated tasks are pending', async () => {
-    (prisma.assignment as any).findUnique.mockResolvedValue({
+    (prisma.assignment as any).findFirst.mockResolvedValue({
       id: 10,
       subShiftId: 2,
       status: WorkSlotStatus.IN_PROGRESS,
@@ -95,9 +112,9 @@ describe('AssignmentsService', () => {
       },
     ]);
 
-    await expect(service.checkOut(10, {}, 99)).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(
+      service.checkOut(10, {}, 99, unscopedCheckOutAbility),
+    ).rejects.toBeInstanceOf(BadRequestException);
 
     expect((prisma.assignment as any).update).not.toHaveBeenCalled();
   });
@@ -111,7 +128,7 @@ describe('AssignmentsService', () => {
       note: null,
     };
 
-    (prisma.assignment as any).findUnique.mockResolvedValue(assignment);
+    (prisma.assignment as any).findFirst.mockResolvedValue(assignment);
 
     (prisma.subShift as any).findUnique.mockResolvedValue({ masterShiftId: 1 });
 
@@ -133,6 +150,7 @@ describe('AssignmentsService', () => {
       10,
       { actualEndTime: '2026-05-30T10:00:00.000Z' },
       99,
+      unscopedCheckOutAbility,
     );
 
     expect(result.warnings).toEqual([
@@ -148,5 +166,54 @@ describe('AssignmentsService', () => {
         }),
       }),
     });
+  });
+
+  it('404s (not 403) when a self-scoped caller checks out an assignment that is not their own', async () => {
+    (prisma.assignment as any).findFirst.mockResolvedValue({
+      id: 10,
+      employeeId: 999,
+      subShiftId: 2,
+      status: WorkSlotStatus.IN_PROGRESS,
+      actualStartTime: new Date('2026-05-30T08:00:00.000Z'),
+      note: null,
+    });
+
+    await expect(
+      service.checkOut(
+        10,
+        { actualEndTime: '2026-05-30T10:00:00.000Z' },
+        99,
+        scopedCheckOutAbility(42),
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+
+    expect((prisma.assignment as any).update).not.toHaveBeenCalled();
+  });
+
+  it('allows a self-scoped caller to check out their own assignment', async () => {
+    const assignment = {
+      id: 10,
+      employeeId: 42,
+      subShiftId: 2,
+      status: WorkSlotStatus.IN_PROGRESS,
+      actualStartTime: new Date('2026-05-30T08:00:00.000Z'),
+      note: null,
+    };
+    (prisma.assignment as any).findFirst.mockResolvedValue(assignment);
+    (prisma.subShift as any).findUnique.mockResolvedValue({ masterShiftId: 1 });
+    (prisma.task as any).findMany.mockResolvedValue([]);
+    (prisma.assignment as any).update.mockResolvedValue({
+      ...assignment,
+      status: WorkSlotStatus.COMPLETED,
+    });
+
+    await expect(
+      service.checkOut(
+        10,
+        { actualEndTime: '2026-05-30T10:00:00.000Z' },
+        99,
+        scopedCheckOutAbility(42),
+      ),
+    ).resolves.toBeDefined();
   });
 });

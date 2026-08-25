@@ -1,8 +1,9 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call */
 import { NotFoundException } from '@nestjs/common';
 import { Prisma, PayPeriodStatus, TimeLogStatus } from '@prisma/client';
 import { PayrollEntryService } from './payroll-entry.service';
 import { PrismaService } from '@modules/prisma/prisma.service';
+import { CaslAbilityFactory } from '@modules/casl/casl-ability.factory';
 
 describe('PayrollEntryService.generate', () => {
   let prisma: {
@@ -125,5 +126,76 @@ describe('PayrollEntryService.generate', () => {
       'Time log has no actual start/end time',
     );
     expect(prisma.employeeHourlyRate.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+describe('PayrollEntryService row-scoping', () => {
+  let prisma: Partial<PrismaService>;
+  let service: PayrollEntryService;
+  const caslAbilityFactory = new CaslAbilityFactory();
+
+  const unscopedAbility = caslAbilityFactory.createForUser({
+    permissions: [{ action: 'read', subject: 'payroll-entries' }],
+  });
+  const scopedAbility = (employeeId: number) =>
+    caslAbilityFactory.createForUser({
+      employeeId,
+      permissions: [
+        {
+          action: 'read',
+          subject: 'payroll-entries',
+          condition: { employeeId: '$self' },
+        },
+      ],
+    });
+
+  beforeEach(() => {
+    prisma = {
+      payrollEntry: {
+        findMany: jest.fn(),
+        findFirst: jest.fn(),
+      } as any,
+    };
+    service = new PayrollEntryService(prisma as PrismaService);
+  });
+
+  describe('findAll', () => {
+    it('applies no filter for an unscoped caller', async () => {
+      (prisma.payrollEntry as any).findMany.mockResolvedValue([]);
+
+      await service.findAll(undefined, undefined, unscopedAbility);
+
+      expect((prisma.payrollEntry as any).findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { AND: [{}] } }),
+      );
+    });
+
+    it('filters to the caller when a self-scoped grant is present', async () => {
+      (prisma.payrollEntry as any).findMany.mockResolvedValue([]);
+
+      await service.findAll(undefined, undefined, scopedAbility(42));
+
+      expect((prisma.payrollEntry as any).findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { AND: [{ OR: [{ employeeId: 42 }] }] },
+        }),
+      );
+    });
+  });
+
+  describe('findOne', () => {
+    it('404s when the row exists but belongs to another employee', async () => {
+      (prisma.payrollEntry as any).findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.findOne(1, scopedAbility(42)),
+      ).rejects.toBeInstanceOf(NotFoundException);
+
+      expect((prisma.payrollEntry as any).findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 1, AND: [{ OR: [{ employeeId: 42 }] }] },
+        }),
+      );
+    });
   });
 });

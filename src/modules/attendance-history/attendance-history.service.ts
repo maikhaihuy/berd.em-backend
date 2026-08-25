@@ -6,6 +6,11 @@ import { AttendanceHistoryFilterDto } from './dto/attendance-history-filter.dto'
 import { Prisma } from '@prisma/client';
 import { attendanceHistoryInclude } from './attendance-history.types';
 import { AttendanceHistoryMapper } from './attendance-history.mapper';
+import { subject } from '@casl/ability';
+import { AppAbility } from '@modules/casl/casl-ability.factory';
+import { accessibleWhere } from '@modules/casl/accessible-where';
+
+const SUBJECT = 'attendance-history';
 
 @Injectable()
 export class AttendanceHistoryService {
@@ -14,12 +19,28 @@ export class AttendanceHistoryService {
   async create(
     createDto: CreateAttendanceHistoryDto,
     currentUserId: number,
+    ability: AppAbility,
   ): Promise<AttendanceHistoryResponseDto> {
-    const assignment = await this.prisma.assignment.findUnique({
+    const assignment = await this.prisma.assignment.findFirst({
       where: { id: createDto.assignmentId },
     });
 
     if (!assignment) {
+      throw new NotFoundException(
+        `Assignment with ID ${createDto.assignmentId} not found`,
+      );
+    }
+
+    // The condition is shaped `{ assignment: { employeeId: <self> } }` (no
+    // direct employeeId column on AttendanceHistory) — checked as an
+    // instance-level access against the referenced assignment, since a
+    // self-scoped caller can only record history against their own.
+    if (
+      !ability.can(
+        'create',
+        subject(SUBJECT, { assignment: { employeeId: assignment.employeeId } }),
+      )
+    ) {
       throw new NotFoundException(
         `Assignment with ID ${createDto.assignmentId} not found`,
       );
@@ -40,20 +61,25 @@ export class AttendanceHistoryService {
 
   async findAll(
     filterDto: AttendanceHistoryFilterDto,
+    ability: AppAbility,
   ): Promise<AttendanceHistoryResponseDto[]> {
     const { assignmentId, employeeId, action, fromDate, toDate, page, limit } =
       filterDto;
 
-    const where: Prisma.AttendanceHistoryWhereInput = {};
+    // The accessibility filter is its own top-level `AND` clause, so it
+    // can't be overwritten by the `employeeId` filter below the way a
+    // shared `where.assignment` key could — Prisma implicitly ANDs every
+    // top-level key together with the explicit `AND` array.
+    const where: Prisma.AttendanceHistoryWhereInput = {
+      AND: [accessibleWhere(ability, 'read', SUBJECT)],
+    };
 
     if (assignmentId) {
       where.assignmentId = assignmentId;
     }
 
     if (employeeId) {
-      where.assignment = {
-        employeeId,
-      };
+      where.assignment = { employeeId };
     }
 
     if (action) {
@@ -86,9 +112,12 @@ export class AttendanceHistoryService {
     return AttendanceHistoryMapper.toDtos(histories);
   }
 
-  async findOne(id: number): Promise<AttendanceHistoryResponseDto> {
-    const history = await this.prisma.attendanceHistory.findUnique({
-      where: { id },
+  async findOne(
+    id: number,
+    ability: AppAbility,
+  ): Promise<AttendanceHistoryResponseDto> {
+    const history = await this.prisma.attendanceHistory.findFirst({
+      where: { id, AND: [accessibleWhere(ability, 'read', SUBJECT)] },
       include: attendanceHistoryInclude,
     });
 
@@ -101,9 +130,13 @@ export class AttendanceHistoryService {
 
   async findByAssignment(
     assignmentId: number,
+    ability: AppAbility,
   ): Promise<AttendanceHistoryResponseDto[]> {
     const histories = await this.prisma.attendanceHistory.findMany({
-      where: { assignmentId },
+      where: {
+        assignmentId,
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
       orderBy: {
         createdAt: 'desc',
       },

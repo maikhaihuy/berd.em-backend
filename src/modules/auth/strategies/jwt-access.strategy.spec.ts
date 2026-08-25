@@ -16,7 +16,6 @@ describe('JwtAccessStrategy', () => {
     id: 1,
     action,
     subject,
-    condition: null,
     description: null,
     createdAt: new Date(),
     createdBy: 1,
@@ -45,11 +44,13 @@ describe('JwtAccessStrategy', () => {
         {
           roleId: 1,
           permissionId: 1,
+          condition: null,
           permission: buildPermission('read', 'users'),
         },
         {
           roleId: 1,
           permissionId: 2,
+          condition: null,
           permission: buildPermission('read', 'employees'),
         },
       ],
@@ -124,8 +125,59 @@ describe('JwtAccessStrategy', () => {
       expect(result.branches).toEqual([7, 9]);
       expect(result.role).toBe('Employee');
       expect(result.permissions).toEqual([
-        { action: 'read', subject: 'users' },
-        { action: 'read', subject: 'employees' },
+        { action: 'read', subject: 'users', condition: null },
+        { action: 'read', subject: 'employees', condition: null },
+      ]);
+    });
+
+    it("carries a RolePermission's own condition through to the mapped permissions", async () => {
+      prismaService.user.findUnique.mockResolvedValue({
+        ...mockUser,
+        role: {
+          ...mockUser.role,
+          rolePermissions: [
+            {
+              roleId: 1,
+              permissionId: 3,
+              condition: { employeeId: '$self' },
+              permission: buildPermission('read', 'time-logs'),
+            },
+          ],
+        },
+      });
+
+      const result = await strategy.validate(mockPayload);
+
+      expect(result.permissions).toEqual([
+        {
+          action: 'read',
+          subject: 'time-logs',
+          condition: { employeeId: '$self' },
+        },
+      ]);
+    });
+
+    it("does not leak one role's RolePermission condition onto another role's grant of the same Permission", async () => {
+      prismaService.user.findUnique.mockResolvedValue({
+        ...mockUser,
+        role: {
+          ...mockUser.role,
+          name: 'Manager',
+          rolePermissions: [
+            {
+              roleId: 2,
+              permissionId: 3,
+              condition: null,
+              permission: buildPermission('read', 'time-logs'),
+            },
+          ],
+        },
+      });
+
+      const result = await strategy.validate(mockPayload);
+
+      expect(result.permissions).toEqual([
+        { action: 'read', subject: 'time-logs', condition: null },
       ]);
     });
 

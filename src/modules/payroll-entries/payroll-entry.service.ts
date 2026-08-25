@@ -5,21 +5,26 @@ import { PayrollEntryResponseDto } from './dto/payroll-entry-response.dto';
 import { GeneratePayrollEntriesResultDto } from './dto/payroll-entry-response.dto';
 import { payrollEntryInclude } from './payroll-entry.types';
 import { PayrollEntryMapper } from './payroll-entry.mapper';
+import { AppAbility } from '@modules/casl/casl-ability.factory';
+import { accessibleWhere } from '@modules/casl/accessible-where';
 
 const MS_PER_HOUR = 1000 * 60 * 60;
+const SUBJECT = 'payroll-entries';
 
 @Injectable()
 export class PayrollEntryService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(
-    payPeriodId?: number,
-    employeeId?: number,
+    payPeriodId: number | undefined,
+    employeeId: number | undefined,
+    ability: AppAbility,
   ): Promise<PayrollEntryResponseDto[]> {
     const entries = await this.prisma.payrollEntry.findMany({
       where: {
         ...(payPeriodId ? { payPeriodId } : {}),
         ...(employeeId ? { employeeId } : {}),
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
       },
       include: payrollEntryInclude,
       orderBy: { workDate: 'desc' },
@@ -27,9 +32,12 @@ export class PayrollEntryService {
     return PayrollEntryMapper.toDtos(entries);
   }
 
-  async findOne(id: number): Promise<PayrollEntryResponseDto> {
-    const entry = await this.prisma.payrollEntry.findUnique({
-      where: { id },
+  async findOne(
+    id: number,
+    ability: AppAbility,
+  ): Promise<PayrollEntryResponseDto> {
+    const entry = await this.prisma.payrollEntry.findFirst({
+      where: { id, AND: [accessibleWhere(ability, 'read', SUBJECT)] },
       include: payrollEntryInclude,
     });
     if (!entry) {

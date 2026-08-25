@@ -40,6 +40,7 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy) {
       permissions: user.role.rolePermissions.map((rp) => ({
         action: rp.permission.action,
         subject: rp.permission.subject,
+        condition: rp.condition as Record<string, unknown> | null,
       })),
     });
   }

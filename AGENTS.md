@@ -6,7 +6,7 @@ This document helps AI coding agents quickly understand the codebase structure, 
 
 ## Project Overview
 
-**StaffHub** (`package.json` name: `berd.em-backend`) is a NestJS-based REST API for managing employee shifts, task assignment, time tracking, and payroll. Auth is Zalo Mini App OAuth (primary) plus JWT access/refresh tokens; authorization is a custom permission system (**not** CASL, despite the package still being installed).
+**StaffHub** (`package.json` name: `berd.em-backend`) is a NestJS-based REST API for managing employee shifts, task assignment, time tracking, and payroll. Auth is Zalo Mini App OAuth (primary) plus JWT access/refresh tokens; authorization is a real CASL-based permission system layered over `Role`/`Permission`/`RolePermission`.
 
 - **Framework**: NestJS 11 with TypeScript
 - **Database**: PostgreSQL with Prisma ORM 6.13.0, `Int` autoincrement primary keys throughout, no soft deletes (hard `.delete()`, audit columns instead)
@@ -88,7 +88,7 @@ src/
 │   ├── attendance-history/          # Append-only log of attendance actions per assignment
 │   ├── leave-requests/              # Absence + replacement employee workflow
 │   ├── time-tracking/               # TimeLog verification → feeds PayrollEntry
-│   ├── casl/                        # DEAD CODE — CaslAbilityFactory is fully commented out, module not imported
+│   ├── casl/                        # CaslAbilityFactory — builds the request-scoped CASL Ability; see Authorization below
 │   └── prisma/                      # PrismaService (singleton PrismaClient wrapper)
 └── test/ directory doesn't exist under src — E2E specs live in top-level test/
 
@@ -237,14 +237,14 @@ See [prisma/schema.prisma](prisma/schema.prisma) for the full definition, includ
 - [src/modules/auth/jwt-token.service.ts](src/modules/auth/jwt-token.service.ts) — Token generation
 - [src/modules/auth/refresh-token.service.ts](src/modules/auth/refresh-token.service.ts) — Token rotation/revocation
 
-### Authorization — custom permission guard, NOT CASL
+### Authorization — real CASL, built per request from Role/Permission/RolePermission
 
-`src/modules/casl/casl-ability.factory.ts` is dead code: fully commented out, and `CaslModule` is never imported in `app.module.ts`. The `@casl/ability`/`@casl/prisma` packages remain in `package.json` but are unused — do not extend or "fix" that file; it's not on the request path.
+`src/modules/casl/casl-ability.factory.ts` (`CaslAbilityFactory`) builds a real `@casl/ability` `Ability` (via `@casl/prisma`'s `createPrismaAbility`) for every request, from the caller's `permissions` list — one CASL rule per granted `(action, subject)`. The `@casl/ability`/`@casl/prisma` packages are real, used dependencies now.
 
-Real authorization is two globally-registered guards, in this order (`src/common/authz.module.ts`, via `APP_GUARD`):
+Two globally-registered guards run in this order (`src/common/authz.module.ts`, via `APP_GUARD`):
 
 1. **`JwtAccessGuard`** — authenticates via the passport `jwt` strategy. Honors `@Public()`.
-2. **`PermissionsGuard`** — authorizes. Honors `@Public()` and `@SkipPermissions()`. **Deny-by-default**: any route that is neither `@Public()` nor `@SkipPermissions()` MUST declare `@RequirePermissions({ action, subject })`, or every request 403s with "This route does not declare required permissions".
+2. **`PermissionsGuard`** — authorizes. Honors `@Public()` and `@SkipPermissions()`. **Deny-by-default**: any route that is neither `@Public()` nor `@SkipPermissions()` MUST declare `@RequirePermissions({ action, subject })`, or every request 403s with "This route does not declare required permissions". It builds the caller's `Ability` via `CaslAbilityFactory` and checks `ability.can(action, subject)` for each required rule — a **type-level** check (subject passed as its string type, not a fetched row), so it passes regardless of whether the matched grant carries a condition. The built `Ability` is attached to the request (`request.ability`) for the handler/service layer to do row-level enforcement.
 
 ```typescript
 // Public route (skips auth AND permission check) — login, refresh, health
@@ -260,14 +260,26 @@ Real authorization is two globally-registered guards, in this order (`src/common
 @Post()
 ```
 
-Permission checks compare `(action, subject)` against `user.permissions` on the JWT payload, with `action: 'manage'` or `subject: 'all'` acting as wildcards. Multiple `@RequirePermissions()` rules are ANDed.
+Multiple `@RequirePermissions()` rules are ANDed. `action: 'manage'` / `subject: 'all'` act as wildcards — this needs no special-casing in this codebase's own guard code, it's `@casl/ability`'s own built-in convention.
+
+#### Row-scoped permission conditions
+
+`RolePermission.condition` (`Json?`) is evaluated at request time: a partial Prisma `where` object where the literal token `"$self"` stands in for the caller's identifier — resolved to `employeeId` when it appears under an `employeeId` key (or a compound name ending in `EmployeeId`, e.g. `absenceEmployeeId`), to `userId` under a `userId`-ending key (e.g. `{ "employeeId": "$self" }`, or nested like `{ "assignment": { "is": { "employeeId": "$self" } } }`). It lives on `RolePermission`, not `Permission` — `Permission` stays unique on `(action, subject)` and unconditioned, so two roles can hold the *same* permission with different scope (e.g. `Employee`'s `read:time-logs` grant is conditioned, `Manager`'s isn't) without needing dedicated per-scope permission rows.
+
+Services read the request's `Ability` via `@CaslAbility()` and build a row-scoped filter with `accessibleWhere(ability, action, subject)` (in `src/modules/casl/accessible-where.ts`, wrapping `@casl/prisma`'s `accessibleBy` — its Proxy key is passed straight through at runtime, so this codebase's existing kebab-case subject strings work directly, not Prisma model names), merged into `where` via a top-level `AND: [...]`. A `create` payload's self-owned field is validated with an instance-level check instead — `ability.can(action, subject(subjectType, candidateRow))` — falling back to the caller's own id only when that specific candidate is disallowed, so an unscoped role (Manager creating on another employee's behalf) is unaffected by a self-scoped role's condition.
+
+**Nested (to-one relation) conditions must use the explicit `is` operator**: `{ assignment: { is: { employeeId: "$self" } } }`, not `{ assignment: { employeeId: "$self" } }`. The implicit form works for `accessibleBy` (Prisma's own client interprets it), but throws `"equals" does not supports comparison of arrays and objects` inside `@casl/prisma`'s own instance-level condition matcher — found by actually running it, not by reading docs.
 
 **Relevant Files:**
 
-- [src/common/authz.module.ts](src/common/authz.module.ts) — Global guard registration
-- [src/common/guards/permissions.guard.ts](src/common/guards/permissions.guard.ts) — Enforcement logic
+- [src/common/authz.module.ts](src/common/authz.module.ts) — Global guard registration, imports `CaslModule`
+- [src/common/guards/permissions.guard.ts](src/common/guards/permissions.guard.ts) — Enforcement logic, builds and attaches the `Ability`
+- [src/modules/casl/casl-ability.factory.ts](src/modules/casl/casl-ability.factory.ts) — `CaslAbilityFactory`, `AppAbility`/`AppSubjects` types
+- [src/modules/casl/accessible-where.ts](src/modules/casl/accessible-where.ts) — `accessibleWhere(ability, action, subject)` helper
+- [src/common/guards/permission-condition.helper.ts](src/common/guards/permission-condition.helper.ts) — `$self` token resolution (CASL-agnostic; called by `CaslAbilityFactory`)
+- [src/modules/auth/decorators/casl-ability.decorator.ts](src/modules/auth/decorators/casl-ability.decorator.ts) — `@CaslAbility()`
 - [src/common/decorators/public.decorator.ts](src/common/decorators/public.decorator.ts), [skip-permissions.decorator.ts](src/common/decorators/skip-permissions.decorator.ts), [permissions.decorator.ts](src/common/decorators/permissions.decorator.ts)
-- `prisma/seed.ts` — shows the `action`/`subject` naming convention (e.g. `create`/`employees`) and how roles are granted permissions
+- `prisma/seed.ts` — shows the `action`/`subject` naming convention (e.g. `create`/`employees`), how a role grant carries its own `condition`, and how roles are granted permissions
 
 ## Global Exception Handling
 
@@ -342,7 +354,7 @@ See the `test-writing` skill for detailed patterns, but note: `@UseGuards` is **
 | 404 on endpoints                             | Module not imported in `app.module.ts`                | Check `app.module.ts` imports array                                  |
 | "This route does not declare required permissions" | Forgot `@RequirePermissions()` on an otherwise-protected route | Add it, or `@SkipPermissions()` if truly none needed |
 | Response wrapping in `{ data, statusCode }` assumed but missing | `TransformInterceptor` exists but isn't registered anywhere | Don't rely on it — responses are whatever the controller returns |
-| Trying to fix/extend CASL ability rules      | `casl-ability.factory.ts` is commented-out dead code   | Use `@RequirePermissions()` instead                                  |
+| Nested condition throws inside `ability.can()` | Relation condition used the implicit shorthand (`{ assignment: { employeeId } }`) instead of `is` | Write it as `{ assignment: { is: { employeeId } } }` — required for CASL's own instance-level matcher, see Authorization above |
 | Seed fails with FK error                     | Parent created after child                             | Check `seed.ts` creation order (parents first)                      |
 | Prisma type mismatch                         | Schema changed, client not regenerated                 | Run `pnpm db:dev` or `pnpm prisma generate`                          |
 | Dev login always 403s                        | `AUTH_DEV_MODE`/`AUTH_DEV_SECRET` not set, or `NODE_ENV=production` | Set both env vars, ensure not production, send matching `x-dev-auth-secret` header |

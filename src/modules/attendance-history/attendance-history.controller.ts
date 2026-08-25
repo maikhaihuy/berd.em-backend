@@ -22,6 +22,8 @@ import { AttendanceHistoryFilterDto } from './dto/attendance-history-filter.dto'
 import { RequirePermissions } from '@common/decorators/permissions.decorator';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
+import { CaslAbility } from '@modules/auth/decorators/casl-ability.decorator';
+import type { AppAbility } from '@modules/casl/casl-ability.factory';
 
 @ApiTags('attendance-history')
 @ApiBearerAuth()
@@ -44,8 +46,13 @@ export class AttendanceHistoryController {
   async create(
     @Body() createDto: CreateAttendanceHistoryDto,
     @AuthenticatedUser() user: AuthenticatedUserDto,
+    @CaslAbility() ability: AppAbility,
   ): Promise<AttendanceHistoryResponseDto> {
-    return this.attendanceHistoryService.create(createDto, user.userId);
+    return this.attendanceHistoryService.create(
+      createDto,
+      user.userId,
+      ability,
+    );
   }
 
   @RequirePermissions({ action: 'read', subject: 'attendance-history' })
@@ -58,8 +65,12 @@ export class AttendanceHistoryController {
   })
   async findByAssignment(
     @Param('assignmentId') assignmentId: string,
+    @CaslAbility() ability: AppAbility,
   ): Promise<AttendanceHistoryResponseDto[]> {
-    return this.attendanceHistoryService.findByAssignment(+assignmentId);
+    return this.attendanceHistoryService.findByAssignment(
+      +assignmentId,
+      ability,
+    );
   }
 
   @RequirePermissions({ action: 'read', subject: 'attendance-history' })
@@ -73,8 +84,9 @@ export class AttendanceHistoryController {
   @ApiResponse({ status: 404, description: 'Attendance history not found' })
   async findOne(
     @Param('id') id: string,
+    @CaslAbility() ability: AppAbility,
   ): Promise<AttendanceHistoryResponseDto> {
-    return this.attendanceHistoryService.findOne(+id);
+    return this.attendanceHistoryService.findOne(+id, ability);
   }
 
   @RequirePermissions({ action: 'read', subject: 'attendance-history' })
@@ -87,8 +99,9 @@ export class AttendanceHistoryController {
   })
   async findAll(
     @Query() filterDto: AttendanceHistoryFilterDto,
+    @CaslAbility() ability: AppAbility,
   ): Promise<AttendanceHistoryResponseDto[]> {
-    return this.attendanceHistoryService.findAll(filterDto);
+    return this.attendanceHistoryService.findAll(filterDto, ability);
   }
 
   // Note: No update or delete endpoints - attendance history is immutable for audit integrity

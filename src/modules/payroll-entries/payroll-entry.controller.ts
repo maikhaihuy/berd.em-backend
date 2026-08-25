@@ -20,6 +20,8 @@ import {
 import { RequirePermissions } from '@common/decorators/permissions.decorator';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
+import { CaslAbility } from '@modules/auth/decorators/casl-ability.decorator';
+import type { AppAbility } from '@modules/casl/casl-ability.factory';
 
 @ApiTags('payroll-entries')
 @Controller('payroll-entries')
@@ -50,12 +52,14 @@ export class PayrollEntriesController {
   })
   @ApiResponse({ status: 200, type: [PayrollEntryResponseDto] })
   async findAll(
+    @CaslAbility() ability: AppAbility,
     @Query('payPeriodId') payPeriodId?: string,
     @Query('employeeId') employeeId?: string,
   ): Promise<PayrollEntryResponseDto[]> {
     return this.payrollEntryService.findAll(
       payPeriodId ? +payPeriodId : undefined,
       employeeId ? +employeeId : undefined,
+      ability,
     );
   }
 
@@ -66,8 +70,9 @@ export class PayrollEntriesController {
   @ApiResponse({ status: 404, description: 'Payroll entry not found' })
   async findOne(
     @Param('id', ParseIntPipe) id: number,
+    @CaslAbility() ability: AppAbility,
   ): Promise<PayrollEntryResponseDto> {
-    return this.payrollEntryService.findOne(id);
+    return this.payrollEntryService.findOne(id, ability);
   }
 
   @RequirePermissions({ action: 'delete', subject: 'payroll-entries' })
