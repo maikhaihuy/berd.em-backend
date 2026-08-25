@@ -18,16 +18,18 @@ describe('AuthController', () => {
   const authUser = new AuthenticatedUserDto({
     userId: 1,
     phone: '0900000001',
-    role: 'Employee',
+    roles: ['Employee'],
     branches: [],
+    managedBranches: [],
     permissions: [],
   });
 
   const refreshSession = new RefreshSessionDto({
     userId: 1,
     phone: '0900000001',
-    role: 'Employee',
+    roles: ['Employee'],
     branches: [],
+    managedBranches: [],
     permissions: [],
     tokenId: 'token-id-123',
   });

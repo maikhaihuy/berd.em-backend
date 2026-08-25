@@ -13,6 +13,8 @@ import { UserMapper } from './user.mapper';
 import { AuditLogsService } from '@modules/audit-logs/audit-logs.service';
 
 const SUBJECT = 'users';
+const ROLE_ASSIGNMENT_SUBJECT = 'user-roles';
+const MANAGER_BRANCHES_SUBJECT = 'manager-branches';
 
 @Injectable()
 export class UsersService {
@@ -25,7 +27,7 @@ export class UsersService {
     createUserDto: CreateUserDto,
     currentUserId: number,
   ): Promise<UserResponseDto> {
-    const { ...userData } = createUserDto;
+    const { roleIds, ...userData } = createUserDto;
 
     // Check if phone number already exists
     const existingPhone = await this.prisma.user.findUnique({
@@ -37,27 +39,16 @@ export class UsersService {
       );
     }
 
-    // Verify role exists
-    const role = await this.prisma.role.findUnique({
-      where: { id: userData.roleId },
-    });
-    if (!role) {
-      throw new BadRequestException('Role does not exist');
-    }
+    // Verify every role exists
+    await this.assertRolesExist(roleIds);
 
     try {
       const user = await this.prisma.user.create({
         data: {
           ...userData,
-          // userBranches:
-          //   branchIds && branchIds.length > 0
-          //     ? {
-          //         create: branchIds.map((branchId) => ({
-          //           branchId,
-          //           isPrimary: branchId === primaryBranchId,
-          //         })),
-          //       }
-          //     : undefined,
+          userRoles: {
+            create: roleIds.map((roleId) => ({ roleId })),
+          },
         },
         include: {
           ...userWithRoleInclude,
@@ -155,16 +146,6 @@ export class UsersService {
     //   }
     // }
 
-    // If updating role, verify it exists
-    if (updateUserDto.roleId) {
-      const role = await this.prisma.role.findUnique({
-        where: { id: updateUserDto.roleId },
-      });
-      if (!role) {
-        throw new BadRequestException('Role does not exist');
-      }
-    }
-
     const existingUserForAudit = await this.prisma.user.findUnique({
       where: { id },
       include: { ...userWithRoleInclude },
@@ -234,6 +215,187 @@ export class UsersService {
         throw new NotFoundException(`User with ID ${id} not found.`);
       }
       throw error;
+    }
+  }
+
+  async assignRoles(
+    id: number,
+    roleIds: number[],
+    currentUserId: number,
+  ): Promise<UserResponseDto> {
+    await this.assertRolesExist(roleIds);
+
+    const before = await this.findOne(id);
+
+    await this.prisma.userRole.createMany({
+      data: roleIds.map((roleId) => ({ userId: id, roleId })),
+      skipDuplicates: true,
+    });
+
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: { ...userWithRoleInclude },
+    });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found.`);
+    }
+    const dto = UserMapper.toDto(user);
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'update',
+      subject: ROLE_ASSIGNMENT_SUBJECT,
+      entityId: id,
+      before: before as unknown as Record<string, unknown>,
+      after: dto as unknown as Record<string, unknown>,
+    });
+
+    return dto;
+  }
+
+  async removeRole(
+    id: number,
+    roleId: number,
+    currentUserId: number,
+  ): Promise<UserResponseDto> {
+    const before = await this.findOne(id);
+
+    if (before.roles.length <= 1) {
+      throw new BadRequestException(
+        'Cannot remove a user’s last remaining role',
+      );
+    }
+
+    try {
+      await this.prisma.userRole.delete({
+        where: { userId_roleId: { userId: id, roleId } },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException(`User ${id} does not hold role ${roleId}.`);
+      }
+      throw error;
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: { ...userWithRoleInclude },
+    });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found.`);
+    }
+    const dto = UserMapper.toDto(user);
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'update',
+      subject: ROLE_ASSIGNMENT_SUBJECT,
+      entityId: id,
+      before: before as unknown as Record<string, unknown>,
+      after: dto as unknown as Record<string, unknown>,
+    });
+
+    return dto;
+  }
+
+  async assignManagerBranches(
+    id: number,
+    branchIds: number[],
+    currentUserId: number,
+  ): Promise<{ userId: number; managedBranchIds: number[] }> {
+    await this.assertUserExists(id);
+    await this.assertBranchesExist(branchIds);
+
+    const before = await this.getManagedBranchIds(id);
+
+    await this.prisma.managerBranch.createMany({
+      data: branchIds.map((branchId) => ({ userId: id, branchId })),
+      skipDuplicates: true,
+    });
+
+    const after = await this.getManagedBranchIds(id);
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'update',
+      subject: MANAGER_BRANCHES_SUBJECT,
+      entityId: id,
+      before: { managedBranchIds: before },
+      after: { managedBranchIds: after },
+    });
+
+    return { userId: id, managedBranchIds: after };
+  }
+
+  async removeManagerBranch(
+    id: number,
+    branchId: number,
+    currentUserId: number,
+  ): Promise<{ userId: number; managedBranchIds: number[] }> {
+    const before = await this.getManagedBranchIds(id);
+
+    try {
+      await this.prisma.managerBranch.delete({
+        where: { userId_branchId: { userId: id, branchId } },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException(
+          `User ${id} does not manage branch ${branchId}.`,
+        );
+      }
+      throw error;
+    }
+
+    const after = await this.getManagedBranchIds(id);
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'update',
+      subject: MANAGER_BRANCHES_SUBJECT,
+      entityId: id,
+      before: { managedBranchIds: before },
+      after: { managedBranchIds: after },
+    });
+
+    return { userId: id, managedBranchIds: after };
+  }
+
+  private async getManagedBranchIds(userId: number): Promise<number[]> {
+    const rows = await this.prisma.managerBranch.findMany({
+      where: { userId },
+    });
+    return rows.map((r) => r.branchId);
+  }
+
+  private async assertUserExists(id: number): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found.`);
+    }
+  }
+
+  private async assertBranchesExist(branchIds: number[]): Promise<void> {
+    const branches = await this.prisma.branch.findMany({
+      where: { id: { in: branchIds } },
+    });
+    if (branches.length !== new Set(branchIds).size) {
+      throw new BadRequestException('One or more branches do not exist');
+    }
+  }
+
+  private async assertRolesExist(roleIds: number[]): Promise<void> {
+    const roles = await this.prisma.role.findMany({
+      where: { id: { in: roleIds } },
+    });
+    if (roles.length !== new Set(roleIds).size) {
+      throw new BadRequestException('One or more roles do not exist');
     }
   }
 }

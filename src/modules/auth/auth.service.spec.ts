@@ -39,8 +39,9 @@ describe('AuthService', () => {
     userId: 1,
     phone: '0900000001',
     employeeId: 10,
-    role: 'Employee',
+    roles: ['Employee'],
     branches: [5],
+    managedBranches: [],
     permissions: [],
   });
 
@@ -115,11 +116,15 @@ describe('AuthService', () => {
         sub: authUser.userId,
         phone: authUser.phone,
         empId: authUser.employeeId,
-        role: authUser.role,
+        roles: authUser.roles,
         branches: authUser.branches,
+        managedBranches: authUser.managedBranches,
       });
       expect(refreshTokenService.createRefreshToken).toHaveBeenCalledWith(
-        expect.objectContaining({ sub: authUser.userId, role: authUser.role }),
+        expect.objectContaining({
+          sub: authUser.userId,
+          roles: authUser.roles,
+        }),
       );
     });
   });
@@ -128,8 +133,9 @@ describe('AuthService', () => {
     const session = new RefreshSessionDto({
       userId: 1,
       phone: '0900000001',
-      role: 'Employee',
+      roles: ['Employee'],
       branches: [5],
+      managedBranches: [],
       permissions: [],
       tokenId: 'old-token-id',
     });
@@ -138,7 +144,8 @@ describe('AuthService', () => {
       prismaService.user.findUnique.mockResolvedValue({
         id: 1,
         phoneNumber: '0900000001',
-        role: { name: 'Employee' },
+        userRoles: [{ role: { name: 'Employee' } }],
+        managerBranches: [],
         employee: { id: 10 },
       });
       prismaService.employee.findUnique.mockResolvedValue({
@@ -159,7 +166,7 @@ describe('AuthService', () => {
       });
       expect(refreshTokenService.rotateRefreshToken).toHaveBeenCalledWith(
         'old-token-id',
-        expect.objectContaining({ sub: 1, role: 'Employee' }),
+        expect.objectContaining({ sub: 1, roles: ['Employee'] }),
       );
     });
 

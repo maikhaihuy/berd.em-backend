@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 
 // Base include (reuse được)
 export const userWithRoleInclude = {
-  role: true,
+  userRoles: { include: { role: true } },
 } satisfies Prisma.UserInclude;
 
 export const userWithEmployeeInclude = {
@@ -21,15 +21,20 @@ export type UserWithEmployee = Prisma.UserGetPayload<{
 // Advanced: RBAC sâu hơn
 
 export const userWithRolePermissionsInclude = {
-  role: {
+  userRoles: {
     include: {
-      rolePermissions: {
+      role: {
         include: {
-          permission: true,
+          rolePermissions: {
+            include: {
+              permission: true,
+            },
+          },
         },
       },
     },
   },
+  managerBranches: true,
   employee: {
     include: {
       employeeBranches: true,

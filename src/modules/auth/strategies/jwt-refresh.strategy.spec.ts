@@ -32,7 +32,7 @@ describe('JwtRefreshStrategy', () => {
     id: 1,
     phoneNumber: '0900000001',
     status: UserStatus.ACTIVE,
-    role: { name: 'Employee' },
+    userRoles: [{ role: { name: 'Employee' } }],
     refreshTokens: [
       { id: 'token-1', hashedToken: 'hashed-token-1', expiresAt: future },
       { id: 'token-2', hashedToken: 'hashed-token-2', expiresAt: future },
@@ -46,8 +46,9 @@ describe('JwtRefreshStrategy', () => {
   const mockPayload: RefreshTokenPayloadDto = {
     sub: 1,
     phone: '0900000001',
-    role: 'Employee',
+    roles: ['Employee'],
     branches: [],
+    managedBranches: [],
   };
 
   beforeEach(async () => {
@@ -98,7 +99,7 @@ describe('JwtRefreshStrategy', () => {
       expect(session).toBeInstanceOf(RefreshSessionDto);
       expect(session.userId).toBe(mockUser.id);
       expect(session.phone).toBe(mockUser.phoneNumber);
-      expect(session.role).toBe(mockUser.role.name);
+      expect(session.roles).toEqual(['Employee']);
       expect(session.tokenId).toBe('token-1');
       expect(mockedCompare).toHaveBeenCalledWith(
         'test-refresh-token',

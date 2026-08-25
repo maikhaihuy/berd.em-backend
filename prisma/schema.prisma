@@ -89,10 +89,11 @@ model User {
   fullName     String
   avatarUrl    String?
   status       UserStatus
-  roleId       Int
-  role         Role          @relation(fields: [roleId], references: [id])
   employee     Employee? // optional relation
   zaloIdentity ZaloIdentity?
+
+  userRoles       UserRole[]
+  managerBranches ManagerBranch[]
 
   refreshTokens RefreshToken[]
   resetTokens   PasswordResetToken[]
@@ -124,7 +125,7 @@ model Role {
   description  String?
   isSystemRole Boolean @default(false)
 
-  users           User[]
+  userRoles       UserRole[]
   rolePermissions RolePermission[]
 
   createdAt DateTime @default(now())
@@ -161,6 +162,33 @@ model RolePermission {
 
   @@id([roleId, permissionId])
   @@map("role_permissions")
+}
+
+model UserRole {
+  userId Int
+  roleId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+// ManagerBranch records which branches a user manages (for `$managedBranches`
+// permission-condition scoping) — independent of EmployeeBranch, which
+// records where an employee works.
+model ManagerBranch {
+  userId   Int
+  branchId Int
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([userId, branchId])
+  @@map("manager_branches")
 }
 
 // model UserBranch {
@@ -210,6 +238,7 @@ model Branch {
   phone        String?
 
   employeeBranches     EmployeeBranch[]
+  managerBranches      ManagerBranch[]
   scheduleConfig       BranchScheduleConfig?
   masterShiftTemplates MasterShiftTemplate[]
   subShiftTemplates    SubShiftTemplate[]

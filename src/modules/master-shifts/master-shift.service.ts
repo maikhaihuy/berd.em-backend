@@ -10,6 +10,10 @@ import { UpdateMasterShiftDto } from './dto/update-master-shift.dto';
 import { MasterShiftResponseDto } from './dto/master-shift-response.dto';
 import { MasterShiftMapper } from './master-shift.mapper';
 import { masterShiftInclude } from './master-shift.types';
+import type { AppAbility } from '@modules/casl/casl-ability.factory';
+import { accessibleWhere } from '@modules/casl/accessible-where';
+
+const SUBJECT = 'master-shifts';
 
 @Injectable()
 export class MasterShiftsService {
@@ -157,6 +161,7 @@ export class MasterShiftsService {
   }
 
   async findAll(
+    ability: AppAbility,
     branchId?: number,
     from?: string,
     to?: string,
@@ -172,6 +177,7 @@ export class MasterShiftsService {
               },
             }
           : {}),
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
       },
       include: masterShiftInclude,
       orderBy: [{ workDate: 'asc' }, { startTime: 'asc' }],
@@ -179,7 +185,22 @@ export class MasterShiftsService {
     return MasterShiftMapper.toDtos(shifts);
   }
 
-  async findOne(id: number): Promise<MasterShiftResponseDto> {
+  async findOne(
+    id: number,
+    ability: AppAbility,
+  ): Promise<MasterShiftResponseDto> {
+    const shift = await this.prisma.masterShift.findFirst({
+      where: {
+        id,
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
+      include: masterShiftInclude,
+    });
+    if (!shift) throw new NotFoundException('Master shift not found');
+    return MasterShiftMapper.toDto(shift);
+  }
+
+  private async findExisting(id: number): Promise<MasterShiftResponseDto> {
     const shift = await this.prisma.masterShift.findUnique({
       where: { id },
       include: masterShiftInclude,
@@ -193,7 +214,7 @@ export class MasterShiftsService {
     dto: UpdateMasterShiftDto,
     currentUserId: number,
   ): Promise<MasterShiftResponseDto> {
-    const existing = await this.findOne(id);
+    const existing = await this.findExisting(id);
     const branchId = dto.branchId ?? existing.branchId;
     if (dto.masterShiftTemplateId) {
       await this.ensureTemplateMatchesBranch(
@@ -223,7 +244,7 @@ export class MasterShiftsService {
   }
 
   async remove(id: number) {
-    await this.findOne(id);
+    await this.findExisting(id);
     await this.prisma.masterShift.delete({ where: { id } });
     return { message: 'Master shift deleted successfully' };
   }

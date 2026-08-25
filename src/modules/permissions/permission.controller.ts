@@ -14,6 +14,7 @@ import { CreatePermissionDto } from './dto/create-permission.dto';
 import { UpdatePermissionDto } from './dto/update-permission.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { PermissionResponseDto } from './dto/permission-response.dto';
+import { PermissionCatalogEntryDto } from './dto/permission-catalog-entry.dto';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 import { RequirePermissions } from '@common/decorators/permissions.decorator';
@@ -52,6 +53,21 @@ export class PermissionsController {
   })
   async findAll() {
     return await this.permissionsService.findAll();
+  }
+
+  @RequirePermissions({ action: 'read', subject: 'permissions' })
+  @Get('catalog')
+  @ApiOperation({
+    summary:
+      "Documents each permission subject's actions and supported condition tokens",
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The permission catalog.',
+    type: [PermissionCatalogEntryDto],
+  })
+  async getCatalog(): Promise<PermissionCatalogEntryDto[]> {
+    return this.permissionsService.getCatalog();
   }
 
   @RequirePermissions({ action: 'read', subject: 'permissions' })
