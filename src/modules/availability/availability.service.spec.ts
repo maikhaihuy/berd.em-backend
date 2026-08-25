@@ -7,9 +7,9 @@ import { LoggerService } from '@common/logger/logger.service';
 describe('AvailabilityService row-scoping', () => {
   let prisma: Partial<PrismaService>;
   let service: AvailabilityService;
-  const caslAbilityFactory = new CaslAbilityFactory(
-    { warn: jest.fn() } as unknown as LoggerService,
-  );
+  const caslAbilityFactory = new CaslAbilityFactory({
+    warn: jest.fn(),
+  } as unknown as LoggerService);
 
   const unscopedAbility = caslAbilityFactory.createForUser({
     permissions: [{ action: 'read', subject: 'availability' }],

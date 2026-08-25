@@ -49,11 +49,14 @@ export class AbilitiesService {
     const caslUser: CaslUser = {
       userId: user.id,
       employeeId: user.employee?.id,
-      permissions: user.role.rolePermissions.map((rp) => ({
-        action: rp.permission.action,
-        subject: rp.permission.subject,
-        condition: rp.condition as JsonObject | null,
-      })),
+      managedBranches: user.managerBranches.map((mb) => mb.branchId),
+      permissions: user.userRoles.flatMap((ur) =>
+        ur.role.rolePermissions.map((rp) => ({
+          action: rp.permission.action,
+          subject: rp.permission.subject,
+          condition: rp.condition as JsonObject | null,
+        })),
+      ),
     };
 
     return this.serialize(caslUser);

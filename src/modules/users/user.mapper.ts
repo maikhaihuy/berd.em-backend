@@ -6,14 +6,13 @@ import { UserLiteDto } from './dto/user.dto';
 export class UserMapper {
   // 🧱 Base mapper
   // Annotate this: void cho static method
-  static mapBase(this: void, user: User): UserResponseDto {
+  static mapBase(this: void, user: User): Omit<UserResponseDto, 'roles'> {
     return {
       id: user.id,
       phoneNumber: user.phoneNumber,
       fullName: user.fullName,
       avatarUrl: user.avatarUrl,
       status: user.status,
-      roleId: user.roleId,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
@@ -27,12 +26,15 @@ export class UserMapper {
     };
   }
 
-  static mapRole(
+  static mapRoles(
     this: void,
     user: Partial<UserWithRole>,
-  ): Partial<UserResponseDto> {
+  ): Pick<UserResponseDto, 'roles'> {
     return {
-      roleName: user.role?.name ?? undefined,
+      roles: (user.userRoles ?? []).map((ur) => ({
+        id: ur.role.id,
+        name: ur.role.name,
+      })),
     };
   }
 
@@ -40,7 +42,7 @@ export class UserMapper {
   static toDto(this: void, user: Partial<UserWithRole>): UserResponseDto {
     return {
       ...UserMapper.mapBase(user as User),
-      ...UserMapper.mapRole(user),
+      ...UserMapper.mapRoles(user),
     } as UserResponseDto;
   }
 
@@ -52,18 +54,14 @@ export class UserMapper {
   // 🚀 Advanced (RBAC sâu hơn)
   static toDtoWithPermissions(user: UserWithRolePermissions): UserResponseDto {
     return {
-      id: user.id,
-      phoneNumber: user.phoneNumber,
-      fullName: user.fullName,
-      avatarUrl: user.avatarUrl,
-      status: user.status,
-      roleId: user.roleId,
-      roleName: user.role?.name,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
+      ...UserMapper.mapBase(user as User),
+      roles: user.userRoles.map((ur) => ({
+        id: ur.role.id,
+        name: ur.role.name,
+      })),
 
       // ví dụ flatten permissions nếu cần
-      // permissions: user.role?.permissions?.map(p => p.name),
-    };
+      // permissions: user.userRoles.flatMap(ur => ur.role.rolePermissions),
+    } as UserResponseDto;
   }
 }

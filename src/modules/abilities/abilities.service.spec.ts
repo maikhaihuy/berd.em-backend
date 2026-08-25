@@ -84,14 +84,19 @@ describe('AbilitiesService', () => {
       (prisma.user as any).findUnique.mockResolvedValue({
         id: 2,
         employee: { id: 8 },
-        role: {
-          rolePermissions: [
-            {
-              condition: { employeeId: '$self' },
-              permission: { action: 'read', subject: 'time-logs' },
+        managerBranches: [],
+        userRoles: [
+          {
+            role: {
+              rolePermissions: [
+                {
+                  condition: { employeeId: '$self' },
+                  permission: { action: 'read', subject: 'time-logs' },
+                },
+              ],
             },
-          ],
-        },
+          },
+        ],
       });
       caslAbilityFactory.createForUser.mockReturnValue({
         rules: [

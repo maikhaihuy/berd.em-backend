@@ -90,7 +90,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
       const session = new RefreshSessionDto({
         userId: user.id,
         phone: user.phoneNumber,
-        role: user.role.name,
+        roles: user.userRoles.map((ur) => ur.role.name),
         tokenId: tokenRecord.id,
       });
 

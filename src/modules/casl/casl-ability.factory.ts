@@ -44,9 +44,7 @@ export interface CaslUser extends SelfIdentity {
  */
 @Injectable()
 export class CaslAbilityFactory {
-  constructor(
-    @Inject(LoggerService) private readonly logger: LoggerService,
-  ) {}
+  constructor(@Inject(LoggerService) private readonly logger: LoggerService) {}
 
   createForUser(user: CaslUser): AppAbility {
     const { can: rawCan, build } = new AbilityBuilder<AppAbility>(

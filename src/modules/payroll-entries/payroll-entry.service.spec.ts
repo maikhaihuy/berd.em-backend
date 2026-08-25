@@ -146,9 +146,9 @@ describe('PayrollEntryService.generate', () => {
 describe('PayrollEntryService row-scoping', () => {
   let prisma: Partial<PrismaService>;
   let service: PayrollEntryService;
-  const caslAbilityFactory = new CaslAbilityFactory(
-    { warn: jest.fn() } as unknown as LoggerService,
-  );
+  const caslAbilityFactory = new CaslAbilityFactory({
+    warn: jest.fn(),
+  } as unknown as LoggerService);
 
   const unscopedAbility = caslAbilityFactory.createForUser({
     permissions: [{ action: 'read', subject: 'payroll-entries' }],

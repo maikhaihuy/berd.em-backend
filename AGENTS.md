@@ -209,11 +209,12 @@ Employee ──Availability (registers interest in a SubShift)
 
 Key models:
 
-- **User**: login-capable account (`phoneNumber` unique, optional `password`, one `roleId`). Has an optional `employee` relation and an optional `zaloIdentity` relation.
+- **User**: login-capable account (`phoneNumber` unique, optional `password`). Has an optional `employee` relation and an optional `zaloIdentity` relation.
 - **ZaloIdentity**: 1:1 link from a `User` to a Zalo `zaloUserId`, created on first successful Zalo login.
 - **Employee**: HR record (name, phone, dates). `userId` is nullable — an employee can exist before being linked to a login account.
 - **RefreshToken**: hashed refresh tokens with `source`/`device`/`ipAddress` for session tracking and revocation.
-- **Role / Permission / RolePermission**: each `User` has exactly one `Role`; a `Role` has many `Permission`s via the `RolePermission` join table. `Permission.action` + `Permission.subject` are the strings matched by `@RequirePermissions()`.
+- **Role / Permission / RolePermission / UserRole**: `User` ↔ `Role` is many-to-many via `UserRole` (a `User` always holds at least one `Role`); a `Role` has many `Permission`s via the `RolePermission` join table. `Permission.action` + `Permission.subject` are the strings matched by `@RequirePermissions()`.
+- **ManagerBranch**: which branches a `User` manages (`userId`, `branchId`) — independent of `EmployeeBranch`, which records where an employee works. Backs the `$managedBranches` permission condition token (see Authorization below).
 - **MasterShiftTemplate / SubShiftTemplate / TaskTemplate**: branch-owned, reusable shift/task definitions.
 - **MasterShift / SubShift / Task**: dated, generated instances of the templates above (optionally linked back via `*TemplateId`, nullable so a template can be edited/deleted without breaking history).
 - **Assignment**: an `Employee` working a specific `SubShift`, optionally originating from an `Availability` registration. Carries `status` (`WorkSlotStatus`) and actual check-in/out times.
@@ -239,7 +240,7 @@ See [prisma/schema.prisma](prisma/schema.prisma) for the full definition, includ
 
 ### Authorization — real CASL, built per request from Role/Permission/RolePermission
 
-`src/modules/casl/casl-ability.factory.ts` (`CaslAbilityFactory`) builds a real `@casl/ability` `Ability` (via `@casl/prisma`'s `createPrismaAbility`) for every request, from the caller's `permissions` list — one CASL rule per granted `(action, subject)`. The `@casl/ability`/`@casl/prisma` packages are real, used dependencies now.
+`src/modules/casl/casl-ability.factory.ts` (`CaslAbilityFactory`) builds a real `@casl/ability` `Ability` (via `@casl/prisma`'s `createPrismaAbility`) for every request, from the caller's `permissions` list — one CASL rule per granted `(action, subject)`. That `permissions` list is the union of every `Role` the caller holds (`User` ↔ `Role` is many-to-many via `UserRole`), assembled by `JwtAccessStrategy`/`AbilitiesService` before `CaslAbilityFactory` ever sees it — the factory itself has no notion of "one role" vs "several". The `@casl/ability`/`@casl/prisma` packages are real, used dependencies now.
 
 Two globally-registered guards run in this order (`src/common/authz.module.ts`, via `APP_GUARD`):
 
@@ -264,7 +265,7 @@ Multiple `@RequirePermissions()` rules are ANDed. `action: 'manage'` / `subject:
 
 #### Row-scoped permission conditions
 
-`RolePermission.condition` (`Json?`) is evaluated at request time: a partial Prisma `where` object where the literal token `"$self"` stands in for the caller's identifier — resolved to `employeeId` when it appears under an `employeeId` key (or a compound name ending in `EmployeeId`, e.g. `absenceEmployeeId`), to `userId` under a `userId`-ending key (e.g. `{ "employeeId": "$self" }`, or nested like `{ "assignment": { "is": { "employeeId": "$self" } } }`). It lives on `RolePermission`, not `Permission` — `Permission` stays unique on `(action, subject)` and unconditioned, so two roles can hold the *same* permission with different scope (e.g. `Employee`'s `read:time-logs` grant is conditioned, `Manager`'s isn't) without needing dedicated per-scope permission rows.
+`RolePermission.condition` (`Json?`) is evaluated at request time: a partial Prisma `where` object where the literal token `"$self"` stands in for the caller's identifier — resolved to `employeeId` when it appears under an `employeeId` key (or a compound name ending in `EmployeeId`, e.g. `absenceEmployeeId`), to `userId` under a `userId`-ending key (e.g. `{ "employeeId": "$self" }`, or nested like `{ "assignment": { "is": { "employeeId": "$self" } } }`). A sibling token, `"$managedBranches"`, resolves to the caller's list of managed branch ids from `ManagerBranch` — typically `{ "branchId": { "in": "$managedBranches" } }`; unlike `$self`, an empty managed-branches list resolves to `{ in: [] }` rather than being treated as an error (a manager with no assigned branches is a valid state, not a broken condition). `GET /permissions/catalog` documents which condition tokens apply to which subject, sourced from the same field-name tables `resolveCondition` uses (`src/common/guards/permission-condition.helper.ts`) so the two can't drift. It lives on `RolePermission`, not `Permission` — `Permission` stays unique on `(action, subject)` and unconditioned, so two roles can hold the *same* permission with different scope (e.g. `Employee`'s `read:time-logs` grant is conditioned, `Manager`'s isn't) without needing dedicated per-scope permission rows.
 
 Services read the request's `Ability` via `@CaslAbility()` and build a row-scoped filter with `accessibleWhere(ability, action, subject)` (in `src/modules/casl/accessible-where.ts`, wrapping `@casl/prisma`'s `accessibleBy` — its Proxy key is passed straight through at runtime, so this codebase's existing kebab-case subject strings work directly, not Prisma model names), merged into `where` via a top-level `AND: [...]`. A `create` payload's self-owned field is validated with an instance-level check instead — `ability.can(action, subject(subjectType, candidateRow))` — falling back to the caller's own id only when that specific candidate is disallowed, so an unscoped role (Manager creating on another employee's behalf) is unaffected by a self-scoped role's condition.
 

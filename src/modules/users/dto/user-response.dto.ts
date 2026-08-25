@@ -1,12 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { RoleLiteDto } from '@modules/roles/dto/role.dto';
 import { UserDto } from './user.dto';
 
 export class UserResponseDto extends UserDto {
-  @ApiProperty({ description: 'Role ID' })
-  roleId!: number;
-
-  @ApiProperty({ description: 'Role name', required: false })
-  roleName?: string;
+  @ApiProperty({ description: 'Roles held by this user', type: [RoleLiteDto] })
+  roles!: RoleLiteDto[];
 
   @ApiProperty({
     description: 'Assigned branches',

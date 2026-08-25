@@ -9,9 +9,9 @@ import { LoggerService } from '@common/logger/logger.service';
 describe('AttendanceHistoryService row-scoping', () => {
   let prisma: Partial<PrismaService>;
   let service: AttendanceHistoryService;
-  const caslAbilityFactory = new CaslAbilityFactory(
-    { warn: jest.fn() } as unknown as LoggerService,
-  );
+  const caslAbilityFactory = new CaslAbilityFactory({
+    warn: jest.fn(),
+  } as unknown as LoggerService);
 
   const unscopedAbility = caslAbilityFactory.createForUser({
     permissions: [

@@ -8,12 +8,15 @@ import {
   Delete,
   HttpStatus,
   HttpCode,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { UsersService } from './user.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { CreateUserDto } from './dto/create-user.dto';
+import { AssignUserRolesDto } from './dto/assign-user-roles.dto';
+import { AssignManagerBranchesDto } from './dto/assign-manager-branches.dto';
 import { RequirePermissions } from '@common/decorators/permissions.decorator';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
@@ -100,8 +103,69 @@ export class UsersController {
     return await this.usersService.update(+id, updateUserDto, user.userId);
   }
 
-  // Note: Role update is now handled via PUT /users/:id with roleId field
-  // since User now has single roleId instead of many-to-many relationship
+  @RequirePermissions({ action: 'update', subject: 'users' })
+  @Post(':id/roles')
+  @ApiOperation({ summary: "Assign one or more roles to a user's account" })
+  @ApiResponse({
+    status: 200,
+    description: 'The role(s) have been assigned.',
+    type: UserResponseDto,
+  })
+  @ApiBody({ type: AssignUserRolesDto })
+  async assignRoles(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AssignUserRolesDto,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
+  ): Promise<UserResponseDto> {
+    return this.usersService.assignRoles(id, dto.roleIds, user.userId);
+  }
+
+  @RequirePermissions({ action: 'update', subject: 'users' })
+  @Delete(':id/roles/:roleId')
+  @ApiOperation({ summary: "Remove one role from a user's account" })
+  @ApiResponse({
+    status: 200,
+    description: 'The role has been removed.',
+    type: UserResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Cannot remove a user's last remaining role.",
+  })
+  async removeRole(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('roleId', ParseIntPipe) roleId: number,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
+  ): Promise<UserResponseDto> {
+    return this.usersService.removeRole(id, roleId, user.userId);
+  }
+
+  @RequirePermissions({ action: 'update', subject: 'manager-branches' })
+  @Post(':id/manager-branches')
+  @ApiOperation({ summary: 'Assign one or more branches for a user to manage' })
+  @ApiBody({ type: AssignManagerBranchesDto })
+  async assignManagerBranches(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AssignManagerBranchesDto,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
+  ) {
+    return this.usersService.assignManagerBranches(
+      id,
+      dto.branchIds,
+      user.userId,
+    );
+  }
+
+  @RequirePermissions({ action: 'update', subject: 'manager-branches' })
+  @Delete(':id/manager-branches/:branchId')
+  @ApiOperation({ summary: 'Remove a branch from the branches a user manages' })
+  async removeManagerBranch(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('branchId', ParseIntPipe) branchId: number,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
+  ) {
+    return this.usersService.removeManagerBranch(id, branchId, user.userId);
+  }
 
   @RequirePermissions({ action: 'delete', subject: 'users' })
   @Delete(':id')

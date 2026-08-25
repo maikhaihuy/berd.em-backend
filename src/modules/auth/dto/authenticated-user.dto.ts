@@ -11,11 +11,14 @@ export class AuthenticatedUserDto {
   @ApiProperty()
   employeeId?: number;
 
-  @ApiProperty()
-  role!: string;
+  @ApiProperty({ type: [String] })
+  roles!: string[];
 
   @ApiProperty()
-  branches!: number[]; // Danh sách ID chi nhánh được phép quản lý/làm việc
+  branches!: number[]; // Danh sách ID chi nhánh mà nhân viên làm việc
+
+  @ApiProperty()
+  managedBranches!: number[]; // Danh sách ID chi nhánh được phép quản lý (ManagerBranch)
 
   @ApiProperty()
   permissions!: {

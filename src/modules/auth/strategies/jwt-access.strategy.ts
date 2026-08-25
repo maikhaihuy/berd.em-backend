@@ -36,12 +36,15 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy) {
       phone: user.phoneNumber,
       employeeId: user.employee?.id,
       branches: user.employee?.employeeBranches.map((eb) => eb.branchId) ?? [],
-      role: user.role.name,
-      permissions: user.role.rolePermissions.map((rp) => ({
-        action: rp.permission.action,
-        subject: rp.permission.subject,
-        condition: rp.condition as Record<string, unknown> | null,
-      })),
+      managedBranches: user.managerBranches.map((mb) => mb.branchId),
+      roles: user.userRoles.map((ur) => ur.role.name),
+      permissions: user.userRoles.flatMap((ur) =>
+        ur.role.rolePermissions.map((rp) => ({
+          action: rp.permission.action,
+          subject: rp.permission.subject,
+          condition: rp.condition as Record<string, unknown> | null,
+        })),
+      ),
     });
   }
 }

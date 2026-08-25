@@ -16,9 +16,9 @@ describe('AssignmentsService', () => {
   let prisma: Partial<PrismaService>;
   let service: AssignmentsService;
   let auditLogsService: { record: jest.Mock };
-  const caslAbilityFactory = new CaslAbilityFactory(
-    { warn: jest.fn() } as unknown as LoggerService,
-  );
+  const caslAbilityFactory = new CaslAbilityFactory({
+    warn: jest.fn(),
+  } as unknown as LoggerService);
   const unscopedCheckOutAbility = caslAbilityFactory.createForUser({
     permissions: [{ action: 'check-out', subject: 'assignments' }],
   });

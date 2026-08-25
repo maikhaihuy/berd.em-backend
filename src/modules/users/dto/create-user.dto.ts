@@ -5,8 +5,11 @@ import {
   IsOptional,
   IsUrl,
   IsEnum,
+  IsArray,
+  ArrayMinSize,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import { UserStatus } from '@prisma/client';
 
 export class CreateUserDto {
@@ -37,7 +40,14 @@ export class CreateUserDto {
   @IsEnum(UserStatus)
   status!: UserStatus;
 
-  @ApiProperty({ description: 'Role ID', example: 1 })
-  @IsInt()
-  roleId!: number;
+  @ApiProperty({
+    description: 'Role IDs to assign; the user must hold at least one',
+    example: [1],
+    type: [Number],
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsInt({ each: true })
+  @Type(() => Number)
+  roleIds!: number[];
 }

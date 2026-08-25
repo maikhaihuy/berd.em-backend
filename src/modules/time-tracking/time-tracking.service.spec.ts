@@ -8,9 +8,9 @@ import { LoggerService } from '@common/logger/logger.service';
 describe('TimeTrackingService row-scoping', () => {
   let prisma: Partial<PrismaService>;
   let service: TimeTrackingService;
-  const caslAbilityFactory = new CaslAbilityFactory(
-    { warn: jest.fn() } as unknown as LoggerService,
-  );
+  const caslAbilityFactory = new CaslAbilityFactory({
+    warn: jest.fn(),
+  } as unknown as LoggerService);
 
   const unscopedAbility = caslAbilityFactory.createForUser({
     permissions: [

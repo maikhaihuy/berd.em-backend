@@ -16,8 +16,9 @@ describe('RefreshTokenService', () => {
   const mockRefreshTokenPayload: RefreshTokenPayloadDto = {
     sub: 1,
     phone: '0900000001',
-    role: 'Employee',
+    roles: ['Employee'],
     branches: [],
+    managedBranches: [],
   };
 
   const mockTokenRecord: RefreshToken = {

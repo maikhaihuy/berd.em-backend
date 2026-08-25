@@ -31,6 +31,7 @@ import { timingSafeEqual } from 'crypto';
 const authUserInclude = {
   ...userWithRoleInclude,
   ...userWithEmployeeInclude,
+  managerBranches: true,
   zaloIdentity: true,
 } satisfies Prisma.UserInclude;
 
@@ -41,15 +42,20 @@ type AuthUser = Prisma.UserGetPayload<{
 const devAuthEmployeeInclude = {
   user: {
     include: {
-      role: {
+      userRoles: {
         include: {
-          rolePermissions: {
+          role: {
             include: {
-              permission: true,
+              rolePermissions: {
+                include: {
+                  permission: true,
+                },
+              },
             },
           },
         },
       },
+      managerBranches: true,
     },
   },
   employeeBranches: {
@@ -168,8 +174,9 @@ export class AuthService {
       sub: user.userId,
       phone: user.phone,
       empId: user.employeeId,
-      role: user.role,
+      roles: user.roles,
       branches: user.branches,
+      managedBranches: user.managedBranches,
     });
 
     const { token: refreshToken } =
@@ -177,8 +184,9 @@ export class AuthService {
         sub: user.userId,
         phone: user.phone,
         empId: user.employeeId,
-        role: user.role,
+        roles: user.roles,
         branches: user.branches,
+        managedBranches: user.managedBranches,
       });
 
     return {
@@ -243,13 +251,16 @@ export class AuthService {
     }
 
     const userWithBranches = await this.getEmployeeWithBranches(user);
+    const roles = user.userRoles.map((ur) => ur.role.name);
+    const managedBranches = user.managerBranches.map((mb) => mb.branchId);
 
     const accessToken = this.jwtTokenService.generateAccessToken({
       sub: user.id,
       phone: user.phoneNumber,
       empId: user.employee?.id || undefined,
-      role: user.role.name,
+      roles,
       branches: userWithBranches.employeeBranches.map((eb) => eb.branch.id),
+      managedBranches,
     });
 
     const { token: refreshToken } =
@@ -259,8 +270,9 @@ export class AuthService {
           sub: user.id,
           phone: user.phoneNumber,
           empId: user.employee?.id || undefined,
-          role: user.role.name,
+          roles,
           branches: refreshSession.branches,
+          managedBranches,
         } as RefreshTokenPayloadDto,
       );
 
@@ -289,8 +301,9 @@ export class AuthService {
       typ: 'access',
       phone: user.phoneNumber,
       empId: user.employee?.id,
-      role: user.role.name,
+      roles: user.userRoles.map((ur) => ur.role.name),
       branches,
+      managedBranches: user.managerBranches.map((mb) => mb.branchId),
     };
 
     const accessToken = this.jwtTokenService.generateAccessToken(payload);
@@ -318,10 +331,15 @@ export class AuthService {
       throw new ForbiddenException('EMPLOYEE_INACTIVE');
     }
 
-    const roleName = employee.user.role.name;
+    const roleNames = employee.user.userRoles.map((ur) => ur.role.name);
     const branchIds = employee.employeeBranches.map((eb) => eb.branch.id);
-    const permissions = employee.user.role.rolePermissions.map(
-      (rp) => `${rp.permission.action}:${rp.permission.subject}`,
+    const managedBranchIds = employee.user.managerBranches.map(
+      (mb) => mb.branchId,
+    );
+    const permissions = employee.user.userRoles.flatMap((ur) =>
+      ur.role.rolePermissions.map(
+        (rp) => `${rp.permission.action}:${rp.permission.subject}`,
+      ),
     );
 
     const accessPayload: AccessTokenPayloadDto = {
@@ -329,8 +347,9 @@ export class AuthService {
       typ: 'access',
       phone: employee.user.phoneNumber,
       empId: employee.id,
-      role: roleName,
+      roles: roleNames,
       branches: branchIds,
+      managedBranches: managedBranchIds,
     };
 
     const accessToken = this.jwtTokenService.generateAccessToken(accessPayload);
@@ -357,7 +376,7 @@ export class AuthService {
         id: String(employee.id),
         fullName: employee.fullName,
         avatarUrl: employee.avatar ?? employee.user.avatarUrl ?? null,
-        roles: [roleName],
+        roles: roleNames,
         permissions,
         branchIds: branchIds.map((branchId) => String(branchId)),
       },

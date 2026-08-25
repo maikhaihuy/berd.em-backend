@@ -8,9 +8,9 @@ import { LoggerService } from '@common/logger/logger.service';
 describe('LeaveRequestsService row-scoping', () => {
   let prisma: Partial<PrismaService>;
   let service: LeaveRequestsService;
-  const caslAbilityFactory = new CaslAbilityFactory(
-    { warn: jest.fn() } as unknown as LoggerService,
-  );
+  const caslAbilityFactory = new CaslAbilityFactory({
+    warn: jest.fn(),
+  } as unknown as LoggerService);
 
   const unscopedAbility = caslAbilityFactory.createForUser({
     permissions: [
@@ -170,7 +170,11 @@ describe('LeaveRequestsService row-scoping', () => {
       });
 
       await service.create(
-        { assignmentId: 5, absenceEmployeeId: 42, replacementEmployeeId: 7 } as any,
+        {
+          assignmentId: 5,
+          absenceEmployeeId: 42,
+          replacementEmployeeId: 7,
+        } as any,
         9,
         scopedAbility(42),
         42,

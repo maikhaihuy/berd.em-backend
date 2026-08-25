@@ -11,6 +11,11 @@ import { Prisma } from '@prisma/client';
 import { PermissionMapper } from './permission.mapper';
 import { permissionWithRolesInclude } from './permission.types';
 import { AuditLogsService } from '@modules/audit-logs/audit-logs.service';
+import {
+  MANAGED_BRANCHES_SCOPABLE_SUBJECT_FIELDS,
+  SELF_SCOPABLE_SUBJECT_FIELDS,
+} from '@common/guards/permission-condition.helper';
+import { PermissionCatalogEntryDto } from './dto/permission-catalog-entry.dto';
 
 const SUBJECT = 'permissions';
 
@@ -135,5 +140,43 @@ export class PermissionsService {
       entityId: id,
       before: deleted,
     });
+  }
+
+  async getCatalog(): Promise<PermissionCatalogEntryDto[]> {
+    const permissions = await this.prisma.permission.findMany();
+
+    const actionsBySubject = new Map<string, Set<string>>();
+    for (const { subject, action } of permissions) {
+      if (!subject) continue;
+      if (!actionsBySubject.has(subject)) {
+        actionsBySubject.set(subject, new Set());
+      }
+      actionsBySubject.get(subject)!.add(action);
+    }
+
+    return [...actionsBySubject.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([subject, actions]) => {
+        const conditionTokens: PermissionCatalogEntryDto['conditionTokens'] =
+          [];
+        const selfFields = SELF_SCOPABLE_SUBJECT_FIELDS[subject];
+        if (selfFields) {
+          conditionTokens.push({ token: '$self', fields: selfFields });
+        }
+        const managedBranchesFields =
+          MANAGED_BRANCHES_SCOPABLE_SUBJECT_FIELDS[subject];
+        if (managedBranchesFields) {
+          conditionTokens.push({
+            token: '$managedBranches',
+            fields: managedBranchesFields,
+          });
+        }
+
+        return {
+          subject,
+          actions: [...actions].sort(),
+          conditionTokens,
+        };
+      });
   }
 }

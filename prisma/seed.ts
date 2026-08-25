@@ -65,6 +65,16 @@ async function main() {
       { action: 'delete', subject, description: `Delete ${subject}` },
     ]),
 
+    // Multi-role assignment (User <-> Role) and managed-branch assignment
+    // (ManagerBranch, backing the `$managedBranches` condition token).
+    // RBAC/admin-only, same posture as role-permissions.
+    ...['user-roles', 'manager-branches'].flatMap((subject) => [
+      { action: 'create', subject, description: `Create ${subject}` },
+      { action: 'read', subject, description: `Read ${subject}` },
+      { action: 'update', subject, description: `Update ${subject}` },
+      { action: 'delete', subject, description: `Delete ${subject}` },
+    ]),
+
     // Audit log: read-only, admin-only. Rows are written internally via
     // AuditLogService.record(), never through a create/update/delete route.
     {
@@ -457,8 +467,9 @@ async function main() {
     update: {
       password: hashed,
       status: 'ACTIVE',
-      role: {
-        connect: { id: adminRole.id },
+      userRoles: {
+        deleteMany: {},
+        create: [{ roleId: adminRole.id }],
       },
     },
     create: {
@@ -467,10 +478,12 @@ async function main() {
       fullName: 'Settings User',
       password: hashed,
       status: 'ACTIVE',
-      roleId: adminRole.id,
+      userRoles: {
+        create: [{ roleId: adminRole.id }],
+      },
     },
     include: {
-      role: true,
+      userRoles: { include: { role: true } },
     },
   });
 
@@ -490,8 +503,9 @@ async function main() {
       fullName: DEV_EMPLOYEE_NAME,
       password: devPasswordHash,
       status: 'ACTIVE',
-      role: {
-        connect: { id: employeeRole.id },
+      userRoles: {
+        deleteMany: {},
+        create: [{ roleId: employeeRole.id }],
       },
     },
     create: {
@@ -500,7 +514,9 @@ async function main() {
       fullName: DEV_EMPLOYEE_NAME,
       password: devPasswordHash,
       status: 'ACTIVE',
-      roleId: employeeRole.id,
+      userRoles: {
+        create: [{ roleId: employeeRole.id }],
+      },
     },
   });
 
@@ -571,6 +587,15 @@ async function main() {
       isPrimary: true,
     },
   });
+
+  // The SETTINGS/dev users above are upserted with explicit ids
+  // (SYSTEM_USER_ID/DEV_USER_ID), which never advances Postgres's identity
+  // sequence for `users.id` (only inserts using the column default do).
+  // Without this, the very first `POST /users` after a fresh seed collides
+  // on the primary key. Idempotent and safe to run on every seed.
+  await prisma.$executeRawUnsafe(
+    `SELECT setval(pg_get_serial_sequence('users', 'id'), COALESCE((SELECT MAX(id) FROM users), 1))`,
+  );
 
   console.log(
     'Seed completed: permissions, roles, SETTINGS user, and dev employee upserted.',
