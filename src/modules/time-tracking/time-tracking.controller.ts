@@ -16,6 +16,10 @@ import { UpdateTimeLogDto } from './dto/update-time-log.dto';
 import { VerifyTimeLogDto } from './dto/verify-time-log.dto';
 import { TimeLogResponseDto } from './dto/time-log-response.dto';
 import { RequirePermissions } from '@common/decorators/permissions.decorator';
+import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
+import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
+import { CaslAbility } from '@modules/auth/decorators/casl-ability.decorator';
+import type { AppAbility } from '@modules/casl/casl-ability.factory';
 
 @ApiTags('time-tracking')
 @Controller('time-tracking')
@@ -34,10 +38,15 @@ export class TimeTrackingController {
   @ApiBody({ type: CreateTimeLogDto })
   async create(
     @Body() createDto: CreateTimeLogDto,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
+    @CaslAbility() ability: AppAbility,
   ): Promise<TimeLogResponseDto> {
-    // TODO: Get currentUserId from JWT token
-    const currentUserId = 1; // Placeholder
-    return this.timeTrackingService.create(createDto, currentUserId);
+    return this.timeTrackingService.create(
+      createDto,
+      user.userId,
+      ability,
+      user.employeeId,
+    );
   }
 
   @RequirePermissions({ action: 'read', subject: 'time-logs' })
@@ -48,8 +57,10 @@ export class TimeTrackingController {
     description: 'List of time logs',
     type: [TimeLogResponseDto],
   })
-  async findAll(): Promise<TimeLogResponseDto[]> {
-    return this.timeTrackingService.findAll();
+  async findAll(
+    @CaslAbility() ability: AppAbility,
+  ): Promise<TimeLogResponseDto[]> {
+    return this.timeTrackingService.findAll(ability);
   }
 
   @RequirePermissions({ action: 'read', subject: 'time-logs' })
@@ -62,8 +73,9 @@ export class TimeTrackingController {
   })
   async findByEmployee(
     @Param('employeeId') employeeId: string,
+    @CaslAbility() ability: AppAbility,
   ): Promise<TimeLogResponseDto[]> {
-    return this.timeTrackingService.findByEmployee(+employeeId);
+    return this.timeTrackingService.findByEmployee(+employeeId, ability);
   }
 
   @RequirePermissions({ action: 'read', subject: 'time-logs' })
@@ -76,8 +88,9 @@ export class TimeTrackingController {
   })
   async findByAssignment(
     @Param('assignmentId') assignmentId: string,
+    @CaslAbility() ability: AppAbility,
   ): Promise<TimeLogResponseDto[]> {
-    return this.timeTrackingService.findByAssignment(+assignmentId);
+    return this.timeTrackingService.findByAssignment(+assignmentId, ability);
   }
 
   @RequirePermissions({ action: 'read', subject: 'time-logs' })
@@ -89,8 +102,11 @@ export class TimeTrackingController {
     type: TimeLogResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Time log not found' })
-  async findOne(@Param('id') id: string): Promise<TimeLogResponseDto> {
-    return this.timeTrackingService.findOne(+id);
+  async findOne(
+    @Param('id') id: string,
+    @CaslAbility() ability: AppAbility,
+  ): Promise<TimeLogResponseDto> {
+    return this.timeTrackingService.findOne(+id, ability);
   }
 
   @RequirePermissions({ action: 'update', subject: 'time-logs' })

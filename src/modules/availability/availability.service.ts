@@ -12,6 +12,10 @@ import { AvailabilityStatus, Prisma } from '@prisma/client';
 import { AvailabilityMapper } from './availability.mapper';
 import { availabilityWithEmployeeInclude } from './availability.types';
 import { userWithEmployeeInclude } from '@modules/users/user.types';
+import { AppAbility } from '@modules/casl/casl-ability.factory';
+import { accessibleWhere } from '@modules/casl/accessible-where';
+
+const SUBJECT = 'availability';
 
 @Injectable()
 export class AvailabilityService {
@@ -94,6 +98,7 @@ export class AvailabilityService {
     from: Date,
     to: Date,
     currentUserId: number,
+    ability: AppAbility,
   ): Promise<AvailabilityResponseDto[]> {
     const employee = await this.getCurrentUserEmployee(currentUserId);
 
@@ -108,6 +113,7 @@ export class AvailabilityService {
           },
         },
         employeeId: employee.id,
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
       },
       include: availabilityWithEmployeeInclude,
       orderBy: {
@@ -121,11 +127,16 @@ export class AvailabilityService {
   async findOne(
     id: number,
     currentUserId: number,
+    ability: AppAbility,
   ): Promise<AvailabilityResponseDto> {
     const employee = await this.getCurrentUserEmployee(currentUserId);
 
     const availability = await this.prisma.availability.findFirst({
-      where: { id, employeeId: employee.id },
+      where: {
+        id,
+        employeeId: employee.id,
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
       include: availabilityWithEmployeeInclude,
     });
 

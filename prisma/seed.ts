@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -201,15 +201,29 @@ async function main() {
   // from Employee, pending row-level ownership scoping.
   const CRUD = ['create', 'read', 'update', 'delete'];
 
-  type Grant = { subject: string; actions: string[] };
+  // A role's grant of an (action, subject) permission carries its own,
+  // optional row-scoping `condition` on the `RolePermission` row — not on
+  // the shared `Permission` row (which stays unique on (action, subject)
+  // and unconditioned). Two roles can therefore grant the identical
+  // permission with different scope: Employee's `read:time-logs` grant can
+  // carry `condition: { employeeId: "$self" }` while Manager's `read:time-logs`
+  // grant carries none. `PermissionsGuard` resolves `$self` and builds a CASL
+  // `Ability` from these per-grant conditions at request time.
+  type Grant = {
+    subject: string;
+    actions: string[];
+    condition?: Prisma.InputJsonValue;
+  };
+  type ResolvedGrant = { permissionId: number; condition?: Prisma.InputJsonValue };
 
   const permIdByKey = new Map(
     allPermissions.map((p) => [`${p.action}:${p.subject}`, p.id] as const),
   );
 
-  const resolveIds = (grants: Grant[]): number[] => {
-    const ids = new Set<number>();
-    for (const { subject, actions } of grants) {
+  const resolveGrants = (grants: Grant[]): ResolvedGrant[] => {
+    const resolved: ResolvedGrant[] = [];
+    const seenPermissionIds = new Set<number>();
+    for (const { subject, actions, condition } of grants) {
       for (const action of actions) {
         const id = permIdByKey.get(`${action}:${subject}`);
         if (id === undefined) {
@@ -217,10 +231,16 @@ async function main() {
             `Seed: role grant references a permission that was not seeded: ${action}:${subject}`,
           );
         }
-        ids.add(id);
+        if (seenPermissionIds.has(id)) {
+          throw new Error(
+            `Seed: role grant references ${action}:${subject} more than once`,
+          );
+        }
+        seenPermissionIds.add(id);
+        resolved.push(condition ? { permissionId: id, condition } : { permissionId: id });
       }
     }
-    return [...ids];
+    return resolved;
   };
 
   // Subject groups
@@ -242,20 +262,29 @@ async function main() {
     'time-logs',
   ];
 
-  // Admin: everything that exists.
-  const adminPermissionIds = allPermissions.map((p) => p.id);
+  // Admin: everything that exists, unconditioned.
+  const adminGrants: ResolvedGrant[] = allPermissions.map((p) => ({
+    permissionId: p.id,
+  }));
 
   // Manager: runs scheduling + day-to-day operations, edits people, but has NO
   // access to the RBAC/admin subjects (users, roles, permissions,
   // role-permissions) and cannot create/delete branches or pay rates.
-  const managerPermissionIds = resolveIds([
+  // check-in/check-out are self-only for every role that holds them (an
+  // actor can only check *themselves* in/out), so Manager's grant of those
+  // two actions carries the same `$self` condition Employee's does.
+  const managerGrants = resolveGrants([
     ...SCHEDULING_SUBJECTS.map((subject) => ({ subject, actions: CRUD })),
     ...OPERATIONAL_SUBJECTS.map((subject) => ({ subject, actions: CRUD })),
     { subject: 'branches', actions: ['read'] },
     { subject: 'employees', actions: ['create', 'read', 'update'] },
     { subject: 'employee-hourly-rates', actions: ['read'] },
     // Custom actions: managers oversee the full operational lifecycle.
-    { subject: 'assignments', actions: ['check-in', 'check-out'] },
+    {
+      subject: 'assignments',
+      actions: ['check-in', 'check-out'],
+      condition: { employeeId: '$self' },
+    },
     { subject: 'leave-requests', actions: ['approve', 'cancel'] },
     { subject: 'time-logs', actions: ['verify'] },
     { subject: 'master-shifts', actions: ['generate'] },
@@ -268,39 +297,82 @@ async function main() {
   // actions (approve/verify/generate), and the coarse `update` on
   // assignments/leave-requests/time-logs (which would allow editing/reassigning
   // any record — deferred to row-level scoping).
-  const employeePermissionIds = resolveIds([
+  //
+  // Row-scoped grants: read/create/cancel on time-logs, leave-requests,
+  // assignments, availability, attendance-history, and payroll-entries are
+  // the plain action with a `$self` condition on Employee's `RolePermission`
+  // row (Manager's/Admin's grants of the same actions carry no condition,
+  // since they resolve to a *different* RolePermission row pointing at the
+  // same Permission). See openspec/changes/adopt-casl-authorization/design.md
+  // (D1).
+  const employeeGrants = resolveGrants([
     { subject: 'branches', actions: ['read'] },
     { subject: 'employees', actions: ['read'] },
     ...SCHEDULING_SUBJECTS.map((subject) => ({ subject, actions: ['read'] })),
-    { subject: 'assignments', actions: ['read', 'check-in', 'check-out'] },
-    { subject: 'availability', actions: CRUD },
-    { subject: 'attendance-history', actions: ['create', 'read'] },
-    { subject: 'leave-requests', actions: ['create', 'read', 'cancel'] },
-    { subject: 'time-logs', actions: ['create', 'read'] },
+    {
+      subject: 'assignments',
+      actions: ['read'],
+      condition: { employeeId: '$self' },
+    },
+    {
+      subject: 'assignments',
+      actions: ['check-in', 'check-out'],
+      condition: { employeeId: '$self' },
+    },
+    {
+      subject: 'availability',
+      actions: ['read', 'create', 'update', 'delete'],
+      condition: { employeeId: '$self' },
+    },
+    {
+      subject: 'attendance-history',
+      actions: ['create', 'read'],
+      // `is` is required (not the implicit-object shorthand) for CASL's own
+      // condition matcher to evaluate this as a to-one relation filter
+      // during an instance-level `ability.can()` check — the implicit form
+      // only works when Prisma itself interprets the where clause (e.g. via
+      // accessibleBy), not when @casl/prisma's matcher does.
+      condition: { assignment: { is: { employeeId: '$self' } } },
+    },
+    {
+      subject: 'leave-requests',
+      actions: ['create', 'read', 'cancel'],
+      condition: { absenceEmployeeId: '$self' },
+    },
+    {
+      subject: 'time-logs',
+      actions: ['create', 'read'],
+      condition: { employeeId: '$self' },
+    },
     { subject: 'tasks', actions: ['complete'] },
+    {
+      subject: 'payroll-entries',
+      actions: ['read'],
+      condition: { employeeId: '$self' },
+    },
   ]);
 
   // 3) Upsert roles and assign permissions
   const rolesSeed: Array<{
     name: string;
     description?: string;
-    permissionIds: number[];
+    grants: ResolvedGrant[];
   }> = [
     {
       name: 'Admin',
       description: 'System administrator with full access',
-      permissionIds: adminPermissionIds,
+      grants: adminGrants,
     },
     {
       name: 'Manager',
       description:
         'Runs scheduling and operations; manages employees; no access to RBAC/admin subjects',
-      permissionIds: managerPermissionIds,
+      grants: managerGrants,
     },
     {
       name: 'Employee',
       description: 'Reads the schedule and performs self-service writes',
-      permissionIds: employeePermissionIds,
+      grants: employeeGrants,
     },
   ];
 
@@ -313,12 +385,13 @@ async function main() {
         createdBy: SYSTEM_USER_ID,
         updatedBy: SYSTEM_USER_ID,
         rolePermissions: {
-          create: role.permissionIds.map((permissionId) => ({
+          create: role.grants.map(({ permissionId, condition }) => ({
             permission: {
               connect: {
                 id: permissionId,
               },
             },
+            ...(condition ? { condition } : {}),
           })),
         },
       },
@@ -327,12 +400,13 @@ async function main() {
         updatedBy: SYSTEM_USER_ID,
         rolePermissions: {
           deleteMany: {},
-          create: role.permissionIds.map((permissionId) => ({
+          create: role.grants.map(({ permissionId, condition }) => ({
             permission: {
               connect: {
                 id: permissionId,
               },
             },
+            ...(condition ? { condition } : {}),
           })),
         },
       },

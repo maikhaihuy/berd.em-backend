@@ -11,6 +11,11 @@ import { TimeLogResponseDto } from './dto/time-log-response.dto';
 import { TimeLogStatus, Prisma } from '@prisma/client';
 import { timeLogInclude } from './time-tracking.types';
 import { TimeLogMapper } from './time-tracking.mapper';
+import { subject } from '@casl/ability';
+import { AppAbility } from '@modules/casl/casl-ability.factory';
+import { accessibleWhere } from '@modules/casl/accessible-where';
+
+const SUBJECT = 'time-logs';
 
 @Injectable()
 export class TimeTrackingService {
@@ -19,6 +24,8 @@ export class TimeTrackingService {
   async create(
     createDto: CreateTimeLogDto,
     currentUserId: number,
+    ability: AppAbility,
+    callerEmployeeId?: number,
   ): Promise<TimeLogResponseDto> {
     const assignment = await this.prisma.assignment.findUnique({
       where: { id: createDto.assignmentId },
@@ -30,21 +37,34 @@ export class TimeTrackingService {
       );
     }
 
+    // A self-scoped grant's condition can't be enforced via accessibleBy on
+    // a create payload, so it's checked directly against the candidate
+    // employeeId: if the caller's ability wouldn't let them create a row for
+    // that employee, fall back to their own (guaranteed resolvable — the
+    // guard already resolved every condition on this caller's abilities).
+    // An unscoped grant's `can()` always passes, so a Manager creating on
+    // another employee's behalf is unaffected.
+    let employeeId = createDto.employeeId;
+    if (
+      callerEmployeeId !== undefined &&
+      !ability.can('create', subject(SUBJECT, { employeeId }))
+    ) {
+      employeeId = callerEmployeeId;
+    }
+
     // Verify employee exists
     const employee = await this.prisma.employee.findUnique({
-      where: { id: createDto.employeeId },
+      where: { id: employeeId },
     });
 
     if (!employee) {
-      throw new NotFoundException(
-        `Employee with ID ${createDto.employeeId} not found`,
-      );
+      throw new NotFoundException(`Employee with ID ${employeeId} not found`);
     }
 
     const timeLog = await this.prisma.timeLog.create({
       data: {
         assignmentId: createDto.assignmentId,
-        employeeId: createDto.employeeId,
+        employeeId,
         actualStartTime: createDto.actualStartTime
           ? new Date(createDto.actualStartTime)
           : null,
@@ -74,8 +94,11 @@ export class TimeTrackingService {
     return TimeLogMapper.toDto(timeLog);
   }
 
-  async findAll(): Promise<TimeLogResponseDto[]> {
+  async findAll(ability: AppAbility): Promise<TimeLogResponseDto[]> {
     const timeLogs = await this.prisma.timeLog.findMany({
+      where: {
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
       orderBy: {
         createdAt: 'desc',
       },
@@ -85,9 +108,12 @@ export class TimeTrackingService {
     return TimeLogMapper.toDtos(timeLogs);
   }
 
-  async findOne(id: number): Promise<TimeLogResponseDto> {
-    const timeLog = await this.prisma.timeLog.findUnique({
-      where: { id },
+  async findOne(id: number, ability: AppAbility): Promise<TimeLogResponseDto> {
+    const timeLog = await this.prisma.timeLog.findFirst({
+      where: {
+        id,
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
       include: timeLogInclude,
     });
 
@@ -98,9 +124,15 @@ export class TimeTrackingService {
     return TimeLogMapper.toDto(timeLog);
   }
 
-  async findByEmployee(employeeId: number): Promise<TimeLogResponseDto[]> {
+  async findByEmployee(
+    employeeId: number,
+    ability: AppAbility,
+  ): Promise<TimeLogResponseDto[]> {
     const timeLogs = await this.prisma.timeLog.findMany({
-      where: { employeeId },
+      where: {
+        employeeId,
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
       orderBy: {
         createdAt: 'desc',
       },
@@ -110,9 +142,15 @@ export class TimeTrackingService {
     return TimeLogMapper.toDtos(timeLogs);
   }
 
-  async findByAssignment(assignmentId: number): Promise<TimeLogResponseDto[]> {
+  async findByAssignment(
+    assignmentId: number,
+    ability: AppAbility,
+  ): Promise<TimeLogResponseDto[]> {
     const timeLogs = await this.prisma.timeLog.findMany({
-      where: { assignmentId },
+      where: {
+        assignmentId,
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
       orderBy: {
         createdAt: 'desc',
       },

@@ -11,6 +11,11 @@ import { LeaveRequestResponseDto } from './dto/leave-request-response.dto';
 import { LeaveStatus, Prisma } from '@prisma/client';
 import { leaveRequestWithRelationsInclude } from './leave-request.types';
 import { LeaveRequestMapper } from './leave-request.mapper';
+import { subject } from '@casl/ability';
+import { AppAbility } from '@modules/casl/casl-ability.factory';
+import { accessibleWhere } from '@modules/casl/accessible-where';
+
+const SUBJECT = 'leave-requests';
 
 @Injectable()
 export class LeaveRequestsService {
@@ -19,6 +24,8 @@ export class LeaveRequestsService {
   async create(
     createDto: CreateLeaveRequestDto,
     currentUserId: number,
+    ability: AppAbility,
+    callerEmployeeId?: number,
   ): Promise<LeaveRequestResponseDto> {
     const assignment = await this.prisma.assignment.findUnique({
       where: { id: createDto.assignmentId },
@@ -30,14 +37,29 @@ export class LeaveRequestsService {
       );
     }
 
+    // A self-scoped grant's condition can't be enforced via accessibleBy on
+    // a create payload, so it's checked directly against the candidate
+    // absenceEmployeeId: if the caller's ability wouldn't let them file a
+    // leave request for that employee, fall back to their own (guaranteed
+    // resolvable — the guard already resolved every condition on this
+    // caller's abilities). An unscoped grant's `can()` always passes, so a
+    // Manager filing on another employee's behalf is unaffected.
+    let absenceEmployeeId = createDto.absenceEmployeeId;
+    if (
+      callerEmployeeId !== undefined &&
+      !ability.can('create', subject(SUBJECT, { absenceEmployeeId }))
+    ) {
+      absenceEmployeeId = callerEmployeeId;
+    }
+
     // Verify absence employee exists
     const absenceEmployee = await this.prisma.employee.findUnique({
-      where: { id: createDto.absenceEmployeeId },
+      where: { id: absenceEmployeeId },
     });
 
     if (!absenceEmployee) {
       throw new NotFoundException(
-        `Employee with ID ${createDto.absenceEmployeeId} not found`,
+        `Employee with ID ${absenceEmployeeId} not found`,
       );
     }
 
@@ -53,7 +75,7 @@ export class LeaveRequestsService {
     }
 
     // Check if absence and replacement are different
-    if (createDto.absenceEmployeeId === createDto.replacementEmployeeId) {
+    if (absenceEmployeeId === createDto.replacementEmployeeId) {
       throw new BadRequestException(
         'Absence employee and replacement employee must be different',
       );
@@ -62,7 +84,7 @@ export class LeaveRequestsService {
     const leaveRequest = await this.prisma.leaveRequest.create({
       data: {
         assignmentId: createDto.assignmentId,
-        absenceEmployeeId: createDto.absenceEmployeeId,
+        absenceEmployeeId,
         replacementEmployeeId: createDto.replacementEmployeeId,
         reason: createDto.reason,
         note: createDto.note,
@@ -76,8 +98,9 @@ export class LeaveRequestsService {
     return LeaveRequestMapper.toDto(leaveRequest);
   }
 
-  async findAll(): Promise<LeaveRequestResponseDto[]> {
+  async findAll(ability: AppAbility): Promise<LeaveRequestResponseDto[]> {
     const leaveRequests = await this.prisma.leaveRequest.findMany({
+      where: { AND: [accessibleWhere(ability, 'read', SUBJECT)] },
       include: leaveRequestWithRelationsInclude,
       orderBy: {
         createdAt: 'desc',
@@ -87,9 +110,12 @@ export class LeaveRequestsService {
     return LeaveRequestMapper.toDtos(leaveRequests);
   }
 
-  async findOne(id: number): Promise<LeaveRequestResponseDto> {
-    const leaveRequest = await this.prisma.leaveRequest.findUnique({
-      where: { id },
+  async findOne(
+    id: number,
+    ability: AppAbility,
+  ): Promise<LeaveRequestResponseDto> {
+    const leaveRequest = await this.prisma.leaveRequest.findFirst({
+      where: { id, AND: [accessibleWhere(ability, 'read', SUBJECT)] },
       include: leaveRequestWithRelationsInclude,
     });
 
@@ -100,13 +126,17 @@ export class LeaveRequestsService {
     return LeaveRequestMapper.toDto(leaveRequest);
   }
 
-  async findByEmployee(employeeId: number): Promise<LeaveRequestResponseDto[]> {
+  async findByEmployee(
+    employeeId: number,
+    ability: AppAbility,
+  ): Promise<LeaveRequestResponseDto[]> {
     const leaveRequests = await this.prisma.leaveRequest.findMany({
       where: {
         OR: [
           { absenceEmployeeId: employeeId },
           { replacementEmployeeId: employeeId },
         ],
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
       },
       include: leaveRequestWithRelationsInclude,
       orderBy: {
@@ -117,9 +147,12 @@ export class LeaveRequestsService {
     return LeaveRequestMapper.toDtos(leaveRequests);
   }
 
-  async findByStatus(status: LeaveStatus): Promise<LeaveRequestResponseDto[]> {
+  async findByStatus(
+    status: LeaveStatus,
+    ability: AppAbility,
+  ): Promise<LeaveRequestResponseDto[]> {
     const leaveRequests = await this.prisma.leaveRequest.findMany({
-      where: { status },
+      where: { status, AND: [accessibleWhere(ability, 'read', SUBJECT)] },
       include: leaveRequestWithRelationsInclude,
       orderBy: {
         createdAt: 'desc',
@@ -223,10 +256,11 @@ export class LeaveRequestsService {
   async cancel(
     id: number,
     currentUserId: number,
+    ability: AppAbility,
   ): Promise<LeaveRequestResponseDto> {
-    // Verify leave request exists
-    const existingRequest = await this.prisma.leaveRequest.findUnique({
-      where: { id },
+    // Verify leave request exists (and, for a self-scoped caller, that it's theirs)
+    const existingRequest = await this.prisma.leaveRequest.findFirst({
+      where: { id, AND: [accessibleWhere(ability, 'cancel', SUBJECT)] },
     });
 
     if (!existingRequest) {

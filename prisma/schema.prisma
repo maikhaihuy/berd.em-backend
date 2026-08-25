@@ -138,7 +138,6 @@ model Permission {
   id          Int     @id @default(autoincrement())
   action      String
   subject     String
-  condition   Json?
   description String?
 
   rolePermissions RolePermission[]
@@ -155,6 +154,7 @@ model Permission {
 model RolePermission {
   roleId       Int
   permissionId Int
+  condition    Json?
   role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 

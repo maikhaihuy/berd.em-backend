@@ -12,22 +12,23 @@ import {
   REQUIRE_PERMISSIONS,
   RequiredPermission,
 } from '../decorators/permissions.decorator';
+import {
+  CaslAbilityFactory,
+  AppAbility,
+  CaslUser,
+} from '@modules/casl/casl-ability.factory';
 
-const MANAGE = 'manage';
-const ALL = 'all';
-
-interface UserPermission {
-  action: string;
-  subject: string;
-}
-
-interface RequestWithUser extends Request {
-  user?: { permissions?: UserPermission[] };
+export interface RequestWithUser extends Request {
+  user?: CaslUser;
+  ability?: AppAbility;
 }
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly caslAbilityFactory: CaslAbilityFactory,
+  ) {}
 
   canActivate(context: ExecutionContext): boolean {
     // Public routes bypass authorization entirely.
@@ -66,18 +67,21 @@ export class PermissionsGuard implements CanActivate {
       );
     }
 
-    const granted = user.permissions ?? [];
+    const ability = this.caslAbilityFactory.createForUser(user);
+
+    // Type-level check: is the subject string, not a fetched instance, so a
+    // rule satisfies this regardless of whether it carries a condition —
+    // narrowing to specific rows is the handler/service's job via
+    // `accessibleBy(ability, action)[subject]`.
     const hasAll = required.every((rule) =>
-      granted.some(
-        (p) =>
-          (p.action === rule.action || p.action === MANAGE) &&
-          (p.subject === rule.subject || p.subject === ALL),
-      ),
+      ability.can(rule.action, rule.subject),
     );
 
     if (!hasAll) {
       throw new ForbiddenException('Insufficient permissions');
     }
+
+    request.ability = ability;
 
     return true;
   }
