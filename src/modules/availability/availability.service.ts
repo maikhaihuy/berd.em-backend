@@ -14,12 +14,16 @@ import { availabilityWithEmployeeInclude } from './availability.types';
 import { userWithEmployeeInclude } from '@modules/users/user.types';
 import { AppAbility } from '@modules/casl/casl-ability.factory';
 import { accessibleWhere } from '@modules/casl/accessible-where';
+import { AuditLogsService } from '@modules/audit-logs/audit-logs.service';
 
 const SUBJECT = 'availability';
 
 @Injectable()
 export class AvailabilityService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogsService: AuditLogsService,
+  ) {}
 
   private async getCurrentUserEmployee(currentUserId: number) {
     const user = await this.prisma.user.findUnique({
@@ -76,6 +80,14 @@ export class AvailabilityService {
           updatedBy: currentUserId,
         },
         include: availabilityWithEmployeeInclude,
+      });
+
+      await this.auditLogsService.record({
+        actorId: currentUserId,
+        action: 'create',
+        subject: SUBJECT,
+        entityId: availability.id,
+        after: availability,
       });
 
       return AvailabilityMapper.toDto(availability);
@@ -207,6 +219,15 @@ export class AvailabilityService {
         include: availabilityWithEmployeeInclude,
       });
 
+      await this.auditLogsService.record({
+        actorId: currentUserId,
+        action: 'update',
+        subject: SUBJECT,
+        entityId: id,
+        before: availability,
+        after: updatedAvailability,
+      });
+
       return AvailabilityMapper.toDto(updatedAvailability);
     } catch (error: any) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -239,6 +260,14 @@ export class AvailabilityService {
 
     await this.prisma.availability.delete({
       where: { id },
+    });
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'delete',
+      subject: SUBJECT,
+      entityId: id,
+      before: availability,
     });
 
     return { message: 'Availability deleted successfully' };

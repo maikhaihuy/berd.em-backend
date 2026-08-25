@@ -10,11 +10,15 @@ import {
 import { AssignmentsService } from './assignment.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CaslAbilityFactory } from '@modules/casl/casl-ability.factory';
+import { LoggerService } from '@common/logger/logger.service';
 
 describe('AssignmentsService', () => {
   let prisma: Partial<PrismaService>;
   let service: AssignmentsService;
-  const caslAbilityFactory = new CaslAbilityFactory();
+  let auditLogsService: { record: jest.Mock };
+  const caslAbilityFactory = new CaslAbilityFactory(
+    { warn: jest.fn() } as unknown as LoggerService,
+  );
   const unscopedCheckOutAbility = caslAbilityFactory.createForUser({
     permissions: [{ action: 'check-out', subject: 'assignments' }],
   });
@@ -49,7 +53,11 @@ describe('AssignmentsService', () => {
         callback(prisma),
       ),
     };
-    service = new AssignmentsService(prisma as PrismaService);
+    auditLogsService = { record: jest.fn() };
+    service = new AssignmentsService(
+      prisma as PrismaService,
+      auditLogsService as any,
+    );
   });
 
   it('creates an assignment and marks linked availability as assigned', async () => {
@@ -84,6 +92,14 @@ describe('AssignmentsService', () => {
       where: { id: 3 },
       data: { status: AvailabilityStatus.ASSIGNED, updatedBy: 99 },
     });
+    expect(auditLogsService.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorId: 99,
+        action: 'create',
+        subject: 'assignments',
+        entityId: 10,
+      }),
+    );
   });
 
   it('blocks checkout while mandatory or dedicated tasks are pending', async () => {

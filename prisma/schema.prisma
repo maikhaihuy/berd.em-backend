@@ -119,9 +119,10 @@ model ZaloIdentity {
 }
 
 model Role {
-  id          Int     @id @default(autoincrement())
-  name        String  @unique
-  description String?
+  id           Int     @id @default(autoincrement())
+  name         String  @unique
+  description  String?
+  isSystemRole Boolean @default(false)
 
   users           User[]
   rolePermissions RolePermission[]
@@ -646,4 +647,23 @@ model PayrollEntry {
   updatedBy Int
 
   @@map("payroll_entries")
+}
+
+// Append-only audit trail for mutations on audited subjects. Deliberately
+// has no updatedBy/updatedAt (rows are never mutated once written) and
+// `actorId` is a plain scalar, not a FK relation — same convention as
+// createdBy/updatedBy elsewhere in this schema.
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  actorId    Int
+  action     String
+  subject    String
+  entityId   Int
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
+  @@index([subject, createdAt])
+  @@index([actorId])
+  @@map("audit_logs")
 }

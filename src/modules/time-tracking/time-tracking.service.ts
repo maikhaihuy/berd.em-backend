@@ -14,12 +14,16 @@ import { TimeLogMapper } from './time-tracking.mapper';
 import { subject } from '@casl/ability';
 import { AppAbility } from '@modules/casl/casl-ability.factory';
 import { accessibleWhere } from '@modules/casl/accessible-where';
+import { AuditLogsService } from '@modules/audit-logs/audit-logs.service';
 
 const SUBJECT = 'time-logs';
 
 @Injectable()
 export class TimeTrackingService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly auditLogsService: AuditLogsService,
+  ) {}
 
   async create(
     createDto: CreateTimeLogDto,
@@ -89,6 +93,14 @@ export class TimeTrackingService {
         updatedBy: currentUserId,
       },
       include: timeLogInclude,
+    });
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'create',
+      subject: SUBJECT,
+      entityId: timeLog.id,
+      after: timeLog,
     });
 
     return TimeLogMapper.toDto(timeLog);
@@ -201,6 +213,15 @@ export class TimeTrackingService {
       include: timeLogInclude,
     });
 
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'update',
+      subject: SUBJECT,
+      entityId: timeLog.id,
+      before: existingLog,
+      after: timeLog,
+    });
+
     return TimeLogMapper.toDto(timeLog);
   }
 
@@ -233,12 +254,22 @@ export class TimeTrackingService {
       include: timeLogInclude,
     });
 
+    await this.auditLogsService.record({
+      actorId: verifierId,
+      action: 'verify',
+      subject: SUBJECT,
+      entityId: timeLog.id,
+      before: existingLog,
+      after: timeLog,
+    });
+
     return TimeLogMapper.toDto(timeLog);
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, currentUserId: number): Promise<void> {
+    let deleted;
     try {
-      await this.prisma.timeLog.delete({ where: { id } });
+      deleted = await this.prisma.timeLog.delete({ where: { id } });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -248,5 +279,13 @@ export class TimeTrackingService {
       }
       throw error;
     }
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'delete',
+      subject: SUBJECT,
+      entityId: id,
+      before: deleted,
+    });
   }
 }

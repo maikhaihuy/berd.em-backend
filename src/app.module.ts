@@ -8,6 +8,8 @@ import { PrismaModule } from '@modules/prisma/prisma.module';
 import { RolesModule } from './modules/roles/role.module';
 import { PermissionsModule } from './modules/permissions/permission.module';
 import { RolePermissionsModule } from './modules/role-permissions/role-permissions.module';
+import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
+import { AbilitiesModule } from './modules/abilities/abilities.module';
 import { EmployeeHourlyRatesModule } from '@modules/employee-hourly-rates/employee-hourly-rates.module';
 import { AvailabilityModule } from '@modules/availability/availability.module';
 import { ExceptionModule } from '@common/exception.module';
@@ -43,6 +45,8 @@ import { BranchScheduleConfigsModule } from './modules/branch-schedule-configs/b
     RolesModule,
     PermissionsModule,
     RolePermissionsModule,
+    AuditLogsModule,
+    AbilitiesModule,
     // Core Entities
     EmployeesModule,
     EmployeeHourlyRatesModule,

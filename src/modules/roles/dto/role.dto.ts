@@ -10,6 +10,13 @@ export class RoleDto {
   @ApiProperty()
   description?: string | null;
 
+  @ApiProperty({
+    description:
+      'True for the seeded base roles (Admin, Manager, Employee); such a ' +
+      'role cannot be deleted through the API.',
+  })
+  isSystemRole!: boolean;
+
   @ApiProperty()
   createdAt!: Date;
 

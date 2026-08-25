@@ -14,12 +14,16 @@ import { LeaveRequestMapper } from './leave-request.mapper';
 import { subject } from '@casl/ability';
 import { AppAbility } from '@modules/casl/casl-ability.factory';
 import { accessibleWhere } from '@modules/casl/accessible-where';
+import { AuditLogsService } from '@modules/audit-logs/audit-logs.service';
 
 const SUBJECT = 'leave-requests';
 
 @Injectable()
 export class LeaveRequestsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly auditLogsService: AuditLogsService,
+  ) {}
 
   async create(
     createDto: CreateLeaveRequestDto,
@@ -93,6 +97,14 @@ export class LeaveRequestsService {
         updatedBy: currentUserId,
       },
       include: leaveRequestWithRelationsInclude,
+    });
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'create',
+      subject: SUBJECT,
+      entityId: leaveRequest.id,
+      after: leaveRequest,
     });
 
     return LeaveRequestMapper.toDto(leaveRequest);
@@ -214,6 +226,15 @@ export class LeaveRequestsService {
       include: leaveRequestWithRelationsInclude,
     });
 
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'update',
+      subject: SUBJECT,
+      entityId: leaveRequest.id,
+      before: existingRequest,
+      after: leaveRequest,
+    });
+
     return LeaveRequestMapper.toDto(leaveRequest);
   }
 
@@ -248,6 +269,15 @@ export class LeaveRequestsService {
         updatedBy: currentUserId,
       },
       include: leaveRequestWithRelationsInclude,
+    });
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'approve',
+      subject: SUBJECT,
+      entityId: leaveRequest.id,
+      before: existingRequest,
+      after: leaveRequest,
     });
 
     return LeaveRequestMapper.toDto(leaveRequest);
@@ -286,12 +316,22 @@ export class LeaveRequestsService {
       include: leaveRequestWithRelationsInclude,
     });
 
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'cancel',
+      subject: SUBJECT,
+      entityId: leaveRequest.id,
+      before: existingRequest,
+      after: leaveRequest,
+    });
+
     return LeaveRequestMapper.toDto(leaveRequest);
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, currentUserId: number): Promise<void> {
+    let deleted;
     try {
-      await this.prisma.leaveRequest.delete({ where: { id } });
+      deleted = await this.prisma.leaveRequest.delete({ where: { id } });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -301,5 +341,13 @@ export class LeaveRequestsService {
       }
       throw error;
     }
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'delete',
+      subject: SUBJECT,
+      entityId: id,
+      before: deleted,
+    });
   }
 }

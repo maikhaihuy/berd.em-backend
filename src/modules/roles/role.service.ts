@@ -10,10 +10,16 @@ import { RoleResponseDto } from './dto/role-response.dto';
 import { Prisma } from '@prisma/client';
 import { roleWithPermissionsInclude } from './role.types';
 import { RoleMapper } from './role.mapper';
+import { AuditLogsService } from '@modules/audit-logs/audit-logs.service';
+
+const SUBJECT = 'roles';
 
 @Injectable()
 export class RolesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly auditLogsService: AuditLogsService,
+  ) {}
 
   async create(
     createRoleDto: CreateRoleDto,
@@ -53,6 +59,15 @@ export class RolesService {
         },
         include: roleWithPermissionsInclude,
       });
+
+      await this.auditLogsService.record({
+        actorId: currentUserId,
+        action: 'create',
+        subject: SUBJECT,
+        entityId: role.id,
+        after: role,
+      });
+
       return RoleMapper.toDto(role);
     } catch (error) {
       if (
@@ -111,54 +126,41 @@ export class RolesService {
     updateRoleDto: UpdateRoleDto,
     currentUserId: number,
   ): Promise<RoleResponseDto> {
-    const { permissionIds, ...roleData } = updateRoleDto;
-    // const data: Prisma.RoleUpdateInput = { ...roleData };
-
-    // Check if role name already exists
-    const existingRole = await this.prisma.role.findFirst({
-      where: { name: roleData.name, id: { not: id } },
+    const existingRoleForAudit = await this.prisma.role.findUnique({
+      where: { id },
     });
-    if (existingRole) {
-      throw new BadRequestException('Role with this name already exists');
-    }
 
-    // Verify permissions if provided
-    if (permissionIds && permissionIds.length > 0) {
-      const permissions = await this.prisma.permission.findMany({
-        where: { id: { in: permissionIds } },
+    // Check if role name already exists — only when name is actually being
+    // changed. `where: { name: undefined }` is dropped by Prisma (no filter
+    // on that field), so running this unconditionally would match the first
+    // *other* role in the table and false-positive on every update that
+    // doesn't touch `name` at all.
+    if (updateRoleDto.name !== undefined) {
+      const existingRole = await this.prisma.role.findFirst({
+        where: { name: updateRoleDto.name, id: { not: id } },
       });
-      if (permissions.length !== permissionIds.length) {
-        throw new BadRequestException('One or more branches do not exist');
+      if (existingRole) {
+        throw new BadRequestException('Role with this name already exists');
       }
     }
 
-    // Set updatedBy when currentUserId provided
-    // if (typeof currentUserId === 'number') {
-    //   // Prisma expects scalar values for updatedBy
-    //   (data as Prisma.RoleUpdateInput & { updatedBy?: number }).updatedBy =
-    //     currentUserId;
-    // }
-
     try {
-      // Update role basic fields
       const updatedRole = await this.prisma.role.update({
         where: { id },
         data: {
-          ...roleData,
+          ...updateRoleDto,
           updatedBy: currentUserId,
-          // chỉ xử lý khi có permissionIds
-          ...(permissionIds && {
-            permissions: {
-              set: permissionIds.map((id) => ({
-                roleId_permissionId: {
-                  roleId: id, // ⚠️ cần composite unique
-                  permissionId: id,
-                },
-              })),
-            },
-          }),
         },
         include: roleWithPermissionsInclude,
+      });
+
+      await this.auditLogsService.record({
+        actorId: currentUserId,
+        action: 'update',
+        subject: SUBJECT,
+        entityId: id,
+        before: existingRoleForAudit as unknown as Record<string, unknown>,
+        after: updatedRole,
       });
 
       return RoleMapper.toDto(updatedRole);
@@ -173,10 +175,16 @@ export class RolesService {
     }
   }
 
-  async remove(id: number, currentUserId?: number): Promise<void> {
-    // currentUserId may be passed in for audit purposes. Mark as used
-    // to avoid unused variable lint errors if not otherwise consumed.
-    void currentUserId;
+  async remove(id: number, currentUserId: number): Promise<void> {
+    const role = await this.prisma.role.findUnique({ where: { id } });
+    if (!role) {
+      throw new NotFoundException(`Role with ID ${id} not found.`);
+    }
+    if (role.isSystemRole) {
+      throw new BadRequestException(
+        'System roles (Admin, Manager, Employee) cannot be deleted',
+      );
+    }
 
     try {
       // If you want to keep an audit trail instead of hard delete,
@@ -192,5 +200,13 @@ export class RolesService {
       }
       throw error;
     }
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'delete',
+      subject: SUBJECT,
+      entityId: id,
+      before: role,
+    });
   }
 }

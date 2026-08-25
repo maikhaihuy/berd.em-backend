@@ -95,7 +95,10 @@ export class AssignmentsController {
 
   @RequirePermissions({ action: 'delete', subject: 'assignments' })
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.service.remove(id);
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
+  ) {
+    return this.service.remove(id, user.userId);
   }
 }

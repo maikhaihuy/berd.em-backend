@@ -180,7 +180,10 @@ export class LeaveRequestsController {
     description: 'Leave request deleted successfully',
   })
   @ApiResponse({ status: 404, description: 'Leave request not found' })
-  async remove(@Param('id') id: string): Promise<void> {
-    await this.leaveRequestsService.remove(+id);
+  async remove(
+    @Param('id') id: string,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
+  ): Promise<void> {
+    await this.leaveRequestsService.remove(+id, user.userId);
   }
 }

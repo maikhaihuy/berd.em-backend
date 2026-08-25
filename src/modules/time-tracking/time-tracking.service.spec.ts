@@ -3,11 +3,14 @@ import { NotFoundException } from '@nestjs/common';
 import { TimeTrackingService } from './time-tracking.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CaslAbilityFactory } from '@modules/casl/casl-ability.factory';
+import { LoggerService } from '@common/logger/logger.service';
 
 describe('TimeTrackingService row-scoping', () => {
   let prisma: Partial<PrismaService>;
   let service: TimeTrackingService;
-  const caslAbilityFactory = new CaslAbilityFactory();
+  const caslAbilityFactory = new CaslAbilityFactory(
+    { warn: jest.fn() } as unknown as LoggerService,
+  );
 
   const unscopedAbility = caslAbilityFactory.createForUser({
     permissions: [
@@ -32,6 +35,8 @@ describe('TimeTrackingService row-scoping', () => {
       ],
     });
 
+  let auditLogsService: { record: jest.Mock };
+
   beforeEach(() => {
     prisma = {
       assignment: { findUnique: jest.fn() } as any,
@@ -40,9 +45,14 @@ describe('TimeTrackingService row-scoping', () => {
         create: jest.fn(),
         findMany: jest.fn(),
         findFirst: jest.fn(),
+        delete: jest.fn(),
       } as any,
     };
-    service = new TimeTrackingService(prisma as PrismaService);
+    auditLogsService = { record: jest.fn() };
+    service = new TimeTrackingService(
+      prisma as PrismaService,
+      auditLogsService as any,
+    );
   });
 
   describe('findAll', () => {
@@ -148,6 +158,67 @@ describe('TimeTrackingService row-scoping', () => {
       expect((prisma.timeLog as any).create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ employeeId: 99 }),
+        }),
+      );
+    });
+
+    it('records an audit log entry on success', async () => {
+      (prisma.assignment as any).findUnique.mockResolvedValue({ id: 5 });
+      (prisma.employee as any).findUnique.mockResolvedValue({ id: 42 });
+      (prisma.timeLog as any).create.mockResolvedValue({
+        id: 1,
+        employeeId: 42,
+      });
+
+      await service.create(
+        { assignmentId: 5, employeeId: 42, multiplier: 1 } as any,
+        7,
+        scopedAbility(42),
+        42,
+      );
+
+      expect(auditLogsService.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 7,
+          action: 'create',
+          subject: 'time-logs',
+          entityId: 1,
+        }),
+      );
+    });
+
+    it('does not record an audit log entry when the write is rejected', async () => {
+      (prisma.assignment as any).findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.create(
+          { assignmentId: 5, employeeId: 42, multiplier: 1 } as any,
+          7,
+          scopedAbility(42),
+          42,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+
+      expect(auditLogsService.record).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('remove', () => {
+    it('records an audit log entry with the deleted row as `before`', async () => {
+      (prisma.timeLog as any).delete.mockResolvedValue({
+        id: 1,
+        employeeId: 42,
+      });
+
+      await service.remove(1, 7);
+
+      expect(auditLogsService.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 7,
+          action: 'delete',
+          subject: 'time-logs',
+          entityId: 1,
+          before: { id: 1, employeeId: 42 },
         }),
       );
     });

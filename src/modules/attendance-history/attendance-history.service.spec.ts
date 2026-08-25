@@ -4,11 +4,14 @@ import { AttendanceHistoryService } from './attendance-history.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AttendanceAction } from '@prisma/client';
 import { CaslAbilityFactory } from '@modules/casl/casl-ability.factory';
+import { LoggerService } from '@common/logger/logger.service';
 
 describe('AttendanceHistoryService row-scoping', () => {
   let prisma: Partial<PrismaService>;
   let service: AttendanceHistoryService;
-  const caslAbilityFactory = new CaslAbilityFactory();
+  const caslAbilityFactory = new CaslAbilityFactory(
+    { warn: jest.fn() } as unknown as LoggerService,
+  );
 
   const unscopedAbility = caslAbilityFactory.createForUser({
     permissions: [
@@ -42,7 +45,10 @@ describe('AttendanceHistoryService row-scoping', () => {
         findFirst: jest.fn(),
       } as any,
     };
-    service = new AttendanceHistoryService(prisma as PrismaService);
+    service = new AttendanceHistoryService(
+      prisma as PrismaService,
+      { record: jest.fn() } as any,
+    );
   });
 
   describe('create', () => {

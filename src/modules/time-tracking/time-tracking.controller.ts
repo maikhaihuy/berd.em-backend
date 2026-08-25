@@ -141,10 +141,9 @@ export class TimeTrackingController {
   async verify(
     @Param('id') id: string,
     @Body() verifyDto: VerifyTimeLogDto,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
   ): Promise<TimeLogResponseDto> {
-    // TODO: Get verifierId from JWT token (manager/supervisor)
-    const verifierId = 1; // Placeholder
-    return this.timeTrackingService.verify(+id, verifyDto, verifierId);
+    return this.timeTrackingService.verify(+id, verifyDto, user.userId);
   }
 
   @RequirePermissions({ action: 'delete', subject: 'time-logs' })
@@ -156,7 +155,10 @@ export class TimeTrackingController {
     description: 'Time log deleted successfully',
   })
   @ApiResponse({ status: 404, description: 'Time log not found' })
-  async remove(@Param('id') id: string): Promise<void> {
-    await this.timeTrackingService.remove(+id);
+  async remove(
+    @Param('id') id: string,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
+  ): Promise<void> {
+    await this.timeTrackingService.remove(+id, user.userId);
   }
 }

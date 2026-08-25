@@ -10,10 +10,16 @@ import { PermissionResponseDto } from './dto/permission-response.dto';
 import { Prisma } from '@prisma/client';
 import { PermissionMapper } from './permission.mapper';
 import { permissionWithRolesInclude } from './permission.types';
+import { AuditLogsService } from '@modules/audit-logs/audit-logs.service';
+
+const SUBJECT = 'permissions';
 
 @Injectable()
 export class PermissionsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly auditLogsService: AuditLogsService,
+  ) {}
 
   async create(
     createPermissionDto: CreatePermissionDto,
@@ -27,6 +33,15 @@ export class PermissionsService {
           updatedBy: currentUserId,
         },
       });
+
+      await this.auditLogsService.record({
+        actorId: currentUserId,
+        action: 'create',
+        subject: SUBJECT,
+        entityId: permission.id,
+        after: permission,
+      });
+
       return PermissionMapper.mapBase(permission);
     } catch (error) {
       if (
@@ -64,6 +79,10 @@ export class PermissionsService {
     updatePermissionDto: UpdatePermissionDto,
     currentUserId: number,
   ): Promise<PermissionResponseDto> {
+    const existing = await this.prisma.permission.findUnique({
+      where: { id },
+    });
+
     try {
       const permission = await this.prisma.permission.update({
         where: { id },
@@ -72,6 +91,16 @@ export class PermissionsService {
           updatedBy: currentUserId,
         },
       });
+
+      await this.auditLogsService.record({
+        actorId: currentUserId,
+        action: 'update',
+        subject: SUBJECT,
+        entityId: id,
+        before: existing,
+        after: permission,
+      });
+
       return PermissionMapper.mapBase(permission);
     } catch (error) {
       if (
@@ -84,12 +113,11 @@ export class PermissionsService {
     }
   }
 
-  async remove(id: number, currentUserId?: number): Promise<void> {
-    // currentUserId available for audit/soft-delete if desired
-    void currentUserId;
+  async remove(id: number, currentUserId: number): Promise<void> {
+    let deleted;
     try {
       // Note: This will cascade delete all RolePermission entries due to onDelete: Cascade
-      await this.prisma.permission.delete({ where: { id } });
+      deleted = await this.prisma.permission.delete({ where: { id } });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -99,5 +127,13 @@ export class PermissionsService {
       }
       throw error;
     }
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'delete',
+      subject: SUBJECT,
+      entityId: id,
+      before: deleted,
+    });
   }
 }

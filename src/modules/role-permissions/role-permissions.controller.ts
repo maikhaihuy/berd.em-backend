@@ -14,6 +14,8 @@ import { RolePermissionsService } from './role-permissions.service';
 import { AssignPermissionsDto } from './dto/assign-permission.dto';
 import { RolePermissionResponseDto } from './dto/role-permission-response.dto';
 import { RequirePermissions } from '@common/decorators/permissions.decorator';
+import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
+import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
 
 @ApiTags('Role Permissions')
 @Controller('role-permissions')
@@ -32,8 +34,9 @@ export class RolePermissionsController {
   })
   async assignPermissions(
     @Body() dto: AssignPermissionsDto,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
   ): Promise<RolePermissionResponseDto[]> {
-    return this.rolePermissionsService.assignPermissions(dto);
+    return this.rolePermissionsService.assignPermissions(dto, user.userId);
   }
 
   @RequirePermissions({ action: 'read', subject: 'role-permissions' })
@@ -58,8 +61,13 @@ export class RolePermissionsController {
   async removePermission(
     @Param('roleId', ParseIntPipe) roleId: number,
     @Param('permissionId', ParseIntPipe) permissionId: number,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
   ): Promise<void> {
-    return this.rolePermissionsService.removePermission(roleId, permissionId);
+    return this.rolePermissionsService.removePermission(
+      roleId,
+      permissionId,
+      user.userId,
+    );
   }
 
   @RequirePermissions({ action: 'delete', subject: 'role-permissions' })
@@ -72,7 +80,11 @@ export class RolePermissionsController {
   })
   async removeAllRolePermissions(
     @Param('roleId', ParseIntPipe) roleId: number,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
   ): Promise<void> {
-    return this.rolePermissionsService.removeAllRolePermissions(roleId);
+    return this.rolePermissionsService.removeAllRolePermissions(
+      roleId,
+      user.userId,
+    );
   }
 }

@@ -12,6 +12,7 @@ export class RoleMapper {
       id: user.id,
       name: user.name,
       description: user.description,
+      isSystemRole: user.isSystemRole,
       createdAt: user.createdAt,
       createdBy: user.createdBy,
       updatedAt: user.updatedAt,

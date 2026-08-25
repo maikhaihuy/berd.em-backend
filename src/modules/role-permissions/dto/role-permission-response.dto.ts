@@ -15,4 +15,12 @@ export class RolePermissionResponseDto {
 
   @ApiProperty({ description: 'Permission subject', required: false })
   subject?: string;
+
+  @ApiProperty({
+    description: 'Row-scoping condition for this grant, if any',
+    required: false,
+    type: Object,
+    nullable: true,
+  })
+  condition?: Record<string, unknown> | null;
 }

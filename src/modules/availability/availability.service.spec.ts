@@ -2,11 +2,14 @@
 import { AvailabilityService } from './availability.service';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { CaslAbilityFactory } from '@modules/casl/casl-ability.factory';
+import { LoggerService } from '@common/logger/logger.service';
 
 describe('AvailabilityService row-scoping', () => {
   let prisma: Partial<PrismaService>;
   let service: AvailabilityService;
-  const caslAbilityFactory = new CaslAbilityFactory();
+  const caslAbilityFactory = new CaslAbilityFactory(
+    { warn: jest.fn() } as unknown as LoggerService,
+  );
 
   const unscopedAbility = caslAbilityFactory.createForUser({
     permissions: [{ action: 'read', subject: 'availability' }],
@@ -35,7 +38,10 @@ describe('AvailabilityService row-scoping', () => {
       id: 1,
       employee: { id: 42 },
     });
-    service = new AvailabilityService(prisma as PrismaService);
+    service = new AvailabilityService(
+      prisma as PrismaService,
+      { record: jest.fn() } as any,
+    );
   });
 
   it('findAll merges a resolved condition into the where clause', async () => {

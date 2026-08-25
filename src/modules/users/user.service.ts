@@ -10,12 +10,21 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { userWithRoleInclude } from './user.types';
 import { UserMapper } from './user.mapper';
+import { AuditLogsService } from '@modules/audit-logs/audit-logs.service';
+
+const SUBJECT = 'users';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly auditLogsService: AuditLogsService,
+  ) {}
 
-  async create(createUserDto: CreateUserDto): Promise<UserResponseDto> {
+  async create(
+    createUserDto: CreateUserDto,
+    currentUserId: number,
+  ): Promise<UserResponseDto> {
     const { ...userData } = createUserDto;
 
     // Check if phone number already exists
@@ -55,7 +64,16 @@ export class UsersService {
         },
       });
 
-      return UserMapper.toDto(user);
+      const dto = UserMapper.toDto(user);
+      await this.auditLogsService.record({
+        actorId: currentUserId,
+        action: 'create',
+        subject: SUBJECT,
+        entityId: user.id,
+        after: dto as unknown as Record<string, unknown>,
+      });
+
+      return dto;
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -114,6 +132,7 @@ export class UsersService {
   async update(
     id: number,
     updateUserDto: UpdateUserDto,
+    currentUserId: number,
   ): Promise<UserResponseDto> {
     // // Verify user exists
     // const existingUser = await this.prisma.user.findUnique({
@@ -146,6 +165,11 @@ export class UsersService {
       }
     }
 
+    const existingUserForAudit = await this.prisma.user.findUnique({
+      where: { id },
+      include: { ...userWithRoleInclude },
+    });
+
     try {
       const user = await this.prisma.user.update({
         where: { id },
@@ -156,7 +180,21 @@ export class UsersService {
           ...userWithRoleInclude,
         },
       });
-      return UserMapper.toDto(user);
+      const dto = UserMapper.toDto(user);
+      await this.auditLogsService.record({
+        actorId: currentUserId,
+        action: 'update',
+        subject: SUBJECT,
+        entityId: id,
+        before: existingUserForAudit
+          ? (UserMapper.toDto(existingUserForAudit) as unknown as Record<
+              string,
+              unknown
+            >)
+          : undefined,
+        after: dto as unknown as Record<string, unknown>,
+      });
+      return dto;
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -168,9 +206,26 @@ export class UsersService {
     }
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, currentUserId: number): Promise<void> {
+    const existingUserForAudit = await this.prisma.user.findUnique({
+      where: { id },
+      include: { ...userWithRoleInclude },
+    });
+
     try {
       await this.prisma.user.delete({ where: { id } });
+      await this.auditLogsService.record({
+        actorId: currentUserId,
+        action: 'delete',
+        subject: SUBJECT,
+        entityId: id,
+        before: existingUserForAudit
+          ? (UserMapper.toDto(existingUserForAudit) as unknown as Record<
+              string,
+              unknown
+            >)
+          : undefined,
+      });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
