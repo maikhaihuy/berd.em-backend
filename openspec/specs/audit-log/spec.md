@@ -12,10 +12,11 @@ The system SHALL record one `AuditLog` row (`actorId`, `action`, `subject`,
 `entityId`, `before`, `after`, `createdAt`) for every successful create,
 update, or delete on the audited subjects: the row-scoped subjects already
 enumerated in the `authorization` spec (`time-logs`, `leave-requests`,
-`assignments`, `payroll-entries`, `availability`, `attendance-history`) plus
-the RBAC/admin subjects (`users`, `roles`, `permissions`,
-`role-permissions`). `AuditLog` rows SHALL never be updated or deleted by
-application code once written.
+`assignments`, `payroll-entries`, `availability`, `attendance-history`,
+`master-shifts`) plus the RBAC/admin subjects (`users`, `roles`,
+`permissions`, `role-permissions`, `user-roles`, `manager-branches`).
+`AuditLog` rows SHALL never be updated or deleted by application code once
+written.
 
 #### Scenario: Creating a leave request is audited
 - **WHEN** an employee successfully creates a `LeaveRequest` via
@@ -35,6 +36,19 @@ application code once written.
 - **GIVEN** a `POST /time-tracking` request that fails validation
 - **WHEN** the request is rejected before any Prisma write occurs
 - **THEN** no `AuditLog` row is written for that request.
+
+#### Scenario: Assigning a role to a user is audited
+- **WHEN** an admin successfully assigns a role to a user via
+  `POST /users/:id/roles`
+- **THEN** an `AuditLog` row is written with `subject: "user-roles"`,
+  `entityId` equal to the target user's id, and `actorId` equal to the
+  admin's user id.
+
+#### Scenario: Assigning a managed branch is audited
+- **WHEN** an admin successfully assigns a managed branch to a manager
+- **THEN** an `AuditLog` row is written with `subject: "manager-branches"`,
+  `entityId` equal to the target user's id, and `actorId` equal to the
+  admin's user id.
 
 ### Requirement: Audit log is queryable via a paginated, filterable list endpoint
 The system SHALL expose `GET /audit-logs`, gated by
