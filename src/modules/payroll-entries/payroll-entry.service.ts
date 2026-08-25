@@ -7,13 +7,17 @@ import { payrollEntryInclude } from './payroll-entry.types';
 import { PayrollEntryMapper } from './payroll-entry.mapper';
 import { AppAbility } from '@modules/casl/casl-ability.factory';
 import { accessibleWhere } from '@modules/casl/accessible-where';
+import { AuditLogsService } from '@modules/audit-logs/audit-logs.service';
 
 const MS_PER_HOUR = 1000 * 60 * 60;
 const SUBJECT = 'payroll-entries';
 
 @Injectable()
 export class PayrollEntryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogsService: AuditLogsService,
+  ) {}
 
   async findAll(
     payPeriodId: number | undefined,
@@ -46,9 +50,10 @@ export class PayrollEntryService {
     return PayrollEntryMapper.toDto(entry);
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, currentUserId: number): Promise<void> {
+    let deleted;
     try {
-      await this.prisma.payrollEntry.delete({ where: { id } });
+      deleted = await this.prisma.payrollEntry.delete({ where: { id } });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -58,6 +63,14 @@ export class PayrollEntryService {
       }
       throw error;
     }
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'delete',
+      subject: SUBJECT,
+      entityId: id,
+      before: deleted,
+    });
   }
 
   /**
@@ -148,6 +161,17 @@ export class PayrollEntryService {
           },
           include: payrollEntryInclude,
         });
+
+        await this.auditLogsService.record(
+          {
+            actorId: currentUserId,
+            action: 'generate',
+            subject: SUBJECT,
+            entityId: entry.id,
+            after: entry,
+          },
+          tx,
+        );
 
         created.push(PayrollEntryMapper.toDto(entry));
       }

@@ -65,6 +65,23 @@ async function main() {
       { action: 'delete', subject, description: `Delete ${subject}` },
     ]),
 
+    // Audit log: read-only, admin-only. Rows are written internally via
+    // AuditLogService.record(), never through a create/update/delete route.
+    {
+      action: 'read',
+      subject: 'audit-logs',
+      description: 'Read audit-logs',
+    },
+
+    // Effective-abilities lookup for an arbitrary user (admin-scoped
+    // GET /users/:id/abilities). Its own (action, subject) pair, not folded
+    // into read:users, so it can be granted narrowly.
+    {
+      action: 'read',
+      subject: 'user-abilities',
+      description: 'Read a user\'s effective, resolved abilities',
+    },
+
     // Core entities
     ...[
       'branches',
@@ -382,6 +399,10 @@ async function main() {
       create: {
         name: role.name,
         description: role.description || '',
+        // All three seeded roles (Admin, Manager, Employee) are the base,
+        // system-protected role set — see the "role-permission-conditions"
+        // capability's isSystemRole requirement.
+        isSystemRole: true,
         createdBy: SYSTEM_USER_ID,
         updatedBy: SYSTEM_USER_ID,
         rolePermissions: {
@@ -397,6 +418,7 @@ async function main() {
       },
       update: {
         description: role.description,
+        isSystemRole: true,
         updatedBy: SYSTEM_USER_ID,
         rolePermissions: {
           deleteMany: {},

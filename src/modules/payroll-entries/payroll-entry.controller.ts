@@ -81,7 +81,10 @@ export class PayrollEntriesController {
   @ApiOperation({ summary: 'Delete a payroll entry' })
   @ApiResponse({ status: 204 })
   @ApiResponse({ status: 404, description: 'Payroll entry not found' })
-  async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
-    await this.payrollEntryService.remove(id);
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
+  ): Promise<void> {
+    await this.payrollEntryService.remove(id, user.userId);
   }
 }

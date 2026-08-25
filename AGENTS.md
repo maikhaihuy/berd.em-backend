@@ -270,6 +270,12 @@ Services read the request's `Ability` via `@CaslAbility()` and build a row-scope
 
 **Nested (to-one relation) conditions must use the explicit `is` operator**: `{ assignment: { is: { employeeId: "$self" } } }`, not `{ assignment: { employeeId: "$self" } }`. The implicit form works for `accessibleBy` (Prisma's own client interprets it), but throws `"equals" does not supports comparison of arrays and objects` inside `@casl/prisma`'s own instance-level condition matcher — found by actually running it, not by reading docs.
 
+`condition` is settable through `POST /role-permissions` (`grants: [{ permissionId, condition? }]`, additive per-grant upsert) — not just seed data. Omitting `condition` on a re-assignment clears it via `Prisma.JsonNull`, not by leaving the existing value untouched.
+
+**Condition resolution fails closed per-rule, not per-request**: if a grant's `condition` can't be resolved (unrecognized token, or a `$self` reference to an identifier the caller doesn't have), `CaslAbilityFactory.createForUser()` drops *that one rule*, logs a warning via `LoggerService` (`{ action, subject, reason }`), and keeps building the rest — it never throws. The caller is denied a route only if *no* surviving rule satisfies it. `GET /me/abilities` (`@SkipPermissions()`, self only) and `GET /users/:id/abilities` (admin-gated via `read`/`user-abilities`, defined on `UsersController`) serialize a built `Ability`'s resolved rules (`src/modules/abilities/abilities.service.ts`) as `{ action, subject, inverted, conditions }[]`, so a dropped rule is visible there instead of only in server logs.
+
+`Role.isSystemRole` marks `Admin`/`Manager`/`Employee` (seeded `true`) as undeletable — `RoleService.remove` throws `BadRequestException` before attempting the delete when set, enforced server-side.
+
 **Relevant Files:**
 
 - [src/common/authz.module.ts](src/common/authz.module.ts) — Global guard registration, imports `CaslModule`
@@ -280,6 +286,12 @@ Services read the request's `Ability` via `@CaslAbility()` and build a row-scope
 - [src/modules/auth/decorators/casl-ability.decorator.ts](src/modules/auth/decorators/casl-ability.decorator.ts) — `@CaslAbility()`
 - [src/common/decorators/public.decorator.ts](src/common/decorators/public.decorator.ts), [skip-permissions.decorator.ts](src/common/decorators/skip-permissions.decorator.ts), [permissions.decorator.ts](src/common/decorators/permissions.decorator.ts)
 - `prisma/seed.ts` — shows the `action`/`subject` naming convention (e.g. `create`/`employees`), how a role grant carries its own `condition`, and how roles are granted permissions
+- [src/modules/abilities/abilities.service.ts](src/modules/abilities/abilities.service.ts) — backs `GET /me/abilities` and `GET /users/:id/abilities`
+- [src/modules/audit-logs/audit-logs.service.ts](src/modules/audit-logs/audit-logs.service.ts) — `record()`, called from every audited subject's mutation methods
+
+### Audit log convention
+
+Any mutation on an audited subject (`time-logs`, `leave-requests`, `assignments`, `payroll-entries`, `availability`, `attendance-history`, `users`, `roles`, `permissions`, `role-permissions`) must call `AuditLogsService.record({ actorId, action, subject, entityId, before?, after? })` after a successful write — inside the same `$transaction` when one already wraps the write (pass the transaction client as `record()`'s second argument so the audit insert doesn't escape it), otherwise as an immediately-following call. This is a manual per-service convention, like `@RequirePermissions` is per-route — not compiler-enforced, so a new mutation on one of these subjects needs the same call added by hand. `GET /audit-logs` (admin-gated via `read`/`audit-logs`) lists rows newest-first with `subject`/`actorId`/`entityId`/date-range filters and page/limit pagination.
 
 ## Global Exception Handling
 

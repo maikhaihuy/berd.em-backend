@@ -12,6 +12,7 @@ export class RolePermissionMapper {
       roleName: assignment.role.name,
       action: assignment.permission.action,
       subject: assignment.permission.subject,
+      condition: assignment.condition as Record<string, unknown> | null,
     };
   }
 

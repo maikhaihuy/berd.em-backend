@@ -6,19 +6,21 @@ import { SKIP_PERMISSIONS } from '../decorators/skip-permissions.decorator';
 import { REQUIRE_PERMISSIONS } from '../decorators/permissions.decorator';
 import { JsonObject } from './permission-condition.helper';
 import { CaslAbilityFactory } from '@modules/casl/casl-ability.factory';
+import { LoggerService } from '@common/logger/logger.service';
 import { accessibleBy } from '@casl/prisma';
 
 describe('PermissionsGuard', () => {
   let guard: PermissionsGuard;
   let reflector: Reflector;
   let lastRequest: RequestWithUser;
+  let loggerWarn: jest.Mock;
 
   /**
    * Builds a mock Reflector whose getAllAndOverride returns the given values
    * keyed by metadata key, plus an ExecutionContext exposing request.user.
-   * Uses the real CaslAbilityFactory (it has no dependencies of its own) so
-   * these tests exercise the guard's actual CASL integration, not a mock of
-   * it.
+   * Uses the real CaslAbilityFactory (with a stub logger — it has no other
+   * dependencies) so these tests exercise the guard's actual CASL
+   * integration, not a mock of it.
    */
   const setup = (
     metadata: {
@@ -45,7 +47,11 @@ describe('PermissionsGuard', () => {
       }),
     } as unknown as Reflector;
 
-    guard = new PermissionsGuard(reflector, new CaslAbilityFactory());
+    loggerWarn = jest.fn();
+    guard = new PermissionsGuard(
+      reflector,
+      new CaslAbilityFactory({ warn: loggerWarn } as unknown as LoggerService),
+    );
 
     lastRequest = { user } as unknown as RequestWithUser;
 
@@ -209,7 +215,7 @@ describe('PermissionsGuard', () => {
       expect(whereFor('read', 'time-logs')).toEqual({});
     });
 
-    it('denies with 403 when `$self` cannot be resolved for the caller', () => {
+    it('denies with 403 when `$self` cannot be resolved and no other grant covers the route', () => {
       const context = setup(
         { required: [{ action: 'read', subject: 'time-logs' }] },
         {
@@ -224,7 +230,31 @@ describe('PermissionsGuard', () => {
         },
       );
 
+      // The rule is dropped inside CaslAbilityFactory (logged, not thrown),
+      // so this 403 comes from the guard's own "no rule satisfies the
+      // route" check, not from ability construction itself throwing.
       expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+      expect(loggerWarn).toHaveBeenCalledTimes(1);
+    });
+
+    it('is authorized when one grant is unresolvable but another covers the same route', () => {
+      const context = setup(
+        { required: [{ action: 'read', subject: 'time-logs' }] },
+        {
+          employeeId: undefined,
+          permissions: [
+            {
+              action: 'read',
+              subject: 'time-logs',
+              condition: { employeeId: '$self' }, // dropped: no employeeId
+            },
+            { action: 'read', subject: 'time-logs' }, // unconditioned
+          ],
+        },
+      );
+
+      expect(guard.canActivate(context)).toBe(true);
+      expect(loggerWarn).toHaveBeenCalledTimes(1);
     });
   });
 });

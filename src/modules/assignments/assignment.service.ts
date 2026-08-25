@@ -22,12 +22,16 @@ import { AssignmentMapper } from './assignment.mapper';
 import { subject } from '@casl/ability';
 import { AppAbility } from '@modules/casl/casl-ability.factory';
 import { accessibleWhere } from '@modules/casl/accessible-where';
+import { AuditLogsService } from '@modules/audit-logs/audit-logs.service';
 
 const SUBJECT = 'assignments';
 
 @Injectable()
 export class AssignmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogsService: AuditLogsService,
+  ) {}
 
   async create(dto: CreateAssignmentDto, currentUserId: number) {
     await this.validateCreate(dto);
@@ -59,6 +63,14 @@ export class AssignmentsService {
         }
 
         return created;
+      });
+
+      await this.auditLogsService.record({
+        actorId: currentUserId,
+        action: 'create',
+        subject: SUBJECT,
+        entityId: assignment.id,
+        after: assignment,
       });
 
       return AssignmentMapper.toDto(assignment);
@@ -126,12 +138,31 @@ export class AssignmentsService {
       },
       include: assignmentInclude,
     });
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'update',
+      subject: SUBJECT,
+      entityId: id,
+      before: existing as unknown as Record<string, unknown>,
+      after: updated,
+    });
+
     return AssignmentMapper.toDto(updated);
   }
 
-  async remove(id: number) {
-    await this.findOne(id);
+  async remove(id: number, currentUserId: number) {
+    const existing = await this.findOne(id);
     await this.prisma.assignment.delete({ where: { id } });
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'delete',
+      subject: SUBJECT,
+      entityId: id,
+      before: existing as unknown as Record<string, unknown>,
+    });
+
     return { message: 'Assignment deleted successfully' };
   }
 
@@ -178,6 +209,15 @@ export class AssignmentsService {
         },
       });
       return result;
+    });
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'check-in',
+      subject: SUBJECT,
+      entityId: id,
+      before: assignment,
+      after: updated,
     });
 
     return AssignmentMapper.toDto(updated);
@@ -247,6 +287,15 @@ export class AssignmentsService {
         },
       });
       return result;
+    });
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'check-out',
+      subject: SUBJECT,
+      entityId: id,
+      before: assignment,
+      after: updated,
     });
 
     return {

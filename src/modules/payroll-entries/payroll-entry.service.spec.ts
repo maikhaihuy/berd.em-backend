@@ -4,8 +4,10 @@ import { Prisma, PayPeriodStatus, TimeLogStatus } from '@prisma/client';
 import { PayrollEntryService } from './payroll-entry.service';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { CaslAbilityFactory } from '@modules/casl/casl-ability.factory';
+import { LoggerService } from '@common/logger/logger.service';
 
 describe('PayrollEntryService.generate', () => {
+  let auditLogsService: { record: jest.Mock };
   let prisma: {
     payPeriod: { findUnique: jest.Mock };
     timeLog: { findMany: jest.Mock };
@@ -51,7 +53,11 @@ describe('PayrollEntryService.generate', () => {
       },
       $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(prisma)),
     };
-    service = new PayrollEntryService(prisma as unknown as PrismaService);
+    auditLogsService = { record: jest.fn() };
+    service = new PayrollEntryService(
+      prisma as unknown as PrismaService,
+      auditLogsService as any,
+    );
   });
 
   it('throws NotFound when the pay period does not exist', async () => {
@@ -86,6 +92,14 @@ describe('PayrollEntryService.generate', () => {
     expect(createArgs.data.totalPay.toString()).toBe('60');
     expect(createArgs.data.timeLogId).toBe(10);
     expect(createArgs.data.payPeriodId).toBe(1);
+    expect(auditLogsService.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorId: 1,
+        action: 'generate',
+        subject: 'payroll-entries',
+      }),
+      prisma, // the transaction client, not the app-wide prisma instance
+    );
   });
 
   it('is idempotent: no eligible time logs -> zero entries created', async () => {
@@ -132,7 +146,9 @@ describe('PayrollEntryService.generate', () => {
 describe('PayrollEntryService row-scoping', () => {
   let prisma: Partial<PrismaService>;
   let service: PayrollEntryService;
-  const caslAbilityFactory = new CaslAbilityFactory();
+  const caslAbilityFactory = new CaslAbilityFactory(
+    { warn: jest.fn() } as unknown as LoggerService,
+  );
 
   const unscopedAbility = caslAbilityFactory.createForUser({
     permissions: [{ action: 'read', subject: 'payroll-entries' }],
@@ -154,9 +170,13 @@ describe('PayrollEntryService row-scoping', () => {
       payrollEntry: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
+        delete: jest.fn(),
       } as any,
     };
-    service = new PayrollEntryService(prisma as PrismaService);
+    service = new PayrollEntryService(
+      prisma as PrismaService,
+      { record: jest.fn() } as any,
+    );
   });
 
   describe('findAll', () => {

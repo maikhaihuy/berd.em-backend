@@ -9,12 +9,16 @@ import { AttendanceHistoryMapper } from './attendance-history.mapper';
 import { subject } from '@casl/ability';
 import { AppAbility } from '@modules/casl/casl-ability.factory';
 import { accessibleWhere } from '@modules/casl/accessible-where';
+import { AuditLogsService } from '@modules/audit-logs/audit-logs.service';
 
 const SUBJECT = 'attendance-history';
 
 @Injectable()
 export class AttendanceHistoryService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly auditLogsService: AuditLogsService,
+  ) {}
 
   async create(
     createDto: CreateAttendanceHistoryDto,
@@ -54,6 +58,14 @@ export class AttendanceHistoryService {
         createdBy: currentUserId,
       },
       include: attendanceHistoryInclude,
+    });
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'create',
+      subject: SUBJECT,
+      entityId: attendanceHistory.id,
+      after: attendanceHistory,
     });
 
     return AttendanceHistoryMapper.toDto(attendanceHistory);

@@ -3,11 +3,14 @@ import { NotFoundException } from '@nestjs/common';
 import { LeaveRequestsService } from './leave-requests.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CaslAbilityFactory } from '@modules/casl/casl-ability.factory';
+import { LoggerService } from '@common/logger/logger.service';
 
 describe('LeaveRequestsService row-scoping', () => {
   let prisma: Partial<PrismaService>;
   let service: LeaveRequestsService;
-  const caslAbilityFactory = new CaslAbilityFactory();
+  const caslAbilityFactory = new CaslAbilityFactory(
+    { warn: jest.fn() } as unknown as LoggerService,
+  );
 
   const unscopedAbility = caslAbilityFactory.createForUser({
     permissions: [
@@ -38,6 +41,8 @@ describe('LeaveRequestsService row-scoping', () => {
       ],
     });
 
+  let auditLogsService: { record: jest.Mock };
+
   beforeEach(() => {
     prisma = {
       assignment: { findUnique: jest.fn() } as any,
@@ -47,9 +52,14 @@ describe('LeaveRequestsService row-scoping', () => {
         findMany: jest.fn(),
         findFirst: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn(),
       } as any,
     };
-    service = new LeaveRequestsService(prisma as PrismaService);
+    auditLogsService = { record: jest.fn() };
+    service = new LeaveRequestsService(
+      prisma as PrismaService,
+      auditLogsService as any,
+    );
   });
 
   describe('findAll', () => {
@@ -148,6 +158,33 @@ describe('LeaveRequestsService row-scoping', () => {
         }),
       );
     });
+
+    it('records an audit log entry on success', async () => {
+      (prisma.assignment as any).findUnique.mockResolvedValue({ id: 5 });
+      (prisma.employee as any).findUnique
+        .mockResolvedValueOnce({ id: 42 })
+        .mockResolvedValueOnce({ id: 7 });
+      (prisma.leaveRequest as any).create.mockResolvedValue({
+        id: 1,
+        absenceEmployeeId: 42,
+      });
+
+      await service.create(
+        { assignmentId: 5, absenceEmployeeId: 42, replacementEmployeeId: 7 } as any,
+        9,
+        scopedAbility(42),
+        42,
+      );
+
+      expect(auditLogsService.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 9,
+          action: 'create',
+          subject: 'leave-requests',
+          entityId: 1,
+        }),
+      );
+    });
   });
 
   describe('cancel', () => {
@@ -159,6 +196,28 @@ describe('LeaveRequestsService row-scoping', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
 
       expect((prisma.leaveRequest as any).update).not.toHaveBeenCalled();
+      expect(auditLogsService.record).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('remove', () => {
+    it('records an audit log entry with the deleted row as `before`', async () => {
+      (prisma.leaveRequest as any).delete.mockResolvedValue({
+        id: 1,
+        absenceEmployeeId: 42,
+      });
+
+      await service.remove(1, 9);
+
+      expect(auditLogsService.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 9,
+          action: 'delete',
+          subject: 'leave-requests',
+          entityId: 1,
+          before: { id: 1, absenceEmployeeId: 42 },
+        }),
+      );
     });
   });
 });

@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { AbilityBuilder, ForcedSubject, PureAbility } from '@casl/ability';
 import { createPrismaAbility, PrismaQuery } from '@casl/prisma';
+import { LoggerService } from '@common/logger/logger.service';
 import {
   JsonObject,
   resolveCondition,
@@ -32,9 +33,21 @@ export interface CaslUser extends SelfIdentity {
  * `$self` and attached as that rule's conditions. `manage`/`all` need no
  * special handling here — they're `@casl/ability`'s own built-in wildcard
  * conventions.
+ *
+ * A grant whose condition can't be resolved (missing identifier, or an
+ * unrecognized token) is dropped — logged as a warning and excluded from
+ * the built `Ability` — rather than throwing. This never builds an `Ability`
+ * with a broken rule, but it also never lets one bad grant sour a request
+ * the caller's *other* grants would otherwise satisfy; see the
+ * `authorization` spec's "Unresolvable `$self` token denies the request"
+ * requirement.
  */
 @Injectable()
 export class CaslAbilityFactory {
+  constructor(
+    @Inject(LoggerService) private readonly logger: LoggerService,
+  ) {}
+
   createForUser(user: CaslUser): AppAbility {
     const { can: rawCan, build } = new AbilityBuilder<AppAbility>(
       createPrismaAbility,
@@ -52,11 +65,25 @@ export class CaslAbilityFactory {
     ) => void;
 
     for (const permission of user.permissions) {
-      if (permission.condition) {
+      if (!permission.condition) {
+        can(permission.action, permission.subject);
+        continue;
+      }
+
+      try {
         const condition = resolveCondition(permission.condition, user);
         can(permission.action, permission.subject, condition);
-      } else {
-        can(permission.action, permission.subject);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        this.logger.warn(
+          {
+            action: permission.action,
+            subject: permission.subject,
+            reason,
+          },
+          CaslAbilityFactory.name,
+        );
+        // Rule dropped: not added to the ability being built.
       }
     }
 
