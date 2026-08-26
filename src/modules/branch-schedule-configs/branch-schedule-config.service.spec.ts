@@ -2,6 +2,15 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { BranchScheduleConfigService } from './branch-schedule-config.service';
 import { PrismaService } from '@modules/prisma/prisma.service';
+import { CaslAbilityFactory } from '@modules/casl/casl-ability.factory';
+import { LoggerService } from '@common/logger/logger.service';
+
+const caslAbilityFactory = new CaslAbilityFactory({
+  warn: jest.fn(),
+} as unknown as LoggerService);
+const unscopedAbility = caslAbilityFactory.createForUser({
+  permissions: [{ action: 'read', subject: 'branch-schedule-configs' }],
+});
 
 const p2002 = new Prisma.PrismaClientKnownRequestError('unique', {
   code: 'P2002',
@@ -17,7 +26,7 @@ describe('BranchScheduleConfigService', () => {
     branchScheduleConfig: {
       create: jest.Mock;
       findMany: jest.Mock;
-      findUnique: jest.Mock;
+      findFirst: jest.Mock;
       update: jest.Mock;
       delete: jest.Mock;
     };
@@ -43,7 +52,7 @@ describe('BranchScheduleConfigService', () => {
       branchScheduleConfig: {
         create: jest.fn(),
         findMany: jest.fn(),
-        findUnique: jest.fn(),
+        findFirst: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
       },
@@ -67,24 +76,28 @@ describe('BranchScheduleConfigService', () => {
   });
 
   it('throws NotFound for a missing config by id', async () => {
-    prisma.branchScheduleConfig.findUnique.mockResolvedValue(null);
-    await expect(service.findOne(99)).rejects.toBeInstanceOf(NotFoundException);
+    prisma.branchScheduleConfig.findFirst.mockResolvedValue(null);
+    await expect(service.findOne(99, unscopedAbility)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('returns the config for a branch', async () => {
-    prisma.branchScheduleConfig.findUnique.mockResolvedValue(config);
-    const result = await service.findByBranch(2);
+    prisma.branchScheduleConfig.findFirst.mockResolvedValue(config);
+    const result = await service.findByBranch(2, unscopedAbility);
     expect(result.branchId).toBe(2);
-    expect(prisma.branchScheduleConfig.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { branchId: 2 } }),
+    expect(prisma.branchScheduleConfig.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ branchId: 2 }),
+      }),
     );
   });
 
   it('throws NotFound when a branch has no config', async () => {
-    prisma.branchScheduleConfig.findUnique.mockResolvedValue(null);
-    await expect(service.findByBranch(2)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    prisma.branchScheduleConfig.findFirst.mockResolvedValue(null);
+    await expect(
+      service.findByBranch(2, unscopedAbility),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('updates a config', async () => {

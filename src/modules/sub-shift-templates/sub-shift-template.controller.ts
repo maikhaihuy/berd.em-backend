@@ -13,6 +13,8 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RequirePermissions } from '@common/decorators/permissions.decorator';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
+import { CaslAbility } from '@modules/auth/decorators/casl-ability.decorator';
+import type { AppAbility } from '@modules/casl/casl-ability.factory';
 import { CreateSubShiftTemplateDto } from './dto/create-sub-shift-template.dto';
 import { UpdateSubShiftTemplateDto } from './dto/update-sub-shift-template.dto';
 import { SubShiftTemplatesService } from './sub-shift-template.service';
@@ -36,10 +38,12 @@ export class SubShiftTemplatesController {
   @RequirePermissions({ action: 'read', subject: 'sub-shift-templates' })
   @Get()
   findAll(
+    @CaslAbility() ability: AppAbility,
     @Query('branchId') branchId?: string,
     @Query('masterShiftTemplateId') masterShiftTemplateId?: string,
   ) {
     return this.service.findAll(
+      ability,
       branchId ? Number(branchId) : undefined,
       masterShiftTemplateId ? Number(masterShiftTemplateId) : undefined,
     );
@@ -47,8 +51,11 @@ export class SubShiftTemplatesController {
 
   @RequirePermissions({ action: 'read', subject: 'sub-shift-templates' })
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.service.findOne(id);
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CaslAbility() ability: AppAbility,
+  ) {
+    return this.service.findOne(id, ability);
   }
 
   @RequirePermissions({ action: 'update', subject: 'sub-shift-templates' })

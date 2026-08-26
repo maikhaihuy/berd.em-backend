@@ -10,6 +10,10 @@ import { UpdateBranchScheduleConfigDto } from './dto/update-branch-schedule-conf
 import { BranchScheduleConfigResponseDto } from './dto/branch-schedule-config-response.dto';
 import { branchScheduleConfigInclude } from './branch-schedule-config.types';
 import { BranchScheduleConfigMapper } from './branch-schedule-config.mapper';
+import type { AppAbility } from '@modules/casl/casl-ability.factory';
+import { accessibleWhere } from '@modules/casl/accessible-where';
+
+const SUBJECT = 'branch-schedule-configs';
 
 @Injectable()
 export class BranchScheduleConfigService {
@@ -42,17 +46,28 @@ export class BranchScheduleConfigService {
     }
   }
 
-  async findAll(): Promise<BranchScheduleConfigResponseDto[]> {
+  async findAll(
+    ability: AppAbility,
+  ): Promise<BranchScheduleConfigResponseDto[]> {
     const configs = await this.prisma.branchScheduleConfig.findMany({
+      where: {
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
       include: branchScheduleConfigInclude,
       orderBy: { branchId: 'asc' },
     });
     return BranchScheduleConfigMapper.toDtos(configs);
   }
 
-  async findOne(id: number): Promise<BranchScheduleConfigResponseDto> {
-    const config = await this.prisma.branchScheduleConfig.findUnique({
-      where: { id },
+  async findOne(
+    id: number,
+    ability: AppAbility,
+  ): Promise<BranchScheduleConfigResponseDto> {
+    const config = await this.prisma.branchScheduleConfig.findFirst({
+      where: {
+        id,
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
       include: branchScheduleConfigInclude,
     });
     if (!config) {
@@ -65,9 +80,13 @@ export class BranchScheduleConfigService {
 
   async findByBranch(
     branchId: number,
+    ability: AppAbility,
   ): Promise<BranchScheduleConfigResponseDto> {
-    const config = await this.prisma.branchScheduleConfig.findUnique({
-      where: { branchId },
+    const config = await this.prisma.branchScheduleConfig.findFirst({
+      where: {
+        branchId,
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
       include: branchScheduleConfigInclude,
     });
     if (!config) {

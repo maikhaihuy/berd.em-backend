@@ -19,6 +19,8 @@ import { EmployeeHourlyRateResponseDto } from '@modules/employee-hourly-rates/dt
 import { UpsertEmployeeHourlyRateDto } from '@modules/employee-hourly-rates/dto/upsert-employee-hourly-rate.dto';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
+import { CaslAbility } from '@modules/auth/decorators/casl-ability.decorator';
+import type { AppAbility } from '@modules/casl/casl-ability.factory';
 
 @ApiTags('employees')
 @Controller('employees')
@@ -55,8 +57,10 @@ export class EmployeesController {
     description: 'A list of employees.',
     type: [EmployeeResponseDto],
   })
-  async findAll(): Promise<EmployeeResponseDto[]> {
-    return await this.employeesService.findAll();
+  async findAll(
+    @CaslAbility() ability: AppAbility,
+  ): Promise<EmployeeResponseDto[]> {
+    return await this.employeesService.findAll(ability);
   }
 
   @RequirePermissions({ action: 'read', subject: 'employees' })
@@ -68,8 +72,11 @@ export class EmployeesController {
     type: EmployeeResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Employee not found.' })
-  async findOne(@Param('id') id: string): Promise<EmployeeResponseDto> {
-    return await this.employeesService.findOne(+id);
+  async findOne(
+    @Param('id') id: string,
+    @CaslAbility() ability: AppAbility,
+  ): Promise<EmployeeResponseDto> {
+    return await this.employeesService.findOne(+id, ability);
   }
 
   @RequirePermissions({ action: 'update', subject: 'employees' })

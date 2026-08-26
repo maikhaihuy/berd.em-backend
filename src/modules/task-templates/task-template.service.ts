@@ -10,6 +10,10 @@ import { UpdateTaskTemplateDto } from './dto/update-task-template.dto';
 import { TaskTemplateResponseDto } from './dto/task-template-response.dto';
 import { TaskTemplateMapper } from './task-template.mapper';
 import { taskTemplateInclude } from './task-template.types';
+import type { AppAbility } from '@modules/casl/casl-ability.factory';
+import { accessibleWhere } from '@modules/casl/accessible-where';
+
+const SUBJECT = 'task-templates';
 
 @Injectable()
 export class TaskTemplatesService {
@@ -39,16 +43,37 @@ export class TaskTemplatesService {
     return TaskTemplateMapper.toDto(template);
   }
 
-  async findAll(branchId?: number): Promise<TaskTemplateResponseDto[]> {
+  async findAll(
+    ability: AppAbility,
+    branchId?: number,
+  ): Promise<TaskTemplateResponseDto[]> {
     const templates = await this.prisma.taskTemplate.findMany({
-      where: branchId ? { branchId } : undefined,
+      where: {
+        ...(branchId ? { branchId } : {}),
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
       include: taskTemplateInclude,
       orderBy: [{ branchId: 'asc' }, { sortOrder: 'asc' }],
     });
     return TaskTemplateMapper.toDtos(templates);
   }
 
-  async findOne(id: number): Promise<TaskTemplateResponseDto> {
+  async findOne(
+    id: number,
+    ability: AppAbility,
+  ): Promise<TaskTemplateResponseDto> {
+    const template = await this.prisma.taskTemplate.findFirst({
+      where: {
+        id,
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
+      include: taskTemplateInclude,
+    });
+    if (!template) throw new NotFoundException('Task template not found');
+    return TaskTemplateMapper.toDto(template);
+  }
+
+  private async findExisting(id: number): Promise<TaskTemplateResponseDto> {
     const template = await this.prisma.taskTemplate.findUnique({
       where: { id },
       include: taskTemplateInclude,
@@ -62,7 +87,7 @@ export class TaskTemplatesService {
     dto: UpdateTaskTemplateDto,
     currentUserId: number,
   ): Promise<TaskTemplateResponseDto> {
-    const existing = await this.findOne(id);
+    const existing = await this.findExisting(id);
     await this.validateScope({
       branchId: dto.branchId ?? existing.branchId,
       masterShiftTemplateId:
@@ -84,7 +109,7 @@ export class TaskTemplatesService {
   }
 
   async remove(id: number) {
-    await this.findOne(id);
+    await this.findExisting(id);
     await this.prisma.taskTemplate.delete({ where: { id } });
     return { message: 'Task template deleted successfully' };
   }

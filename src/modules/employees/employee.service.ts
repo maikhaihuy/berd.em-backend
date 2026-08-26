@@ -14,6 +14,10 @@ import {
   employeeWithUserInclude,
 } from './employee.types';
 import { EmployeeHourlyRatesMapper } from '@modules/employee-hourly-rates/employee-hourly-rates.mapper';
+import type { AppAbility } from '@modules/casl/casl-ability.factory';
+import { accessibleWhere } from '@modules/casl/accessible-where';
+
+const SUBJECT = 'employees';
 
 @Injectable()
 export class EmployeesService {
@@ -95,8 +99,11 @@ export class EmployeesService {
     }
   }
 
-  async findAll(): Promise<EmployeeResponseDto[]> {
+  async findAll(ability: AppAbility): Promise<EmployeeResponseDto[]> {
     const employees = await this.prisma.employee.findMany({
+      where: {
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
       include: {
         ...employeeWithBranchesInclude,
         ...employeeWithUserInclude,
@@ -108,9 +115,12 @@ export class EmployeesService {
     });
   }
 
-  async findOne(id: number): Promise<EmployeeResponseDto> {
-    const employee = await this.prisma.employee.findUnique({
-      where: { id },
+  async findOne(id: number, ability: AppAbility): Promise<EmployeeResponseDto> {
+    const employee = await this.prisma.employee.findFirst({
+      where: {
+        id,
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
       include: {
         ...employeeWithBranchesInclude,
         ...employeeWithUserInclude,

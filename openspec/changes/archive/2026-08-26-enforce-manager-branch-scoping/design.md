@@ -1,13 +1,26 @@
 ## Context
 
-`RolePermission.condition` and the `$managedBranches` token are fully
-implemented (`managed-branch-scoping` capability, `CaslAbilityFactory`,
-`permission-condition.helper.ts`). Nothing here changes that mechanism.
-The gap is purely in `prisma/seed.ts`: the seeded `Manager` role's grants
-for scheduling subjects, `employees`, and `branches` carry no `condition`,
-so every Manager currently has unscoped access to every branch's data —
-the exact case the mechanism was built to prevent, just never wired up for
-the default role.
+`RolePermission.condition` and the `$managedBranches` token resolution
+mechanism are fully implemented (`managed-branch-scoping` capability,
+`CaslAbilityFactory`, `permission-condition.helper.ts`). Nothing here
+changes that resolution mechanism. The gap has two parts, only one of
+which was caught before this change's first archive attempt:
+
+1. `prisma/seed.ts`: the seeded `Manager` role's grants for scheduling
+   subjects, `employees`, and `branches` carried no `condition`, so every
+   Manager had unscoped access to every branch's data.
+2. **(Found during pre-archive verification, addressed in tasks.md §7)**
+   Even with the condition set, five of the six affected services —
+   `EmployeeService`, `BranchScheduleConfigService`,
+   `MasterShiftTemplatesService`, `SubShiftTemplatesService`,
+   `TaskTemplatesService` — had no `accessibleWhere`/CASL ability filtering
+   in their `findAll`/`findOne` at all (only `master-shifts` did, wired in
+   the earlier `rbac-multi-role-managed-branches` change). Setting the
+   condition alone is inert without a service that consults the built
+   `Ability` when querying — the condition would resolve correctly (visible
+   via `GET /users/:id/abilities`) while the actual list/detail endpoints
+   stayed fully unfiltered. Both parts are needed for the fix to be real;
+   this change now closes both.
 
 ## Goals / Non-Goals
 
@@ -25,6 +38,11 @@ the default role.
   with the seed (per the existing "catalog can't drift from the resolver"
   convention — this constant is documentation only, not enforced by the
   resolver).
+- Wire `accessibleWhere(ability, 'read', <subject>)` into `findAll`/
+  `findOne` (and, for `BranchScheduleConfigService`, `findByBranch`) on all
+  five newly-scoped services, and thread `@CaslAbility()` through their
+  controllers — mirroring the existing `master-shifts` pattern — so the
+  seeded condition is actually enforced, not just resolvable.
 - Extend `rbac-multi-role-managed-branches.e2e-spec.ts` to assert the
   *seeded* Manager role (not just a test-created role) is scoped.
 
@@ -45,16 +63,24 @@ the default role.
   managing a branch's data are treated as separate concerns; the proposal's
   "What Changes" section scopes only the scheduling subjects and
   `employees`.
-- No change to `EmployeeService.create`. It performs no instance-level
-  `ability.can()` check today (unlike `assignments`/`leave-requests`/etc,
-  which validate a create payload's self-owned field against the caller's
-  ability). Adding the `employees` condition therefore scopes `read` and
-  `update` (via `accessibleWhere` query filtering) but has no effect on
-  `create` — a Manager can still create an `Employee` with `branchIds`
-  outside their managed set. Documented as a known limitation, not silently
-  worked around, since fixing it means adding a new instance-check code
-  path that's out of this change's stated scope (`prisma/seed.ts` + the
-  e2e spec).
+- No change to `EmployeeService.create`, `.update`, or `.remove` (or the
+  equivalent write paths on the other four newly-scoped services). None of
+  them perform an instance-level `ability.can()` check today (unlike
+  `assignments`/`leave-requests`/etc, which validate a create payload's
+  self-owned field against the caller's ability). `accessibleWhere` only
+  wires into `findAll`/`findOne` (list/detail reads) — the same convention
+  every other row-scoped subject in this codebase already follows (see the
+  `authorization` spec's "Row-scoped subjects apply CASL `accessibleBy`
+  filters" requirement, and e.g. `TimeTrackingService.update`, which also
+  has no ability check). So the `employees` condition scopes `read` only;
+  a Manager can still create or update an `Employee` (or a scheduling-
+  subject row) outside their managed branches via `update`/`create`.
+  Documented as a known limitation, not silently worked around, since
+  adding instance-level write checks is new scope inconsistent with the
+  rest of the codebase's established pattern, not something this change's
+  stated scope (`prisma/seed.ts` + the e2e spec, later extended to also
+  wire `accessibleWhere` into the five services' read paths — see tasks.md
+  §7) covers.
 - No migration/backfill script for already-deployed databases. `seed.ts` is
   idempotent (`upsert` on role, condition is part of the create/update
   payload) but only re-runs on `db:seed`/`db:reset` — it does not retroactively
@@ -103,11 +129,12 @@ field name any resolver code parses or validates.
   but call it out explicitly in the PR/rollout notes so it isn't reported as
   a regression; `ManagerBranch` assignment (`POST /users/:id/manager-branches`)
   already exists and is an admin action, not new work.
-- **[Risk]** `employees` scoping only covers `read`/`update` query filtering,
-  not `create` (see Non-Goals) — a Manager can still create an employee in
-  an unmanaged branch, then immediately lose the ability to see or edit it.
-  → **Mitigation**: documented as a known follow-up; not silently accepted
-  as fine, just out of this change's stated scope.
+- **[Risk]** `employees` scoping only covers `read` query filtering, not
+  `create`/`update` (see Non-Goals) — a Manager can still create or edit an
+  employee's branch assignments outside their managed set, and would then
+  immediately lose the ability to see or further edit that employee via the
+  now-filtered `read`. → **Mitigation**: documented as a known follow-up;
+  not silently accepted as fine, just out of this change's stated scope.
 - **[Trade-off]** Leaving `sub-shifts`/`tasks`/`branches` unscoped means this
   change closes the most visible part of the gap (the Why section's
   concrete complaint: full read/write on every branch's core scheduling
