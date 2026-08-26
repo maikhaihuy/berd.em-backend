@@ -18,6 +18,8 @@ import { BranchScheduleConfigResponseDto } from './dto/branch-schedule-config-re
 import { RequirePermissions } from '@common/decorators/permissions.decorator';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
+import { CaslAbility } from '@modules/auth/decorators/casl-ability.decorator';
+import type { AppAbility } from '@modules/casl/casl-ability.factory';
 
 @ApiTags('branch-schedule-configs')
 @Controller('branch-schedule-configs')
@@ -41,8 +43,10 @@ export class BranchScheduleConfigsController {
   @Get()
   @ApiOperation({ summary: 'List all branch schedule configs' })
   @ApiResponse({ status: 200, type: [BranchScheduleConfigResponseDto] })
-  async findAll(): Promise<BranchScheduleConfigResponseDto[]> {
-    return this.service.findAll();
+  async findAll(
+    @CaslAbility() ability: AppAbility,
+  ): Promise<BranchScheduleConfigResponseDto[]> {
+    return this.service.findAll(ability);
   }
 
   // Declared before ':id' so 'branch' is not captured as an id.
@@ -53,8 +57,9 @@ export class BranchScheduleConfigsController {
   @ApiResponse({ status: 404, description: 'Branch has no config' })
   async findByBranch(
     @Param('branchId', ParseIntPipe) branchId: number,
+    @CaslAbility() ability: AppAbility,
   ): Promise<BranchScheduleConfigResponseDto> {
-    return this.service.findByBranch(branchId);
+    return this.service.findByBranch(branchId, ability);
   }
 
   @RequirePermissions({ action: 'read', subject: 'branch-schedule-configs' })
@@ -64,8 +69,9 @@ export class BranchScheduleConfigsController {
   @ApiResponse({ status: 404, description: 'Config not found' })
   async findOne(
     @Param('id', ParseIntPipe) id: number,
+    @CaslAbility() ability: AppAbility,
   ): Promise<BranchScheduleConfigResponseDto> {
-    return this.service.findOne(id);
+    return this.service.findOne(id, ability);
   }
 
   @RequirePermissions({ action: 'update', subject: 'branch-schedule-configs' })

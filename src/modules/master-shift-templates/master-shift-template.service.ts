@@ -10,6 +10,10 @@ import { UpdateMasterShiftTemplateDto } from './dto/update-master-shift-template
 import { MasterShiftTemplateResponseDto } from './dto/master-shift-template-response.dto';
 import { MasterShiftTemplateMapper } from './master-shift-template.mapper';
 import { masterShiftTemplateInclude } from './master-shift-template.types';
+import type { AppAbility } from '@modules/casl/casl-ability.factory';
+import { accessibleWhere } from '@modules/casl/accessible-where';
+
+const SUBJECT = 'master-shift-templates';
 
 @Injectable()
 export class MasterShiftTemplatesService {
@@ -44,16 +48,40 @@ export class MasterShiftTemplatesService {
     }
   }
 
-  async findAll(branchId?: number): Promise<MasterShiftTemplateResponseDto[]> {
+  async findAll(
+    ability: AppAbility,
+    branchId?: number,
+  ): Promise<MasterShiftTemplateResponseDto[]> {
     const templates = await this.prisma.masterShiftTemplate.findMany({
-      where: branchId ? { branchId } : undefined,
+      where: {
+        ...(branchId ? { branchId } : {}),
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
       orderBy: [{ branchId: 'asc' }, { startTime: 'asc' }],
       include: masterShiftTemplateInclude,
     });
     return MasterShiftTemplateMapper.toDtos(templates);
   }
 
-  async findOne(id: number): Promise<MasterShiftTemplateResponseDto> {
+  async findOne(
+    id: number,
+    ability: AppAbility,
+  ): Promise<MasterShiftTemplateResponseDto> {
+    const template = await this.prisma.masterShiftTemplate.findFirst({
+      where: {
+        id,
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
+      include: masterShiftTemplateInclude,
+    });
+    if (!template)
+      throw new NotFoundException('Master shift template not found');
+    return MasterShiftTemplateMapper.toDto(template);
+  }
+
+  private async findExisting(
+    id: number,
+  ): Promise<MasterShiftTemplateResponseDto> {
     const template = await this.prisma.masterShiftTemplate.findUnique({
       where: { id },
       include: masterShiftTemplateInclude,
@@ -68,7 +96,7 @@ export class MasterShiftTemplatesService {
     dto: UpdateMasterShiftTemplateDto,
     currentUserId: number,
   ): Promise<MasterShiftTemplateResponseDto> {
-    const existing = await this.findOne(id);
+    const existing = await this.findExisting(id);
     if (dto.branchId) await this.ensureBranch(dto.branchId);
     const startTime = dto.startTime ?? existing.startTime.toISOString();
     const endTime = dto.endTime ?? existing.endTime.toISOString();
@@ -93,7 +121,7 @@ export class MasterShiftTemplatesService {
   }
 
   async remove(id: number) {
-    await this.findOne(id);
+    await this.findExisting(id);
     await this.prisma.masterShiftTemplate.delete({ where: { id } });
     return { message: 'Master shift template deleted successfully' };
   }
