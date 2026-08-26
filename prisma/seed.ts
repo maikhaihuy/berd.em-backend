@@ -281,6 +281,16 @@ async function main() {
     // Per-branch scheduling config: Manager manages it, Employee reads it.
     'branch-schedule-configs',
   ];
+  // Scheduling subjects that carry a direct `branchId` field — the ones
+  // Manager's grant below scopes to `$managedBranches` via `RolePermission.
+  // condition`. `sub-shifts` and `tasks` have no direct `branchId` (only
+  // reachable transitively through their parent `masterShift.branchId`), so
+  // they're deliberately left unconditioned here — see the
+  // `enforce-manager-branch-scoping` change's design.md (Non-Goals) for why
+  // that's not simply an oversight.
+  const BRANCH_SCOPED_SCHEDULING_SUBJECTS = SCHEDULING_SUBJECTS.filter(
+    (subject) => subject !== 'sub-shifts' && subject !== 'tasks',
+  );
   const OPERATIONAL_SUBJECTS = [
     'assignments',
     'availability',
@@ -300,11 +310,38 @@ async function main() {
   // check-in/check-out are self-only for every role that holds them (an
   // actor can only check *themselves* in/out), so Manager's grant of those
   // two actions carries the same `$self` condition Employee's does.
+  //
+  // Branch scoping: Manager's CRUD grant on branch-scoped scheduling
+  // subjects (BRANCH_SCOPED_SCHEDULING_SUBJECTS) carries
+  // `condition: { branchId: { in: '$managedBranches' } }`, so a Manager only
+  // reads/writes rows for branches they're assigned via `ManagerBranch` —
+  // without this, any Manager could read and mutate every branch's data.
+  // `sub-shifts` and `tasks` stay unconditioned (no direct `branchId`).
+  // `employees` uses a relation-based condition below since `Employee` has
+  // no `branchId` field at all.
   const managerGrants = resolveGrants([
-    ...SCHEDULING_SUBJECTS.map((subject) => ({ subject, actions: CRUD })),
+    ...BRANCH_SCOPED_SCHEDULING_SUBJECTS.map((subject) => ({
+      subject,
+      actions: CRUD,
+      condition: { branchId: { in: '$managedBranches' } },
+    })),
+    { subject: 'sub-shifts', actions: CRUD },
+    { subject: 'tasks', actions: CRUD },
     ...OPERATIONAL_SUBJECTS.map((subject) => ({ subject, actions: CRUD })),
     { subject: 'branches', actions: ['read'] },
-    { subject: 'employees', actions: ['create', 'read', 'update'] },
+    {
+      subject: 'employees',
+      actions: ['create', 'read', 'update'],
+      // Scopes `read`/`update` query filtering (via `accessibleWhere`) to
+      // employees with an `EmployeeBranch` row in a managed branch. Has no
+      // effect on `create`: `EmployeeService.create` performs no
+      // instance-level `ability.can()` check today, so this condition
+      // cannot yet block a Manager from creating an employee in a branch
+      // they don't manage — a known limitation, see design.md Non-Goals.
+      condition: {
+        employeeBranches: { some: { branchId: { in: '$managedBranches' } } },
+      },
+    },
     { subject: 'employee-hourly-rates', actions: ['read'] },
     // Custom actions: managers oversee the full operational lifecycle.
     {

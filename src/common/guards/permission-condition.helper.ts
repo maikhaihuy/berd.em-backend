@@ -139,4 +139,8 @@ export const MANAGED_BRANCHES_SCOPABLE_SUBJECT_FIELDS: Record<
   'sub-shift-templates': ['branchId'],
   'task-templates': ['branchId'],
   'master-shifts': ['branchId'],
+  // `Employee` has no direct `branchId` — scoped via its `EmployeeBranch`
+  // relation instead, e.g. `{ employeeBranches: { some: { branchId: { in:
+  // "$managedBranches" } } } }`.
+  employees: ['employeeBranches.branchId'],
 };
