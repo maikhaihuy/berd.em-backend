@@ -294,4 +294,83 @@ describe('RBAC multi-role & managed branches (e2e)', () => {
         .expect(403);
     });
   });
+
+  describe('seeded Manager role scopes to $managedBranches', () => {
+    let managerRoleId: number;
+    let managerUserId: number;
+
+    beforeAll(async () => {
+      const rolesRes = await request(app.getHttpServer())
+        .get('/roles')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+      const roles = rolesRes.body as { id: number; name: string }[];
+      managerRoleId = roles.find((r) => r.name === 'Manager')!.id;
+
+      const userRes = await request(app.getHttpServer())
+        .post('/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          phoneNumber: `09097${Date.now() % 100000}`,
+          fullName: 'E2E Seeded Manager User',
+          status: 'ACTIVE',
+          roleIds: [managerRoleId],
+        })
+        .expect(201);
+      managerUserId = userRes.body.id as number;
+    }, 30000);
+
+    afterAll(async () => {
+      if (managerUserId) {
+        await request(app.getHttpServer())
+          .delete(`/users/${managerUserId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .catch(() => {});
+      }
+    });
+
+    it('resolves master-shifts and employees to an empty list when the manager manages no branches', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/users/${managerUserId}/abilities`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      const rules = res.body as AbilityRule[];
+      expect(findRule(rules, 'master-shifts')?.conditions).toEqual({
+        branchId: { in: [] },
+      });
+      expect(findRule(rules, 'employees')?.conditions).toEqual({
+        employeeBranches: { some: { branchId: { in: [] } } },
+      });
+      // sub-shifts/tasks have no direct branchId and stay unconditioned.
+      expect(findRule(rules, 'sub-shifts')?.conditions).toBeUndefined();
+      expect(findRule(rules, 'tasks')?.conditions).toBeUndefined();
+    });
+
+    it('scopes master-shifts and employees to the assigned branch once managed', async () => {
+      await request(app.getHttpServer())
+        .post(`/users/${managerUserId}/manager-branches`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ branchIds: [branchId] })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .get(`/users/${managerUserId}/abilities`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      const rules = res.body as AbilityRule[];
+      expect(findRule(rules, 'master-shifts')?.conditions).toEqual({
+        branchId: { in: [branchId] },
+      });
+      expect(findRule(rules, 'employees')?.conditions).toEqual({
+        employeeBranches: { some: { branchId: { in: [branchId] } } },
+      });
+
+      await request(app.getHttpServer())
+        .delete(`/users/${managerUserId}/manager-branches/${branchId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+    });
+  });
 });
