@@ -10,13 +10,14 @@ and expose that trail through a queryable, admin-gated list endpoint.
 ### Requirement: Audited mutations are recorded to an append-only audit log
 The system SHALL record one `AuditLog` row (`actorId`, `action`, `subject`,
 `entityId`, `before`, `after`, `createdAt`) for every successful create,
-update, or delete on the audited subjects: the row-scoped subjects already
-enumerated in the `authorization` spec (`time-logs`, `leave-requests`,
+update, or delete on the audited subjects: `time-logs`, `leave-requests`,
 `assignments`, `payroll-entries`, `availability`, `attendance-history`,
-`master-shifts`) plus the RBAC/admin subjects (`users`, `roles`,
-`permissions`, `role-permissions`, `user-roles`, `manager-branches`).
-`AuditLog` rows SHALL never be updated or deleted by application code once
-written.
+plus the RBAC/admin subjects `users`, `roles`, `permissions`,
+`role-permissions`, `user-roles`, and `manager-branches`. This is a subset
+of the row-scoped subjects enumerated in the `authorization` spec — not
+every row-scoped subject is audited (e.g. `master-shifts` is row-scoped for
+CASL filtering but not currently audited). `AuditLog` rows SHALL never be
+updated or deleted by application code once written.
 
 #### Scenario: Creating a leave request is audited
 - **WHEN** an employee successfully creates a `LeaveRequest` via

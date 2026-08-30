@@ -13,12 +13,11 @@ replacement employee, and have hours converted into payroll entries.
 - **Framework**: NestJS 11 (TypeScript), Express platform
 - **ORM/DB**: Prisma 6 + PostgreSQL, `Int` autoincrement primary keys, hard
   deletes (no soft-delete column)
-- **Auth**: Passport (`jwt`, `local` strategies), `@nestjs/jwt`, Zalo Mini App
-  OAuth as the primary login path today — **note: the frontend product spec
-  now calls for password login to become primary and Zalo to become a
-  secondary/optional link once a corresponding backend change lands; until
-  that change is proposed and applied, this describes current behavior, not
-  the target.**
+- **Auth**: Passport (`jwt`, `local` strategies), `@nestjs/jwt`. Password login
+  (phone number + password) is the primary path for the `staffhub-frontend`
+  web dashboard, per `make-password-login-primary`; Zalo Mini App OAuth is a
+  secondary, optional identity link (`POST /auth/link/zalo`), and stays
+  primary only for the separate, not-yet-started Zalo Mini App repo.
 - **Validation**: `class-validator` / `class-transformer` via a global
   `ValidationPipe` (whitelist, transform, forbidNonWhitelisted)
 - **Docs**: `@nestjs/swagger`, served at `/docs`; OpenAPI JSON/types can be
@@ -74,18 +73,28 @@ closed per-rule, not per-request) rather than throwing. See
 
 ### Auth flows
 
-- **Zalo login** (primary, today): verifies a Zalo access token server-side and links
-  a `ZaloIdentity` to a pre-existing `User` matched by phone number. Zalo users
-  are never auto-created — the phone number must already belong to a `User`.
-- **Dev login**: bypasses Zalo for local/frontend development, gated by an
-  env flag + shared secret header, and hard-disabled when
+- **Password login** (`POST /auth/login`, primary): authenticates by phone
+  number + password against `User.password` (bcrypt). An Admin/Owner sets a
+  User's initial password via the optional `password` field on
+  `POST /users` / `PUT /users/:id`.
+- **Password recovery**: `POST /auth/forgot-password` (always `200 OK`, never
+  reveals account existence) issues a single-use reset token; since there is
+  no email/SMS delivery channel, the working recovery path is
+  `POST /users/:id/password-reset-token` (admin-gated), which returns the raw
+  token for an Admin to relay out of band. `POST /auth/reset-password`
+  completes either flow, matching the submitted token against every
+  unexpired stored hash rather than an unscoped lookup.
+- **Zalo login** (`POST /auth/login/zalo`, secondary/optional): verifies a
+  Zalo access token server-side and links a `ZaloIdentity` to a pre-existing
+  `User` matched by phone number. Zalo users are never auto-created — the
+  phone number must already belong to a `User`. Stays primary only for the
+  separate, not-yet-started Zalo Mini App.
+- **Zalo linking** (`POST /auth/link/zalo`, authenticated): lets an
+  already-authenticated User attach a `ZaloIdentity` to their own account
+  independent of how they logged in.
+- **Dev login**: bypasses Zalo and password for local/frontend development,
+  gated by an env flag + shared secret header, and hard-disabled when
   `NODE_ENV=production`.
-- **Password login** exists on `User` but is being phased out in favor of
-  Zalo *as of today's code*; password-reset flows are deprecated/commented
-  out. **Pending direction change**: the frontend now targets a web dashboard
-  (not a Zalo Mini App) and needs password login to be primary instead — see
-  the Tech Stack note above. Treat this section as accurate-but-transitional
-  until that backend change is proposed and applied.
 - Access + refresh JWT pair; refresh tokens are persisted hashed (rotation +
   revocation, per-session `source`/`device`/`ipAddress` tracking).
 

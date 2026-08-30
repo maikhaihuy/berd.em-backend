@@ -50,7 +50,7 @@ When a request is rejected for a validation reason that is not scoped to one req
 #### Scenario: Non-field business validation error
 - **WHEN** a request is rejected by a business rule that does not correspond to one specific request field
 - **THEN** the response has a `message` describing the failure
-- **AND** `errors` contains a general key (not attributed to an arbitrary unrelated field) whose array includes that failure's message
+- **AND** `errors._general` is an array including that failure's message
 
 ### Requirement: Unrelated error responses are unchanged
 Error responses that are not request-validation failures (authentication, authorization, not-found, conflict, and unexpected server errors) SHALL keep their current response shape.
