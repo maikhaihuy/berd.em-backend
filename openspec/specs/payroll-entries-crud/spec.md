@@ -17,7 +17,7 @@ The system SHALL provide `read` (list + get-by-id) and `delete` endpoints for `P
 
 #### Scenario: No public create endpoint exists
 - **WHEN** a client sends `POST /payroll-entries` with a hand-built body
-- **THEN** the route does not exist (404) — entries can only be produced via `POST /pay-periods/:id/payroll-entries/generate` (or equivalent `generate` route)
+- **THEN** the route does not exist (404) — entries can only be produced via `POST /payroll-entries/generate`, which takes a `payPeriodId` in its body rather than a resource path segment
 
 ### Requirement: Payroll entries are generated from verified time logs
 `generate(payPeriodId)` SHALL create one `PayrollEntry` per `TimeLog` where `status` is `VERIFIED`, `payrollEntry` is not yet set, and `actualStartTime` falls within `[payPeriod.startDate, payPeriod.endDate]`, computing `totalPay` from the time log's hours, its `multiplier`, and the employee's `EmployeeHourlyRate` effective as of the time log's work date. `generate` is gated by `@RequirePermissions({ action: 'generate', subject: 'payroll-entries' })`.

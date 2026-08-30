@@ -38,6 +38,10 @@ export class EnvVariables {
   @IsString()
   @IsOptional()
   AUTH_DEV_SECRET?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  CORS_ALLOWED_ORIGINS: string;
 }
 
 export function validate(config: Record<string, unknown>) {

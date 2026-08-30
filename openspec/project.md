@@ -13,12 +13,11 @@ replacement employee, and have hours converted into payroll entries.
 - **Framework**: NestJS 11 (TypeScript), Express platform
 - **ORM/DB**: Prisma 6 + PostgreSQL, `Int` autoincrement primary keys, hard
   deletes (no soft-delete column)
-- **Auth**: Passport (`jwt`, `local` strategies), `@nestjs/jwt`, Zalo Mini App
-  OAuth as the primary login path today — **note: the frontend product spec
-  now calls for password login to become primary and Zalo to become a
-  secondary/optional link once a corresponding backend change lands; until
-  that change is proposed and applied, this describes current behavior, not
-  the target.**
+- **Auth**: Passport (`jwt`, `local` strategies), `@nestjs/jwt`. Password login
+  (phone number + password) is the primary path for the `staffhub-frontend`
+  web dashboard, per `make-password-login-primary`; Zalo Mini App OAuth is a
+  secondary, optional identity link (`POST /auth/link/zalo`), and stays
+  primary only for the separate, not-yet-started Zalo Mini App repo.
 - **Validation**: `class-validator` / `class-transformer` via a global
   `ValidationPipe` (whitelist, transform, forbidNonWhitelisted)
 - **Docs**: `@nestjs/swagger`, served at `/docs`; OpenAPI JSON/types can be
@@ -71,21 +70,54 @@ grant whose condition can't be resolved is dropped for that request (fails
 closed per-rule, not per-request) rather than throwing. See
 `openspec/specs/authorization/spec.md` for the full behavioral spec and
 `src/common/guards/permission-condition.helper.ts` for the resolver.
+`src/modules/casl/casl-ability.factory.ts` (`CaslAbilityFactory`) builds a
+real `@casl/ability` `Ability` (via `@casl/prisma`) for every request, from
+the caller's `Role` → `RolePermission` → `Permission` grants, unioned across
+every `Role` the caller holds (`User` ↔ `Role` is **many-to-many** via the
+`UserRole` join table — a `User` always holds at least one `Role`;
+`POST /users/:id/roles` / `DELETE /users/:id/roles/:roleId` manage the
+assignment). `action: 'manage'` and `subject: 'all'` act as CASL's own
+built-in wildcards. A handful of privileged sub-operations are modeled as
+their own dedicated actions rather than folded into `update` (e.g.
+`check-in`/`check-out` on assignments, `approve`/`cancel` on leave-requests,
+`verify` on time-logs, `generate` on master-shifts, `complete` on tasks) so a
+role can hold self-service rights without full edit rights on the subject.
+
+`RolePermission.condition` (`Json?`) gives a role's grant of a permission
+row-level scope: `"$self"` resolves to the caller's `employeeId`/`userId`,
+`"$managedBranches"` resolves to the caller's managed branch ids (via
+`ManagerBranch`) — e.g. `{ "branchId": { "in": "$managedBranches" } }`. A
+grant whose condition can't be resolved is dropped for that request (fails
+closed per-rule, not per-request) rather than throwing. See
+`openspec/specs/authorization/spec.md` for the full behavioral spec and
+`src/common/guards/permission-condition.helper.ts` for the resolver.
 
 ### Auth flows
 
-- **Zalo login** (primary, today): verifies a Zalo access token server-side and links
-  a `ZaloIdentity` to a pre-existing `User` matched by phone number. Zalo users
-  are never auto-created — the phone number must already belong to a `User`.
-- **Dev login**: bypasses Zalo for local/frontend development, gated by an
-  env flag + shared secret header, and hard-disabled when
+- **Password login** (`POST /auth/login`, primary): authenticates by phone
+  number + password against `User.password` (bcrypt). An Admin/Owner sets a
+  User's initial password via the optional `password` field on
+  `POST /users` / `PUT /users/:id`.
+- **Password recovery**: `POST /auth/forgot-password` (always `200 OK`, never
+  reveals account existence) issues a single-use reset token; since there is
+  no email/SMS delivery channel, the working recovery path is
+  `POST /users/:id/password-reset-token` (admin-gated), which returns the raw
+  token for an Admin to relay out of band. `POST /auth/reset-password`
+  completes either flow, matching the submitted token against every
+  unexpired stored hash rather than an unscoped lookup.
+- **Zalo login** (`POST /auth/login/zalo`, secondary/optional): verifies a
+  Zalo access token server-side and links a `ZaloIdentity` to a pre-existing
+  `User` matched by phone number. Zalo users are never auto-created — the
+  phone number must already belong to a `User`. Stays primary only for the
+  separate, not-yet-started Zalo Mini App.
+- **Zalo linking** (`POST /auth/link/zalo`, authenticated): lets an
+  already-authenticated User attach a `ZaloIdentity` to their own account
+  independent of how they logged in.
+- **Dev login**: bypasses Zalo and password for local/frontend development,
+  gated by an env flag + shared secret header, and hard-disabled when
   `NODE_ENV=production`.
 - **Password login** exists on `User` but is being phased out in favor of
-  Zalo *as of today's code*; password-reset flows are deprecated/commented
-  out. **Pending direction change**: the frontend now targets a web dashboard
-  (not a Zalo Mini App) and needs password login to be primary instead — see
-  the Tech Stack note above. Treat this section as accurate-but-transitional
-  until that backend change is proposed and applied.
+  Zalo; password-reset flows are deprecated.
 - Access + refresh JWT pair; refresh tokens are persisted hashed (rotation +
   revocation, per-session `source`/`device`/`ipAddress` tracking).
 
@@ -160,7 +192,23 @@ tools and are kept in sync. `.claude/skills/` holds project-specific skills
 `schema-review`, `test-writing`) plus the OpenSpec workflow skills
 (`openspec-*`); all are current with `prisma/schema.prisma` and the actual
 `src/` code.
+`TransformInterceptor` (`src/common/interceptors/transform.interceptor.ts`)
+exists in the tree but is not wired into the app — don't assume responses are
+wrapped. `AGENTS.md` and `CLAUDE.md` cover the same ground for different
+tools and are kept in sync. `.claude/skills/` holds project-specific skills
+(`crud-generation`, `database-lifecycle`, `nestjs-prisma-expert`,
+`schema-review`, `test-writing`) plus the OpenSpec workflow skills
+(`openspec-*`); all are current with `prisma/schema.prisma` and the actual
+`src/` code.
 
+**Resync note (2026-08-26)**: this file previously described authorization as
+"custom RBAC, not CASL" with `@casl/ability`/`@casl/prisma` as unused dead
+dependencies, and `User`↔`Role` as one-role-per-user. Both were stale —
+CASL was adopted in the archived change `2026-08-25-adopt-casl-authorization`
+and multi-role support landed in `2026-08-26-rbac-multi-role-managed-branches`,
+but this file was never resynced afterward even though it's fed into every
+`/opsx:propose` run. Corrected above; re-check this file after future
+archived changes touching auth/authorization.
 **Resync note (2026-08-26)**: this file previously described authorization as
 "custom RBAC, not CASL" with `@casl/ability`/`@casl/prisma` as unused dead
 dependencies, and `User`↔`Role` as one-role-per-user. Both were stale —

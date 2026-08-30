@@ -9,10 +9,10 @@ import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
 import { UsersModule } from '../users/user.module';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { JwtTokenService } from './jwt-token.service';
-import { ThrottlerModule } from '@nestjs/throttler';
 import { PasswordService } from '../../common/services/password.service';
 import { ZaloAuthService } from './zalo-auth.service';
 import { LocalStrategy } from './strategies/local.strategy';
+import { PasswordResetTokenModule } from './password-reset-token.module';
 
 @Module({
   imports: [
@@ -20,7 +20,7 @@ import { LocalStrategy } from './strategies/local.strategy';
     PassportModule,
     JwtModule.register({}),
     ConfigModule,
-    ThrottlerModule,
+    PasswordResetTokenModule,
   ],
   controllers: [AuthController],
   providers: [

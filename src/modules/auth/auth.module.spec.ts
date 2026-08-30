@@ -8,6 +8,7 @@ import { JwtTokenService } from './jwt-token.service';
 import { PasswordService } from '../../common/services/password.service';
 import { ZaloAuthService } from './zalo-auth.service';
 import { LocalStrategy } from './strategies/local.strategy';
+import { PasswordResetTokenService } from './password-reset-token.service';
 import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { PrismaService } from '@modules/prisma/prisma.service';
@@ -39,11 +40,22 @@ describe('AuthModule wiring', () => {
         LocalStrategy,
         JwtAccessStrategy,
         JwtRefreshStrategy,
+        PasswordResetTokenService,
         {
           provide: PrismaService,
           useValue: {
-            user: { findUnique: jest.fn(), findFirst: jest.fn() },
+            user: {
+              findUnique: jest.fn(),
+              findFirst: jest.fn(),
+              update: jest.fn(),
+            },
             refreshToken: {
+              create: jest.fn(),
+              findMany: jest.fn(),
+              delete: jest.fn(),
+              deleteMany: jest.fn(),
+            },
+            passwordResetToken: {
               create: jest.fn(),
               findMany: jest.fn(),
               delete: jest.fn(),
@@ -55,6 +67,7 @@ describe('AuthModule wiring', () => {
               create: jest.fn(),
               update: jest.fn(),
             },
+            $transaction: jest.fn(),
           },
         },
         {

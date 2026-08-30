@@ -11,6 +11,8 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { userWithRoleInclude } from './user.types';
 import { UserMapper } from './user.mapper';
 import { AuditLogsService } from '@modules/audit-logs/audit-logs.service';
+import { PasswordService } from '@common/services/password.service';
+import { PasswordResetTokenService } from '@modules/auth/password-reset-token.service';
 
 const SUBJECT = 'users';
 const ROLE_ASSIGNMENT_SUBJECT = 'user-roles';
@@ -21,13 +23,15 @@ export class UsersService {
   constructor(
     private prisma: PrismaService,
     private readonly auditLogsService: AuditLogsService,
+    private readonly passwordService: PasswordService,
+    private readonly passwordResetTokenService: PasswordResetTokenService,
   ) {}
 
   async create(
     createUserDto: CreateUserDto,
     currentUserId: number,
   ): Promise<UserResponseDto> {
-    const { roleIds, ...userData } = createUserDto;
+    const { roleIds, password, ...userData } = createUserDto;
 
     // Check if phone number already exists
     const existingPhone = await this.prisma.user.findUnique({
@@ -42,10 +46,15 @@ export class UsersService {
     // Verify every role exists
     await this.assertRolesExist(roleIds);
 
+    const hashedPassword = password
+      ? await this.passwordService.hash(password)
+      : undefined;
+
     try {
       const user = await this.prisma.user.create({
         data: {
           ...userData,
+          ...(hashedPassword ? { password: hashedPassword } : {}),
           userRoles: {
             create: roleIds.map((roleId) => ({ roleId })),
           },
@@ -151,11 +160,17 @@ export class UsersService {
       include: { ...userWithRoleInclude },
     });
 
+    const { password, ...updateData } = updateUserDto;
+    const hashedPassword = password
+      ? await this.passwordService.hash(password)
+      : undefined;
+
     try {
       const user = await this.prisma.user.update({
         where: { id },
         data: {
-          ...updateUserDto,
+          ...updateData,
+          ...(hashedPassword ? { password: hashedPassword } : {}),
         },
         include: {
           ...userWithRoleInclude,
@@ -216,6 +231,25 @@ export class UsersService {
       }
       throw error;
     }
+  }
+
+  async generatePasswordResetToken(
+    id: number,
+    currentUserId: number,
+  ): Promise<{ token: string; expiresAt: Date }> {
+    await this.assertUserExists(id);
+
+    const result = await this.passwordResetTokenService.issueForUser(id);
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'password-reset-token-issued',
+      subject: SUBJECT,
+      entityId: id,
+      after: { expiresAt: result.expiresAt.toISOString() },
+    });
+
+    return result;
   }
 
   async assignRoles(

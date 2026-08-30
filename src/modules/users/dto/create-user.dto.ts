@@ -7,6 +7,7 @@ import {
   IsEnum,
   IsArray,
   ArrayMinSize,
+  MinLength,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -31,6 +32,17 @@ export class CreateUserDto {
   @IsOptional()
   @IsUrl()
   avatarUrl?: string;
+
+  @ApiProperty({
+    description:
+      'Initial password for this user; omit to create the user without password login enabled',
+    example: 'ChangeMe!123',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(6, { message: 'Password must be at least 6 characters long.' })
+  password?: string;
 
   @ApiProperty({
     description: 'User status',
