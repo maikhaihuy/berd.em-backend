@@ -261,7 +261,8 @@ export class AuthService {
       phone: user.phoneNumber,
       empId: user.employee?.id || undefined,
       roles,
-      branches: userWithBranches.employeeBranches.map((eb) => eb.branch.id),
+      branches:
+        userWithBranches?.employeeBranches.map((eb) => eb.branch.id) ?? [],
       managedBranches,
     });
 
@@ -295,9 +296,8 @@ export class AuthService {
     }
 
     const userWithBranches = await this.getEmployeeWithBranches(user);
-    const branches = userWithBranches.employeeBranches.map(
-      (eb) => eb.branch.id,
-    );
+    const branches =
+      userWithBranches?.employeeBranches.map((eb) => eb.branch.id) ?? [];
     const payload: AccessTokenPayloadDto = {
       sub: user.id,
       typ: 'access',
@@ -448,7 +448,7 @@ export class AuthService {
 
   private async getEmployeeWithBranches(user: AuthUser) {
     if (!user.employee?.id) {
-      throw new NotFoundException('Employee record not found for user');
+      return null;
     }
 
     const employee = await this.prisma.employee.findUnique({

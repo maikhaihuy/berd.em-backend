@@ -191,6 +191,48 @@ describe('AuthService', () => {
       await expect(service.refreshToken(session)).rejects.toThrow();
       expect(refreshTokenService.rotateRefreshToken).not.toHaveBeenCalled();
     });
+
+    it('should succeed with an empty branches list when the user has no linked employee', async () => {
+      prismaService.user.findUnique.mockResolvedValue({
+        id: 1,
+        phoneNumber: '0900000001',
+        userRoles: [{ role: { name: 'Employee' } }],
+        managerBranches: [],
+        employee: null,
+      });
+      jwtTokenService.generateAccessToken.mockReturnValue('new-access-token');
+      refreshTokenService.rotateRefreshToken.mockResolvedValue({
+        token: 'new-refresh-token',
+        tokenRecord: {},
+      });
+
+      const result = await service.refreshToken(session);
+
+      expect(result).toEqual({
+        accessToken: 'new-access-token',
+        refreshToken: 'new-refresh-token',
+      });
+      expect(prismaService.employee.findUnique).not.toHaveBeenCalled();
+      expect(jwtTokenService.generateAccessToken).toHaveBeenCalledWith(
+        expect.objectContaining({ branches: [] }),
+      );
+    });
+
+    it('should still throw when the linked employee id does not resolve to a row', async () => {
+      prismaService.user.findUnique.mockResolvedValue({
+        id: 1,
+        phoneNumber: '0900000001',
+        userRoles: [{ role: { name: 'Employee' } }],
+        managerBranches: [],
+        employee: { id: 10 },
+      });
+      prismaService.employee.findUnique.mockResolvedValue(null);
+
+      await expect(service.refreshToken(session)).rejects.toThrow(
+        'Employee record not found for user',
+      );
+      expect(refreshTokenService.rotateRefreshToken).not.toHaveBeenCalled();
+    });
   });
 
   describe('logout', () => {
