@@ -1,11 +1,12 @@
 {
-  "name": "berd.em-backend",
+  "name": "staffhub-backend",
   "version": "0.0.1",
-  "description": "",
-  "author": "",
+  "description": "StaffHub Backend",
+  "author": "HoayMe Team",
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "postinstall": "prisma generate",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-StaffHub backend (`berd.em-backend`) is a NestJS 11 + Prisma REST API for employee shift scheduling, task assignment, time tracking, and payroll. Auth is phone number + password (primary) with Zalo OAuth as a secondary, optional identity link for staffhub-frontend — there is no separate Zalo Mini App consumer; Zalo login has no primary role anywhere in this system — plus a JWT access/refresh pair; authorization is a CASL-based permission system layered over a `Role`/`Permission`/`RolePermission` data model (see below).
+StaffHub backend (`staffhub-backend`) is a NestJS 11 + Prisma REST API for employee shift scheduling, task assignment, time tracking, and payroll. Auth is phone number + password (primary) with Zalo OAuth as a secondary, optional identity link for staffhub-frontend — there is no separate Zalo Mini App consumer; Zalo login has no primary role anywhere in this system — plus a JWT access/refresh pair; authorization is a CASL-based permission system layered over a `Role`/`Permission`/`RolePermission` data model (see below).
 
 **Docs note**: `AGENTS.md` covers the same ground as this file for non-Claude agents and is kept in sync — update both together. The project skills under `.claude/skills/` (`crud-generation`, `database-lifecycle`, `nestjs-prisma-expert`, `schema-review`, `test-writing`) match the current schema (`Int` autoincrement IDs, hard deletes). If any doc ever contradicts `prisma/schema.prisma` or the actual `src/` code, the code wins.
 
