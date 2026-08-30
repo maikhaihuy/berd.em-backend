@@ -83,14 +83,15 @@ enum AttendanceAction {
 // ==================== AUTH & USER MANAGEMENT ====================
 
 model User {
-  id           Int           @id @default(autoincrement())
-  phoneNumber  String        @unique
-  password     String?
-  fullName     String
-  avatarUrl    String?
-  status       UserStatus
-  employee     Employee? // optional relation
-  zaloIdentity ZaloIdentity?
+  id                 Int           @id @default(autoincrement())
+  phoneNumber        String        @unique
+  password           String?
+  fullName           String
+  avatarUrl          String?
+  status             UserStatus
+  mustChangePassword Boolean       @default(false)
+  employee           Employee? // optional relation
+  zaloIdentity       ZaloIdentity?
 
   userRoles       UserRole[]
   managerBranches ManagerBranch[]
@@ -683,14 +684,14 @@ model PayrollEntry {
 // `actorId` is a plain scalar, not a FK relation — same convention as
 // createdBy/updatedBy elsewhere in this schema.
 model AuditLog {
-  id         Int      @id @default(autoincrement())
-  actorId    Int
-  action     String
-  subject    String
-  entityId   Int
-  before     Json?
-  after      Json?
-  createdAt  DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  actorId   Int
+  action    String
+  subject   String
+  entityId  Int
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
 
   @@index([subject, createdAt])
   @@index([actorId])

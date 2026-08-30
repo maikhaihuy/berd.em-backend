@@ -34,7 +34,9 @@ import { DevLoginDto } from './dto/dev-login.dto';
 import { AuthSessionResponseDto } from './dto/auth-session-response.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LinkZaloDto } from './dto/link-zalo.dto';
+import { AllowWhilePasswordChangeRequired } from '@common/decorators/allow-while-password-change-required.decorator';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -130,6 +132,7 @@ export class AuthController {
   }
 
   @SkipPermissions()
+  @AllowWhilePasswordChangeRequired()
   @Post('logout-all')
   @ApiOperation({ summary: 'Logout from all devices' })
   @HttpCode(HttpStatus.OK)
@@ -186,6 +189,29 @@ export class AuthController {
       resetPasswordDto.newPassword,
     );
     return { message: 'Password reset successful.' };
+  }
+
+  @SkipPermissions()
+  @AllowWhilePasswordChangeRequired()
+  @Post('change-password')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: "Change the caller's own password",
+    description:
+      'Requires the correct current password even when a password change is required. On success, clears the mustChangePassword flag.',
+  })
+  @ApiBody({ type: ChangePasswordDto })
+  @HttpCode(HttpStatus.OK)
+  async changePassword(
+    @Body() changePasswordDto: ChangePasswordDto,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
+  ): Promise<{ message: string }> {
+    await this.authService.changePassword(
+      user.userId,
+      changePasswordDto.currentPassword,
+      changePasswordDto.newPassword,
+    );
+    return { message: 'Password changed successfully.' };
   }
 
   @SkipPermissions()

@@ -35,6 +35,7 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy) {
       userId: user.id,
       phone: user.phoneNumber,
       employeeId: user.employee?.id,
+      mustChangePassword: user.mustChangePassword,
       branches: user.employee?.employeeBranches.map((eb) => eb.branchId) ?? [],
       managedBranches: user.managerBranches.map((mb) => mb.branchId),
       roles: user.userRoles.map((ur) => ur.role.name),

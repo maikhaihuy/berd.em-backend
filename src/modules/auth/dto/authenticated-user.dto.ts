@@ -11,6 +11,9 @@ export class AuthenticatedUserDto {
   @ApiProperty()
   employeeId?: number;
 
+  @ApiProperty()
+  mustChangePassword!: boolean;
+
   @ApiProperty({ type: [String] })
   roles!: string[];
 
