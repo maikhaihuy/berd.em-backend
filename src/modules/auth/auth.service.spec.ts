@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Test, TestingModule } from '@nestjs/testing';
-import { UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import { AuthService } from './auth.service';
 import { RefreshTokenService } from './refresh-token.service';
 import { JwtTokenService } from './jwt-token.service';
@@ -9,6 +11,7 @@ import { ZaloAuthService } from './zalo-auth.service';
 import { PrismaService } from '@modules/prisma/prisma.service';
 import { AuthenticatedUserDto } from './dto/authenticated-user.dto';
 import { RefreshSessionDto } from './dto/refresh-session.dto';
+import { PasswordResetTokenService } from './password-reset-token.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -20,6 +23,10 @@ describe('AuthService', () => {
       update: jest.Mock;
       create: jest.Mock;
     };
+  };
+  let passwordResetTokenService: {
+    issueForUser: jest.Mock;
+    consume: jest.Mock;
   };
   let jwtTokenService: {
     generateAccessToken: jest.Mock;
@@ -68,6 +75,10 @@ describe('AuthService', () => {
       verifyAccessToken: jest.fn(),
       getPhoneNumber: jest.fn(),
     };
+    passwordResetTokenService = {
+      issueForUser: jest.fn(),
+      consume: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -83,6 +94,10 @@ describe('AuthService', () => {
         {
           provide: ConfigService,
           useValue: { get: jest.fn(), getOrThrow: jest.fn() },
+        },
+        {
+          provide: PasswordResetTokenService,
+          useValue: passwordResetTokenService,
         },
       ],
     }).compile();
@@ -199,6 +214,109 @@ describe('AuthService', () => {
       await expect(
         service.loginWithZalo({ accessToken: 'bad' }),
       ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('forgotPassword', () => {
+    it('issues a reset token when the username matches a user', async () => {
+      prismaService.user.findUnique.mockResolvedValue({ id: 1 });
+
+      await service.forgotPassword('0900000001');
+
+      expect(passwordResetTokenService.issueForUser).toHaveBeenCalledWith(1);
+    });
+
+    it('does nothing (but still resolves) when the username has no match', async () => {
+      prismaService.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.forgotPassword('0900000000'),
+      ).resolves.toBeUndefined();
+      expect(passwordResetTokenService.issueForUser).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('delegates to PasswordResetTokenService.consume', async () => {
+      passwordResetTokenService.consume.mockResolvedValue(undefined);
+
+      await service.resetPassword('raw-token', 'newPassword123');
+
+      expect(passwordResetTokenService.consume).toHaveBeenCalledWith(
+        'raw-token',
+        'newPassword123',
+      );
+    });
+  });
+
+  describe('linkZalo', () => {
+    it('creates a ZaloIdentity for the caller when the token is valid', async () => {
+      zaloAuthService.verifyAccessToken.mockResolvedValue({
+        zaloUserId: 'zalo-123',
+        fullName: 'Test User',
+        avatarUrl: null,
+      });
+      prismaService.zaloIdentity.create.mockResolvedValue({});
+
+      await service.linkZalo(1, 'valid-token');
+
+      expect(prismaService.zaloIdentity.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId: 1,
+            zaloUserId: 'zalo-123',
+          }),
+        }),
+      );
+    });
+
+    it('rejects an invalid Zalo access token', async () => {
+      zaloAuthService.verifyAccessToken.mockResolvedValue({
+        zaloUserId: undefined,
+      });
+
+      await expect(service.linkZalo(1, 'bad')).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(prismaService.zaloIdentity.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects when the caller already has a linked Zalo identity', async () => {
+      zaloAuthService.verifyAccessToken.mockResolvedValue({
+        zaloUserId: 'zalo-123',
+        fullName: 'Test User',
+        avatarUrl: null,
+      });
+      prismaService.zaloIdentity.create.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '6.13.0',
+          meta: { target: ['userId'] },
+        }),
+      );
+
+      await expect(service.linkZalo(1, 'valid-token')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('rejects when the Zalo identity is already linked to a different user', async () => {
+      zaloAuthService.verifyAccessToken.mockResolvedValue({
+        zaloUserId: 'zalo-123',
+        fullName: 'Test User',
+        avatarUrl: null,
+      });
+      prismaService.zaloIdentity.create.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '6.13.0',
+          meta: { target: ['zaloUserId'] },
+        }),
+      );
+
+      await expect(service.linkZalo(1, 'valid-token')).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 });

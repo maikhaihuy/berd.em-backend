@@ -3,11 +3,15 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { UsersService } from './user.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogsService } from '@modules/audit-logs/audit-logs.service';
+import { PasswordService } from '@common/services/password.service';
+import { PasswordResetTokenService } from '@modules/auth/password-reset-token.service';
 import { Prisma } from '@prisma/client';
 
 describe('UsersService', () => {
   let prisma: Partial<PrismaService>;
   let auditLogsService: { record: jest.Mock };
+  let passwordService: { hash: jest.Mock; compare: jest.Mock };
+  let passwordResetTokenService: { issueForUser: jest.Mock };
   let service: UsersService;
 
   const baseUser = {
@@ -47,9 +51,21 @@ describe('UsersService', () => {
       } as any,
     };
     auditLogsService = { record: jest.fn() };
+    passwordService = {
+      hash: jest.fn().mockResolvedValue('hashed-password'),
+      compare: jest.fn(),
+    };
+    passwordResetTokenService = {
+      issueForUser: jest.fn().mockResolvedValue({
+        token: 'raw-reset-token',
+        expiresAt: new Date('2026-01-01T00:00:00Z'),
+      }),
+    };
     service = new UsersService(
       prisma as PrismaService,
       auditLogsService as unknown as AuditLogsService,
+      passwordService as unknown as PasswordService,
+      passwordResetTokenService as unknown as PasswordResetTokenService,
     );
   });
 
@@ -110,6 +126,51 @@ describe('UsersService', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(auditLogsService.record).not.toHaveBeenCalled();
     });
+
+    it('hashes the password and stores the hash when provided', async () => {
+      (prisma.user as any).findUnique.mockResolvedValue(null);
+      (prisma.role as any).findMany.mockResolvedValue([{ id: 1 }]);
+      (prisma.user as any).create.mockResolvedValue(baseUser);
+
+      await service.create(
+        {
+          phoneNumber: baseUser.phoneNumber,
+          fullName: baseUser.fullName,
+          roleIds: [1],
+          password: 'plaintext-pw',
+        } as any,
+        99,
+      );
+
+      expect(passwordService.hash).toHaveBeenCalledWith('plaintext-pw');
+      expect(prisma.user!.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ password: 'hashed-password' }),
+        }),
+      );
+    });
+
+    it('does not set a password field when none is provided', async () => {
+      (prisma.user as any).findUnique.mockResolvedValue(null);
+      (prisma.role as any).findMany.mockResolvedValue([{ id: 1 }]);
+      (prisma.user as any).create.mockResolvedValue(baseUser);
+
+      await service.create(
+        {
+          phoneNumber: baseUser.phoneNumber,
+          fullName: baseUser.fullName,
+          roleIds: [1],
+        } as any,
+        99,
+      );
+
+      expect(passwordService.hash).not.toHaveBeenCalled();
+      expect(prisma.user!.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.not.objectContaining({ password: expect.anything() }),
+        }),
+      );
+    });
   });
 
   describe('update', () => {
@@ -147,6 +208,65 @@ describe('UsersService', () => {
         service.update(1, { fullName: 'x' } as any, 99),
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(auditLogsService.record).not.toHaveBeenCalled();
+    });
+
+    it('hashes and replaces the password when provided', async () => {
+      (prisma.user as any).findUnique.mockResolvedValue(baseUser);
+      (prisma.user as any).update.mockResolvedValue(baseUser);
+
+      await service.update(1, { password: 'new-plaintext-pw' } as any, 99);
+
+      expect(passwordService.hash).toHaveBeenCalledWith('new-plaintext-pw');
+      expect(prisma.user!.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ password: 'hashed-password' }),
+        }),
+      );
+    });
+
+    it('leaves the stored password untouched when omitted', async () => {
+      (prisma.user as any).findUnique.mockResolvedValue(baseUser);
+      (prisma.user as any).update.mockResolvedValue(baseUser);
+
+      await service.update(1, { fullName: 'Updated Name' } as any, 99);
+
+      expect(passwordService.hash).not.toHaveBeenCalled();
+      expect(prisma.user!.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.not.objectContaining({ password: expect.anything() }),
+        }),
+      );
+    });
+  });
+
+  describe('generatePasswordResetToken', () => {
+    it('issues a token and records an audit log entry without the raw token', async () => {
+      (prisma.user as any).findUnique.mockResolvedValue(baseUser);
+
+      const result = await service.generatePasswordResetToken(1, 99);
+
+      expect(passwordResetTokenService.issueForUser).toHaveBeenCalledWith(1);
+      expect(result.token).toBe('raw-reset-token');
+      expect(auditLogsService.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 99,
+          subject: 'users',
+          entityId: 1,
+        }),
+      );
+      const recordCall = auditLogsService.record.mock.calls[0][0] as {
+        after?: Record<string, unknown>;
+      };
+      expect(JSON.stringify(recordCall.after)).not.toContain('raw-reset-token');
+    });
+
+    it('throws NotFoundException when the user does not exist', async () => {
+      (prisma.user as any).findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.generatePasswordResetToken(999, 99),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(passwordResetTokenService.issueForUser).not.toHaveBeenCalled();
     });
   });
 

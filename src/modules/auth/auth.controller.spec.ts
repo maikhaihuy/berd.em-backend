@@ -49,6 +49,9 @@ describe('AuthController', () => {
             login: jest.fn(),
             refreshToken: jest.fn(),
             logout: jest.fn(),
+            forgotPassword: jest.fn(),
+            resetPassword: jest.fn(),
+            linkZalo: jest.fn(),
           },
         },
         {
@@ -174,6 +177,55 @@ describe('AuthController', () => {
       expect(refreshTokenService.getUserActiveTokens).toHaveBeenCalledWith(
         authUser.userId,
       );
+    });
+  });
+
+  describe('forgotPassword', () => {
+    it('always returns a generic success message', async () => {
+      const forgotSpy = jest
+        .spyOn(authService, 'forgotPassword')
+        .mockResolvedValue(undefined);
+
+      const result = await controller.forgotPassword({
+        username: '0900000001',
+      });
+
+      expect(forgotSpy).toHaveBeenCalledWith('0900000001');
+      expect(result).toEqual({
+        message: 'If the account exists, a reset token was issued.',
+      });
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('completes the reset and returns a success message', async () => {
+      const resetSpy = jest
+        .spyOn(authService, 'resetPassword')
+        .mockResolvedValue(undefined);
+
+      const result = await controller.resetPassword({
+        token: 'raw-token',
+        newPassword: 'newPassword123',
+      });
+
+      expect(resetSpy).toHaveBeenCalledWith('raw-token', 'newPassword123');
+      expect(result).toEqual({ message: 'Password reset successful.' });
+    });
+  });
+
+  describe('linkZalo', () => {
+    it('links the Zalo identity for the authenticated caller', async () => {
+      const linkSpy = jest
+        .spyOn(authService, 'linkZalo')
+        .mockResolvedValue(undefined);
+
+      const result = await controller.linkZalo(
+        { accessToken: 'zalo-token' },
+        authUser,
+      );
+
+      expect(linkSpy).toHaveBeenCalledWith(authUser.userId, 'zalo-token');
+      expect(result).toEqual({ message: 'Zalo account linked successfully.' });
     });
   });
 

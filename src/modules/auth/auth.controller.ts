@@ -22,8 +22,6 @@ import { RefreshTokenService } from './refresh-token.service';
 import { JwtRefreshGuard } from '@common/guards/jwt-refresh.guard';
 import { Public } from '@common/decorators/public.decorator';
 import { SkipPermissions } from '@common/decorators/skip-permissions.decorator';
-// Deprecated imports removed: LoginDto, RegisterDto, ForgotPasswordDto, ResetPasswordDto
-// These are no longer used since Zalo authentication is now the primary method
 import { RefreshSession } from './decorators/refresh-session.decorator';
 import { AuthenticatedUser } from './decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from './dto/authenticated-user.dto';
@@ -34,6 +32,9 @@ import { LoginDto } from './dto/login.dto';
 import { LocalAuthGuard } from '@common/guards/local-auth.guard';
 import { DevLoginDto } from './dto/dev-login.dto';
 import { AuthSessionResponseDto } from './dto/auth-session-response.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { LinkZaloDto } from './dto/link-zalo.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -154,6 +155,54 @@ export class AuthController {
     };
   }
 
-  // DEPRECATED: Password reset endpoints removed
-  // No longer needed with Zalo phone number authentication
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 attempts per minute
+  @Post('forgot-password')
+  @ApiOperation({
+    summary: 'Request a password reset token',
+    description:
+      'Always responds 200 OK regardless of whether the username matches an account, so the response never reveals account existence.',
+  })
+  @ApiBody({ type: ForgotPasswordDto })
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(
+    @Body() forgotPasswordDto: ForgotPasswordDto,
+  ): Promise<{ message: string }> {
+    await this.authService.forgotPassword(forgotPasswordDto.username);
+    return { message: 'If the account exists, a reset token was issued.' };
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 attempts per minute
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Complete a password reset with a valid token' })
+  @ApiBody({ type: ResetPasswordDto })
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(
+    @Body() resetPasswordDto: ResetPasswordDto,
+  ): Promise<{ message: string }> {
+    await this.authService.resetPassword(
+      resetPasswordDto.token,
+      resetPasswordDto.newPassword,
+    );
+    return { message: 'Password reset successful.' };
+  }
+
+  @SkipPermissions()
+  @Post('link/zalo')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: "Link a Zalo identity to the caller's own account",
+    description:
+      'Authenticated, self-service linking — independent of POST /auth/login/zalo. Does not require the caller to have logged in via Zalo.',
+  })
+  @ApiBody({ type: LinkZaloDto })
+  @HttpCode(HttpStatus.OK)
+  async linkZalo(
+    @Body() linkZaloDto: LinkZaloDto,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
+  ): Promise<{ message: string }> {
+    await this.authService.linkZalo(user.userId, linkZaloDto.accessToken);
+    return { message: 'Zalo account linked successfully.' };
+  }
 }

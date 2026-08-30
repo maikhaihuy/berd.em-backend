@@ -19,6 +19,7 @@ import { PasswordService } from '../../common/services/password.service';
 import { ZaloAuthService } from './zalo-auth.service';
 import { ZaloLoginDto } from './dto/zalo-login.dto';
 import { DevLoginDto } from './dto/dev-login.dto';
+import { PasswordResetTokenService } from './password-reset-token.service';
 import { AuthSessionResponseDto } from './dto/auth-session-response.dto';
 import {
   userWithEmployeeInclude,
@@ -80,6 +81,7 @@ export class AuthService {
     private readonly passwordService: PasswordService,
     private readonly zaloAuthService: ZaloAuthService,
     private readonly configService: ConfigService,
+    private readonly passwordResetTokenService: PasswordResetTokenService,
   ) {}
 
   /**
@@ -489,16 +491,65 @@ export class AuthService {
     return [...candidates];
   }
 
-  // DEPRECATED: Password reset methods - no longer needed with Zalo auth
-  // async forgotPassword(email: string): Promise<void> {
-  //   throw new BadRequestException(
-  //     'Password reset is not available. Please use Zalo login.',
-  //   );
-  // }
+  /**
+   * Always resolves regardless of whether `username` matches a User, so the
+   * response never reveals whether an account exists.
+   */
+  async forgotPassword(username: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { phoneNumber: username },
+    });
 
-  // async resetPassword(token: string, newPassword: string): Promise<void> {
-  //   throw new BadRequestException(
-  //     'Password reset is not available. Please use Zalo login.',
-  //   );
-  // }
+    if (user) {
+      await this.passwordResetTokenService.issueForUser(user.id);
+    }
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    await this.passwordResetTokenService.consume(token, newPassword);
+  }
+
+  /**
+   * Links a verified Zalo identity to an already-authenticated User,
+   * independent of `loginWithZalo` — the caller need not have logged in via
+   * Zalo at all.
+   */
+  async linkZalo(userId: number, accessToken: string): Promise<void> {
+    const zaloProfile =
+      await this.zaloAuthService.verifyAccessToken(accessToken);
+
+    if (!zaloProfile.zaloUserId) {
+      throw new UnauthorizedException('Invalid Zalo access token');
+    }
+
+    try {
+      await this.prisma.zaloIdentity.create({
+        data: {
+          userId,
+          zaloUserId: zaloProfile.zaloUserId,
+          displayName: zaloProfile.fullName,
+          avatarUrl: zaloProfile.avatarUrl,
+          lastVerifiedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const target = (error.meta?.target as string[] | undefined) ?? [];
+
+        if (target.includes('userId')) {
+          throw new BadRequestException(
+            'This account already has a linked Zalo identity.',
+          );
+        }
+
+        throw new BadRequestException(
+          'This Zalo account is already linked to another user.',
+        );
+      }
+      throw error;
+    }
+  }
 }

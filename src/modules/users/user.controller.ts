@@ -104,6 +104,25 @@ export class UsersController {
   }
 
   @RequirePermissions({ action: 'update', subject: 'users' })
+  @Post(':id/password-reset-token')
+  @ApiOperation({
+    summary: "Generate a password reset token for a user's account (admin)",
+    description:
+      'Returns the raw reset token so an Admin can relay it to the user out of band; the token is single-use and short-lived.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The reset token and its expiry.',
+  })
+  @ApiResponse({ status: 404, description: 'User not found.' })
+  async generatePasswordResetToken(
+    @Param('id', ParseIntPipe) id: number,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
+  ): Promise<{ token: string; expiresAt: Date }> {
+    return this.usersService.generatePasswordResetToken(id, user.userId);
+  }
+
+  @RequirePermissions({ action: 'update', subject: 'users' })
   @Post(':id/roles')
   @ApiOperation({ summary: "Assign one or more roles to a user's account" })
   @ApiResponse({
