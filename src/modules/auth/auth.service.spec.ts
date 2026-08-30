@@ -16,7 +16,7 @@ import { PasswordResetTokenService } from './password-reset-token.service';
 describe('AuthService', () => {
   let service: AuthService;
   let prismaService: {
-    user: { findUnique: jest.Mock; findFirst: jest.Mock };
+    user: { findUnique: jest.Mock; findFirst: jest.Mock; update: jest.Mock };
     employee: { findUnique: jest.Mock; findFirst: jest.Mock };
     zaloIdentity: {
       findUnique: jest.Mock;
@@ -24,6 +24,7 @@ describe('AuthService', () => {
       create: jest.Mock;
     };
   };
+  let passwordService: { compare: jest.Mock; hash: jest.Mock };
   let passwordResetTokenService: {
     issueForUser: jest.Mock;
     consume: jest.Mock;
@@ -54,7 +55,7 @@ describe('AuthService', () => {
 
   beforeEach(async () => {
     prismaService = {
-      user: { findUnique: jest.fn(), findFirst: jest.fn() },
+      user: { findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
       employee: { findUnique: jest.fn(), findFirst: jest.fn() },
       zaloIdentity: {
         findUnique: jest.fn(),
@@ -62,6 +63,7 @@ describe('AuthService', () => {
         create: jest.fn(),
       },
     };
+    passwordService = { compare: jest.fn(), hash: jest.fn() };
     jwtTokenService = {
       generateAccessToken: jest.fn(),
       parseExpirationTime: jest.fn(),
@@ -88,7 +90,7 @@ describe('AuthService', () => {
         { provide: RefreshTokenService, useValue: refreshTokenService },
         {
           provide: PasswordService,
-          useValue: { compare: jest.fn(), hash: jest.fn() },
+          useValue: passwordService,
         },
         { provide: ZaloAuthService, useValue: zaloAuthService },
         {
@@ -288,6 +290,43 @@ describe('AuthService', () => {
         'raw-token',
         'newPassword123',
       );
+    });
+  });
+
+  describe('changePassword', () => {
+    it('hashes and persists the new password and clears mustChangePassword on a correct current password', async () => {
+      prismaService.user.findUnique.mockResolvedValue({
+        id: 1,
+        password: 'stored-hash',
+      });
+      passwordService.compare.mockResolvedValue(true);
+      passwordService.hash.mockResolvedValue('new-hash');
+
+      await service.changePassword(1, 'currentPassword123', 'newPassword123');
+
+      expect(passwordService.compare).toHaveBeenCalledWith(
+        'currentPassword123',
+        'stored-hash',
+      );
+      expect(passwordService.hash).toHaveBeenCalledWith('newPassword123');
+      expect(prismaService.user.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { password: 'new-hash', mustChangePassword: false },
+      });
+    });
+
+    it('rejects and leaves state unchanged when the current password does not match', async () => {
+      prismaService.user.findUnique.mockResolvedValue({
+        id: 1,
+        password: 'stored-hash',
+      });
+      passwordService.compare.mockResolvedValue(false);
+
+      await expect(
+        service.changePassword(1, 'wrongPassword', 'newPassword123'),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(prismaService.user.update).not.toHaveBeenCalled();
     });
   });
 

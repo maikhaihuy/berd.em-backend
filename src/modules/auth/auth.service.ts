@@ -510,6 +510,37 @@ export class AuthService {
   }
 
   /**
+   * Authenticated, logged-in password change — distinct from the
+   * token-based forgot/reset flow above, which is for a logged-out user.
+   * Requires `currentPassword` to match even when `mustChangePassword` is
+   * set, so a valid access token alone is never enough on its own.
+   */
+  async changePassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user?.password) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const matches = await this.passwordService.compare(
+      currentPassword,
+      user.password,
+    );
+    if (!matches) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const hashedPassword = await this.passwordService.hash(newPassword);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword, mustChangePassword: false },
+    });
+  }
+
+  /**
    * Links a verified Zalo identity to an already-authenticated User,
    * independent of `loginWithZalo` — the caller need not have logged in via
    * Zalo at all.

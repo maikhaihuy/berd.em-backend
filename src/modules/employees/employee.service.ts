@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { EmployeeResponseDto } from './dto/employee-response.dto';
-import { Prisma } from '@prisma/client';
+import { Prisma, UserStatus } from '@prisma/client';
 import { UpsertEmployeeHourlyRateDto } from '@modules/employee-hourly-rates/dto/upsert-employee-hourly-rate.dto';
 import { EmployeeHourlyRateResponseDto } from '@modules/employee-hourly-rates/dto/employee-hourly-rate-response.dto';
 import { EmployeeMapper } from './employee.mapper';
@@ -16,12 +16,19 @@ import {
 import { EmployeeHourlyRatesMapper } from '@modules/employee-hourly-rates/employee-hourly-rates.mapper';
 import type { AppAbility } from '@modules/casl/casl-ability.factory';
 import { accessibleWhere } from '@modules/casl/accessible-where';
+import { PasswordService } from '@common/services/password.service';
+import { AuditLogsService } from '@modules/audit-logs/audit-logs.service';
 
 const SUBJECT = 'employees';
+const EMPLOYEE_ROLE_NAME = 'Employee';
 
 @Injectable()
 export class EmployeesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private passwordService: PasswordService,
+    private auditLogsService: AuditLogsService,
+  ) {}
 
   async create(
     createEmployeeDto: CreateEmployeeDto,
@@ -62,24 +69,77 @@ export class EmployeesService {
     }
 
     try {
-      const employee = await this.prisma.employee.create({
-        data: {
-          ...employeeData,
-          createdBy: currentUserId,
-          updatedBy: currentUserId,
-          employeeBranches:
-            branchIds && branchIds.length > 0
-              ? {
-                  create: branchIds.map((branchId) => ({
-                    branchId,
-                    isPrimary: branchId === primaryBranchId,
-                  })),
-                }
-              : undefined,
-        },
-        include: {
-          ...employeeWithBranchesInclude,
-        },
+      const employee = await this.prisma.$transaction(async (tx) => {
+        // A pre-existing User with this phone number is not silently reused
+        // or overwritten — reject loudly and let the Admin resolve it
+        // manually.
+        const existingUser = await tx.user.findUnique({
+          where: { phoneNumber: employeeData.phoneNumber },
+        });
+        if (existingUser) {
+          throw new FieldValidationException(
+            'phoneNumber',
+            'A user account with this phone number already exists',
+          );
+        }
+
+        const employeeRole = await tx.role.findFirstOrThrow({
+          where: { name: EMPLOYEE_ROLE_NAME },
+        });
+
+        const hashedPassword = await this.passwordService.hash(
+          employeeData.phoneNumber,
+        );
+
+        const user = await tx.user.create({
+          data: {
+            phoneNumber: employeeData.phoneNumber,
+            fullName: employeeData.fullName,
+            password: hashedPassword,
+            status: UserStatus.ACTIVE,
+            mustChangePassword: true,
+            userRoles: {
+              create: [{ roleId: employeeRole.id }],
+            },
+          },
+        });
+
+        await this.auditLogsService.record(
+          {
+            actorId: currentUserId,
+            action: 'create',
+            subject: 'users',
+            entityId: user.id,
+            after: {
+              phoneNumber: user.phoneNumber,
+              fullName: user.fullName,
+              status: user.status,
+              mustChangePassword: user.mustChangePassword,
+            },
+          },
+          tx,
+        );
+
+        return tx.employee.create({
+          data: {
+            ...employeeData,
+            userId: user.id,
+            createdBy: currentUserId,
+            updatedBy: currentUserId,
+            employeeBranches:
+              branchIds && branchIds.length > 0
+                ? {
+                    create: branchIds.map((branchId) => ({
+                      branchId,
+                      isPrimary: branchId === primaryBranchId,
+                    })),
+                  }
+                : undefined,
+          },
+          include: {
+            ...employeeWithBranchesInclude,
+          },
+        });
       });
 
       return EmployeeMapper.toDtoWithBranches(employee);
