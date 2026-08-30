@@ -70,6 +70,27 @@ grant whose condition can't be resolved is dropped for that request (fails
 closed per-rule, not per-request) rather than throwing. See
 `openspec/specs/authorization/spec.md` for the full behavioral spec and
 `src/common/guards/permission-condition.helper.ts` for the resolver.
+`src/modules/casl/casl-ability.factory.ts` (`CaslAbilityFactory`) builds a
+real `@casl/ability` `Ability` (via `@casl/prisma`) for every request, from
+the caller's `Role` → `RolePermission` → `Permission` grants, unioned across
+every `Role` the caller holds (`User` ↔ `Role` is **many-to-many** via the
+`UserRole` join table — a `User` always holds at least one `Role`;
+`POST /users/:id/roles` / `DELETE /users/:id/roles/:roleId` manage the
+assignment). `action: 'manage'` and `subject: 'all'` act as CASL's own
+built-in wildcards. A handful of privileged sub-operations are modeled as
+their own dedicated actions rather than folded into `update` (e.g.
+`check-in`/`check-out` on assignments, `approve`/`cancel` on leave-requests,
+`verify` on time-logs, `generate` on master-shifts, `complete` on tasks) so a
+role can hold self-service rights without full edit rights on the subject.
+
+`RolePermission.condition` (`Json?`) gives a role's grant of a permission
+row-level scope: `"$self"` resolves to the caller's `employeeId`/`userId`,
+`"$managedBranches"` resolves to the caller's managed branch ids (via
+`ManagerBranch`) — e.g. `{ "branchId": { "in": "$managedBranches" } }`. A
+grant whose condition can't be resolved is dropped for that request (fails
+closed per-rule, not per-request) rather than throwing. See
+`openspec/specs/authorization/spec.md` for the full behavioral spec and
+`src/common/guards/permission-condition.helper.ts` for the resolver.
 
 ### Auth flows
 
@@ -95,6 +116,8 @@ closed per-rule, not per-request) rather than throwing. See
 - **Dev login**: bypasses Zalo and password for local/frontend development,
   gated by an env flag + shared secret header, and hard-disabled when
   `NODE_ENV=production`.
+- **Password login** exists on `User` but is being phased out in favor of
+  Zalo; password-reset flows are deprecated.
 - Access + refresh JWT pair; refresh tokens are persisted hashed (rotation +
   revocation, per-session `source`/`device`/`ipAddress` tracking).
 
@@ -169,7 +192,23 @@ tools and are kept in sync. `.claude/skills/` holds project-specific skills
 `schema-review`, `test-writing`) plus the OpenSpec workflow skills
 (`openspec-*`); all are current with `prisma/schema.prisma` and the actual
 `src/` code.
+`TransformInterceptor` (`src/common/interceptors/transform.interceptor.ts`)
+exists in the tree but is not wired into the app — don't assume responses are
+wrapped. `AGENTS.md` and `CLAUDE.md` cover the same ground for different
+tools and are kept in sync. `.claude/skills/` holds project-specific skills
+(`crud-generation`, `database-lifecycle`, `nestjs-prisma-expert`,
+`schema-review`, `test-writing`) plus the OpenSpec workflow skills
+(`openspec-*`); all are current with `prisma/schema.prisma` and the actual
+`src/` code.
 
+**Resync note (2026-08-26)**: this file previously described authorization as
+"custom RBAC, not CASL" with `@casl/ability`/`@casl/prisma` as unused dead
+dependencies, and `User`↔`Role` as one-role-per-user. Both were stale —
+CASL was adopted in the archived change `2026-08-25-adopt-casl-authorization`
+and multi-role support landed in `2026-08-26-rbac-multi-role-managed-branches`,
+but this file was never resynced afterward even though it's fed into every
+`/opsx:propose` run. Corrected above; re-check this file after future
+archived changes touching auth/authorization.
 **Resync note (2026-08-26)**: this file previously described authorization as
 "custom RBAC, not CASL" with `@casl/ability`/`@casl/prisma` as unused dead
 dependencies, and `User`↔`Role` as one-role-per-user. Both were stale —
