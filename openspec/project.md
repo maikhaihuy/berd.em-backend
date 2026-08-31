@@ -2,7 +2,7 @@
 
 ## Purpose
 
-StaffHub backend (`berd.em-backend`): a REST API for employee shift
+StaffHub backend (`staffhub-backend`): a REST API for employee shift
 scheduling, task assignment, attendance/time tracking, and payroll for a
 multi-branch business (e.g. retail/F&B branches). Employees register
 availability for shifts, get assigned, check in/out, request leave with a
