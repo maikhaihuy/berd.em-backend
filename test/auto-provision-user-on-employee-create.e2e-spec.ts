@@ -10,6 +10,14 @@ import { AppModule } from './../src/app.module';
  *
  * Requires DATABASE_URL to point at a reachable, seeded database.
  */
+
+/** Decodes a JWT's payload segment without verifying its signature. */
+function decodeJwtPayload(token: string): Record<string, unknown> {
+  const payloadSegment = token.split('.')[1];
+  const json = Buffer.from(payloadSegment, 'base64').toString('utf8');
+  return JSON.parse(json) as Record<string, unknown>;
+}
+
 describe('Auto-provision User on Employee create (e2e)', () => {
   let app: INestApplication;
   let adminToken: string;
@@ -17,6 +25,8 @@ describe('Auto-provision User on Employee create (e2e)', () => {
 
   let testEmployeeId: number;
   let testUserId: number;
+  let temporaryPassword: string;
+  let employeeToken: string;
   const testEmployeePhone = `09099${Date.now() % 100000}`;
 
   beforeAll(async () => {
@@ -78,16 +88,41 @@ describe('Auto-provision User on Employee create (e2e)', () => {
 
       testEmployeeId = employeeRes.body.id as number;
       expect(testEmployeeId).toBeDefined();
+      temporaryPassword = employeeRes.body.temporaryPassword as string;
+      expect(temporaryPassword).toBeDefined();
+      expect(temporaryPassword).not.toBe(testEmployeePhone);
 
       const login = await request(app.getHttpServer())
         .post('/auth/login')
         .send({
           username: testEmployeePhone,
-          password: testEmployeePhone,
+          password: temporaryPassword,
         })
         .expect(200);
 
       expect(login.body.accessToken).toBeDefined();
+      employeeToken = login.body.accessToken as string;
+
+      // The freshly issued access token flags the caller as needing a
+      // password change.
+      const decodedLoginToken = decodeJwtPayload(employeeToken);
+      expect(decodedLoginToken.mustChangePassword).toBe(true);
+
+      // A refreshed access token still carries the (still-true) flag.
+      const refreshRes = await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .send({ refreshToken: login.body.refreshToken as string })
+        .expect(200);
+      const decodedRefreshedToken = decodeJwtPayload(
+        refreshRes.body.accessToken as string,
+      );
+      expect(decodedRefreshedToken.mustChangePassword).toBe(true);
+
+      // The phone number itself is no longer a valid password.
+      await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ username: testEmployeePhone, password: testEmployeePhone })
+        .expect(401);
 
       const employeeDetail = await request(app.getHttpServer())
         .get(`/employees/${testEmployeeId}`)
@@ -95,6 +130,8 @@ describe('Auto-provision User on Employee create (e2e)', () => {
         .expect(200);
       testUserId = employeeDetail.body.user?.id as number;
       expect(testUserId).toBeDefined();
+      // The one-time credential is never echoed back on GET.
+      expect(employeeDetail.body.temporaryPassword).toBeUndefined();
     });
 
     it('rejects creating a second Employee with a phone number that already belongs to a User', async () => {
@@ -112,19 +149,6 @@ describe('Auto-provision User on Employee create (e2e)', () => {
   });
 
   describe('forced password change', () => {
-    let employeeToken: string;
-
-    beforeAll(async () => {
-      const login = await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({
-          username: testEmployeePhone,
-          password: testEmployeePhone,
-        })
-        .expect(200);
-      employeeToken = login.body.accessToken as string;
-    });
-
     it('blocks a non-exempt authenticated route with PASSWORD_CHANGE_REQUIRED', async () => {
       const res = await request(app.getHttpServer())
         .get('/me/abilities')
@@ -152,7 +176,7 @@ describe('Auto-provision User on Employee create (e2e)', () => {
         .post('/auth/change-password')
         .set('Authorization', `Bearer ${employeeToken}`)
         .send({
-          currentPassword: testEmployeePhone,
+          currentPassword: temporaryPassword,
           newPassword: 'NewEmployeePass123',
         })
         .expect(200);
@@ -162,10 +186,10 @@ describe('Auto-provision User on Employee create (e2e)', () => {
         .set('Authorization', `Bearer ${employeeToken}`)
         .expect(200);
 
-      // Old (phone-derived) password no longer works.
+      // Old one-time credential no longer works.
       await request(app.getHttpServer())
         .post('/auth/login')
-        .send({ username: testEmployeePhone, password: testEmployeePhone })
+        .send({ username: testEmployeePhone, password: temporaryPassword })
         .expect(401);
 
       await request(app.getHttpServer())
@@ -177,6 +201,9 @@ describe('Auto-provision User on Employee create (e2e)', () => {
         .expect(200)
         .expect((res) => {
           expect(res.body.accessToken).toBeDefined();
+          // The flag is cleared, so a fresh login token reflects that.
+          const decoded = decodeJwtPayload(res.body.accessToken as string);
+          expect(decoded.mustChangePassword).toBe(false);
         });
     });
   });

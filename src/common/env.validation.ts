@@ -40,6 +40,10 @@ export class EnvVariables {
   AUTH_DEV_SECRET?: string;
 
   @IsString()
+  @IsOptional()
+  INITIAL_PASSWORD_TTL_DAYS?: string;
+
+  @IsString()
   @IsNotEmpty()
   CORS_ALLOWED_ORIGINS: string;
 }

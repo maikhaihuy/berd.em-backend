@@ -12,7 +12,10 @@ import {
 import { EmployeesService } from './employee.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
-import { EmployeeResponseDto } from './dto/employee-response.dto';
+import {
+  EmployeeCreatedResponseDto,
+  EmployeeResponseDto,
+} from './dto/employee-response.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { EmployeeHourlyRateResponseDto } from '@modules/employee-hourly-rates/dto/employee-hourly-rate-response.dto';
@@ -35,14 +38,15 @@ export class EmployeesController {
   })
   @ApiResponse({
     status: 201,
-    description: 'The employee has been successfully created.',
-    type: EmployeeResponseDto,
+    description:
+      'The employee has been successfully created. The response includes a one-time temporaryPassword — capture it now, it is never returned again.',
+    type: EmployeeCreatedResponseDto,
   })
   @ApiBody({ type: CreateEmployeeDto })
   async create(
     @Body() createEmployeeDto: CreateEmployeeDto,
     @AuthenticatedUser() currentUser: AuthenticatedUserDto,
-  ): Promise<EmployeeResponseDto> {
+  ): Promise<EmployeeCreatedResponseDto> {
     return await this.employeesService.create(
       createEmployeeDto,
       currentUser.userId,

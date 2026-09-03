@@ -48,6 +48,18 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Username or password are not match.');
     }
 
+    if (
+      user.mustChangePassword &&
+      user.mustChangePasswordExpiresAt &&
+      user.mustChangePasswordExpiresAt < new Date()
+    ) {
+      throw new UnauthorizedException({
+        message:
+          'This one-time password has expired. Ask an Admin to re-issue a new one.',
+        details: { code: 'INITIAL_PASSWORD_EXPIRED' },
+      });
+    }
+
     return new AuthenticatedUserDto({
       userId: user.id,
       phone: user.phoneNumber,

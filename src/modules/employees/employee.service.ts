@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { FieldValidationException } from '@common/exceptions/field-validation.exception';
 import { uniqueConstraintFields } from '@common/helpers/prisma-errors.helper';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
-import { EmployeeResponseDto } from './dto/employee-response.dto';
+import {
+  EmployeeCreatedResponseDto,
+  EmployeeResponseDto,
+} from './dto/employee-response.dto';
 import { Prisma, UserStatus } from '@prisma/client';
 import { UpsertEmployeeHourlyRateDto } from '@modules/employee-hourly-rates/dto/upsert-employee-hourly-rate.dto';
 import { EmployeeHourlyRateResponseDto } from '@modules/employee-hourly-rates/dto/employee-hourly-rate-response.dto';
@@ -28,12 +32,13 @@ export class EmployeesService {
     private prisma: PrismaService,
     private passwordService: PasswordService,
     private auditLogsService: AuditLogsService,
+    private configService: ConfigService,
   ) {}
 
   async create(
     createEmployeeDto: CreateEmployeeDto,
     currentUserId: number,
-  ): Promise<EmployeeResponseDto> {
+  ): Promise<EmployeeCreatedResponseDto> {
     const { branchIds, primaryBranchId, ...employeeData } = createEmployeeDto;
 
     // Verify branches if provided
@@ -69,7 +74,7 @@ export class EmployeesService {
     }
 
     try {
-      const employee = await this.prisma.$transaction(async (tx) => {
+      const result = await this.prisma.$transaction(async (tx) => {
         // A pre-existing User with this phone number is not silently reused
         // or overwritten — reject loudly and let the Admin resolve it
         // manually.
@@ -87,8 +92,13 @@ export class EmployeesService {
           where: { name: EMPLOYEE_ROLE_NAME },
         });
 
-        const hashedPassword = await this.passwordService.hash(
-          employeeData.phoneNumber,
+        const { password: temporaryPassword, hash: hashedPassword } =
+          await this.passwordService.generateOneTimeCredential();
+        const ttlDays = Number(
+          this.configService.get<string>('INITIAL_PASSWORD_TTL_DAYS') ?? 7,
+        );
+        const mustChangePasswordExpiresAt = new Date(
+          Date.now() + ttlDays * 24 * 60 * 60 * 1000,
         );
 
         const user = await tx.user.create({
@@ -98,6 +108,7 @@ export class EmployeesService {
             password: hashedPassword,
             status: UserStatus.ACTIVE,
             mustChangePassword: true,
+            mustChangePasswordExpiresAt,
             userRoles: {
               create: [{ roleId: employeeRole.id }],
             },
@@ -120,7 +131,7 @@ export class EmployeesService {
           tx,
         );
 
-        return tx.employee.create({
+        const createdEmployee = await tx.employee.create({
           data: {
             ...employeeData,
             userId: user.id,
@@ -140,9 +151,14 @@ export class EmployeesService {
             ...employeeWithBranchesInclude,
           },
         });
+
+        return { employee: createdEmployee, temporaryPassword };
       });
 
-      return EmployeeMapper.toDtoWithBranches(employee);
+      return {
+        ...EmployeeMapper.toDtoWithBranches(result.employee),
+        temporaryPassword: result.temporaryPassword,
+      };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {

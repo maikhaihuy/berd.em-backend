@@ -42,6 +42,7 @@ describe('AuthService', () => {
     verifyAccessToken: jest.Mock;
     getPhoneNumber: jest.Mock;
   };
+  let configService: { get: jest.Mock; getOrThrow: jest.Mock };
 
   const authUser = new AuthenticatedUserDto({
     userId: 1,
@@ -81,6 +82,7 @@ describe('AuthService', () => {
       issueForUser: jest.fn(),
       consume: jest.fn(),
     };
+    configService = { get: jest.fn(), getOrThrow: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -95,7 +97,7 @@ describe('AuthService', () => {
         { provide: ZaloAuthService, useValue: zaloAuthService },
         {
           provide: ConfigService,
-          useValue: { get: jest.fn(), getOrThrow: jest.fn() },
+          useValue: configService,
         },
         {
           provide: PasswordResetTokenService,
@@ -116,7 +118,20 @@ describe('AuthService', () => {
   });
 
   describe('login', () => {
-    it('should generate an access token and refresh token for the user', async () => {
+    it('re-fetches the User fresh and generates an access/refresh token pair fully populated from it', async () => {
+      prismaService.user.findUnique.mockResolvedValue({
+        id: 1,
+        phoneNumber: '0900000001',
+        status: 'ACTIVE',
+        mustChangePassword: true,
+        userRoles: [{ role: { name: 'Employee' } }],
+        managerBranches: [],
+        employee: { id: 10 },
+      });
+      prismaService.employee.findUnique.mockResolvedValue({
+        id: 10,
+        employeeBranches: [{ branch: { id: 5 } }],
+      });
       jwtTokenService.generateAccessToken.mockReturnValue('access-token');
       refreshTokenService.createRefreshToken.mockResolvedValue({
         token: 'refresh-token',
@@ -125,24 +140,37 @@ describe('AuthService', () => {
 
       const result = await service.login(authUser);
 
+      expect(prismaService.user.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: authUser.userId } }),
+      );
       expect(result).toEqual({
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
       });
       expect(jwtTokenService.generateAccessToken).toHaveBeenCalledWith({
-        sub: authUser.userId,
-        phone: authUser.phone,
-        empId: authUser.employeeId,
-        roles: authUser.roles,
-        branches: authUser.branches,
-        managedBranches: authUser.managedBranches,
+        sub: 1,
+        typ: 'access',
+        phone: '0900000001',
+        empId: 10,
+        roles: ['Employee'],
+        branches: [5],
+        managedBranches: [],
+        mustChangePassword: true,
       });
       expect(refreshTokenService.createRefreshToken).toHaveBeenCalledWith(
         expect.objectContaining({
-          sub: authUser.userId,
-          roles: authUser.roles,
+          sub: 1,
+          roles: ['Employee'],
+          mustChangePassword: true,
         }),
       );
+    });
+
+    it('throws when the User no longer exists', async () => {
+      prismaService.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.login(authUser)).rejects.toThrow('User not found');
+      expect(jwtTokenService.generateAccessToken).not.toHaveBeenCalled();
     });
   });
 
@@ -161,6 +189,7 @@ describe('AuthService', () => {
       prismaService.user.findUnique.mockResolvedValue({
         id: 1,
         phoneNumber: '0900000001',
+        mustChangePassword: true,
         userRoles: [{ role: { name: 'Employee' } }],
         managerBranches: [],
         employee: { id: 10 },
@@ -181,6 +210,9 @@ describe('AuthService', () => {
         accessToken: 'new-access-token',
         refreshToken: 'new-refresh-token',
       });
+      expect(jwtTokenService.generateAccessToken).toHaveBeenCalledWith(
+        expect.objectContaining({ mustChangePassword: true }),
+      );
       expect(refreshTokenService.rotateRefreshToken).toHaveBeenCalledWith(
         'old-token-id',
         expect.objectContaining({ sub: 1, roles: ['Employee'] }),
@@ -259,6 +291,84 @@ describe('AuthService', () => {
         service.loginWithZalo({ accessToken: 'bad' }),
       ).rejects.toThrow(UnauthorizedException);
     });
+
+    it('generates an access token carrying mustChangePassword for an existing linked identity', async () => {
+      zaloAuthService.verifyAccessToken.mockResolvedValue({
+        zaloUserId: 'zalo-1',
+        fullName: 'Zalo User',
+        avatarUrl: null,
+      });
+      prismaService.zaloIdentity.findUnique.mockResolvedValue({
+        id: 1,
+        user: {
+          id: 1,
+          phoneNumber: '0900000001',
+          status: 'ACTIVE',
+          mustChangePassword: true,
+          userRoles: [{ role: { name: 'Employee' } }],
+          managerBranches: [],
+          employee: null,
+        },
+      });
+      prismaService.zaloIdentity.update.mockResolvedValue({});
+      jwtTokenService.generateAccessToken.mockReturnValue('zalo-access-token');
+      refreshTokenService.createRefreshToken.mockResolvedValue({
+        token: 'zalo-refresh-token',
+        tokenRecord: {},
+      });
+
+      await service.loginWithZalo({ accessToken: 'good' });
+
+      expect(jwtTokenService.generateAccessToken).toHaveBeenCalledWith(
+        expect.objectContaining({ mustChangePassword: true }),
+      );
+    });
+  });
+
+  describe('loginWithDev', () => {
+    const devLoginDto = { employeeId: 42 };
+
+    beforeEach(() => {
+      const configValues: Record<string, string> = {
+        NODE_ENV: 'development',
+        AUTH_DEV_MODE: 'true',
+        AUTH_DEV_SECRET: 'dev-secret',
+      };
+      configService.get.mockImplementation((key: string) => configValues[key]);
+      configService.getOrThrow.mockImplementation(
+        (key: string) => configValues[key],
+      );
+      jwtTokenService.parseExpirationTime.mockReturnValue(3600000);
+    });
+
+    it('generates an access token carrying mustChangePassword for the dev employee', async () => {
+      prismaService.employee.findUnique.mockResolvedValue({
+        id: 42,
+        fullName: 'Dev Employee',
+        avatar: null,
+        employeeBranches: [{ branch: { id: 7 } }],
+        user: {
+          id: 1,
+          phoneNumber: '0900000001',
+          avatarUrl: null,
+          status: 'ACTIVE',
+          mustChangePassword: true,
+          userRoles: [{ role: { name: 'Employee', rolePermissions: [] } }],
+          managerBranches: [],
+        },
+      });
+      jwtTokenService.generateAccessToken.mockReturnValue('dev-access-token');
+      refreshTokenService.createRefreshToken.mockResolvedValue({
+        token: 'dev-refresh-token',
+        tokenRecord: {},
+      });
+
+      await service.loginWithDev(devLoginDto, 'dev-secret');
+
+      expect(jwtTokenService.generateAccessToken).toHaveBeenCalledWith(
+        expect.objectContaining({ mustChangePassword: true }),
+      );
+    });
   });
 
   describe('forgotPassword', () => {
@@ -311,7 +421,11 @@ describe('AuthService', () => {
       expect(passwordService.hash).toHaveBeenCalledWith('newPassword123');
       expect(prismaService.user.update).toHaveBeenCalledWith({
         where: { id: 1 },
-        data: { password: 'new-hash', mustChangePassword: false },
+        data: {
+          password: 'new-hash',
+          mustChangePassword: false,
+          mustChangePasswordExpiresAt: null,
+        },
       });
     });
 

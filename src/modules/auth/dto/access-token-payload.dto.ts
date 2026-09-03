@@ -6,6 +6,7 @@ export class AccessTokenPayloadDto {
   roles!: string[]; // Mỗi User có thể giữ nhiều role cùng lúc (via UserRole)
   branches!: number[]; // Danh sách ID chi nhánh mà nhân viên làm việc
   managedBranches!: number[]; // Danh sách ID chi nhánh được phép quản lý (ManagerBranch)
+  mustChangePassword!: boolean; // Bắt buộc đổi mật khẩu trước khi dùng các route khác
   iat?: number; // Issued at
   exp?: number; // Expires at
   jti?: string; // JWT ID (for refresh tokens)

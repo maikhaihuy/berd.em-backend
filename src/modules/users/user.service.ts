@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { UserResponseDto } from './dto/user-response.dto';
@@ -25,6 +26,7 @@ export class UsersService {
     private readonly auditLogsService: AuditLogsService,
     private readonly passwordService: PasswordService,
     private readonly passwordResetTokenService: PasswordResetTokenService,
+    private readonly configService: ConfigService,
   ) {}
 
   async create(
@@ -250,6 +252,45 @@ export class UsersService {
     });
 
     return result;
+  }
+
+  /**
+   * Re-issues a fresh one-time credential for a User whose original
+   * auto-provisioned password expired or was lost before handoff — the
+   * original is never retrievable again once its initial response is gone
+   * (see openspec password-account-recovery spec).
+   */
+  async reissueInitialPassword(
+    id: number,
+    currentUserId: number,
+  ): Promise<{ password: string; expiresAt: Date }> {
+    await this.assertUserExists(id);
+
+    const { password, hash } =
+      await this.passwordService.generateOneTimeCredential();
+    const ttlDays = Number(
+      this.configService.get<string>('INITIAL_PASSWORD_TTL_DAYS') ?? 7,
+    );
+    const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000);
+
+    await this.prisma.user.update({
+      where: { id },
+      data: {
+        password: hash,
+        mustChangePassword: true,
+        mustChangePasswordExpiresAt: expiresAt,
+      },
+    });
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'initial-password-reissued',
+      subject: SUBJECT,
+      entityId: id,
+      after: { mustChangePassword: true, expiresAt: expiresAt.toISOString() },
+    });
+
+    return { password, expiresAt };
   }
 
   async assignRoles(
