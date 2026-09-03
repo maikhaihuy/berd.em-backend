@@ -123,6 +123,27 @@ export class UsersController {
   }
 
   @RequirePermissions({ action: 'update', subject: 'users' })
+  @Post(':id/reissue-initial-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      "Re-issue a fresh one-time password for a User's unclaimed or expired account (admin)",
+    description:
+      'Returns the raw one-time password so an Admin can relay it to the user out of band; invalidates the previous credential and resets the password-change-required expiry.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The new one-time password and its expiry.',
+  })
+  @ApiResponse({ status: 404, description: 'User not found.' })
+  async reissueInitialPassword(
+    @Param('id', ParseIntPipe) id: number,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
+  ): Promise<{ password: string; expiresAt: Date }> {
+    return this.usersService.reissueInitialPassword(id, user.userId);
+  }
+
+  @RequirePermissions({ action: 'update', subject: 'users' })
   @Post(':id/roles')
   @ApiOperation({ summary: "Assign one or more roles to a user's account" })
   @ApiResponse({

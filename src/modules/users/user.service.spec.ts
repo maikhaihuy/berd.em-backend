@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method */
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { UsersService } from './user.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogsService } from '@modules/audit-logs/audit-logs.service';
@@ -10,8 +11,13 @@ import { Prisma } from '@prisma/client';
 describe('UsersService', () => {
   let prisma: Partial<PrismaService>;
   let auditLogsService: { record: jest.Mock };
-  let passwordService: { hash: jest.Mock; compare: jest.Mock };
+  let passwordService: {
+    hash: jest.Mock;
+    compare: jest.Mock;
+    generateOneTimeCredential: jest.Mock;
+  };
   let passwordResetTokenService: { issueForUser: jest.Mock };
+  let configService: { get: jest.Mock };
   let service: UsersService;
 
   const baseUser = {
@@ -54,6 +60,10 @@ describe('UsersService', () => {
     passwordService = {
       hash: jest.fn().mockResolvedValue('hashed-password'),
       compare: jest.fn(),
+      generateOneTimeCredential: jest.fn().mockResolvedValue({
+        password: 'RANDOM42',
+        hash: 'hashed-random-password',
+      }),
     };
     passwordResetTokenService = {
       issueForUser: jest.fn().mockResolvedValue({
@@ -61,11 +71,13 @@ describe('UsersService', () => {
         expiresAt: new Date('2026-01-01T00:00:00Z'),
       }),
     };
+    configService = { get: jest.fn().mockReturnValue(undefined) };
     service = new UsersService(
       prisma as PrismaService,
       auditLogsService as unknown as AuditLogsService,
       passwordService as unknown as PasswordService,
       passwordResetTokenService as unknown as PasswordResetTokenService,
+      configService as unknown as ConfigService,
     );
   });
 
@@ -267,6 +279,52 @@ describe('UsersService', () => {
         service.generatePasswordResetToken(999, 99),
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(passwordResetTokenService.issueForUser).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reissueInitialPassword', () => {
+    it('generates a fresh one-time credential, resets the flag and expiry, and audit-logs without the credential', async () => {
+      (prisma.user as any).findUnique.mockResolvedValue(baseUser);
+      (prisma.user as any).update.mockResolvedValue(baseUser);
+
+      const result = await service.reissueInitialPassword(1, 99);
+
+      expect(passwordService.generateOneTimeCredential).toHaveBeenCalled();
+      expect(prisma.user!.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: {
+          password: 'hashed-random-password',
+          mustChangePassword: true,
+          mustChangePasswordExpiresAt: expect.any(Date),
+        },
+      });
+      expect(result.password).toBe('RANDOM42');
+      expect(result.expiresAt).toBeInstanceOf(Date);
+      expect(auditLogsService.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 99,
+          action: 'initial-password-reissued',
+          subject: 'users',
+          entityId: 1,
+        }),
+      );
+      const recordCall = auditLogsService.record.mock.calls[0][0] as {
+        after?: Record<string, unknown>;
+      };
+      expect(JSON.stringify(recordCall.after)).not.toContain('RANDOM42');
+      expect(JSON.stringify(recordCall.after)).not.toContain(
+        'hashed-random-password',
+      );
+    });
+
+    it('throws NotFoundException when the user does not exist', async () => {
+      (prisma.user as any).findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.reissueInitialPassword(999, 99),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(passwordService.generateOneTimeCredential).not.toHaveBeenCalled();
+      expect(prisma.user!.update).not.toHaveBeenCalled();
     });
   });
 

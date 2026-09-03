@@ -119,5 +119,54 @@ describe('LocalStrategy', () => {
       );
       expect(passwordService.compare).not.toHaveBeenCalled();
     });
+
+    it('should authenticate normally for a User with no mustChangePassword expiry set', async () => {
+      prismaService.user.findUnique.mockResolvedValue({
+        ...mockUser,
+        mustChangePassword: false,
+        mustChangePasswordExpiresAt: null,
+      });
+      passwordService.compare.mockResolvedValue(true);
+
+      const result = await strategy.validate(phoneNumber, password);
+
+      expect(result).toBeInstanceOf(AuthenticatedUserDto);
+    });
+
+    it('should authenticate with a correct, not-yet-expired one-time credential', async () => {
+      prismaService.user.findUnique.mockResolvedValue({
+        ...mockUser,
+        mustChangePassword: true,
+        mustChangePasswordExpiresAt: new Date(Date.now() + 60_000),
+      });
+      passwordService.compare.mockResolvedValue(true);
+
+      const result = await strategy.validate(phoneNumber, password);
+
+      expect(result).toBeInstanceOf(AuthenticatedUserDto);
+    });
+
+    it('should reject login with a distinct error once the one-time credential has expired', async () => {
+      prismaService.user.findUnique.mockResolvedValue({
+        ...mockUser,
+        mustChangePassword: true,
+        mustChangePasswordExpiresAt: new Date(Date.now() - 60_000),
+      });
+      passwordService.compare.mockResolvedValue(true);
+
+      await expect(strategy.validate(phoneNumber, password)).rejects.toThrow(
+        UnauthorizedException,
+      );
+      try {
+        await strategy.validate(phoneNumber, password);
+        fail('expected validate() to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(UnauthorizedException);
+        const response = (error as UnauthorizedException).getResponse() as {
+          details?: { code?: string };
+        };
+        expect(response.details?.code).toBe('INITIAL_PASSWORD_EXPIRED');
+      }
+    });
   });
 });

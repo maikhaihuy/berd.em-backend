@@ -83,15 +83,16 @@ enum AttendanceAction {
 // ==================== AUTH & USER MANAGEMENT ====================
 
 model User {
-  id                 Int           @id @default(autoincrement())
-  phoneNumber        String        @unique
-  password           String?
-  fullName           String
-  avatarUrl          String?
-  status             UserStatus
-  mustChangePassword Boolean       @default(false)
-  employee           Employee? // optional relation
-  zaloIdentity       ZaloIdentity?
+  id                          Int           @id @default(autoincrement())
+  phoneNumber                 String        @unique
+  password                    String?
+  fullName                    String
+  avatarUrl                   String?
+  status                      UserStatus
+  mustChangePassword          Boolean       @default(false)
+  mustChangePasswordExpiresAt DateTime?
+  employee                    Employee? // optional relation
+  zaloIdentity                ZaloIdentity?
 
   userRoles       UserRole[]
   managerBranches ManagerBranch[]

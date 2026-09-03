@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { FieldValidationException } from '@common/exceptions/field-validation.exception';
 import { UserStatus } from '@prisma/client';
 import { EmployeesService } from './employee.service';
@@ -20,8 +21,9 @@ describe('EmployeesService', () => {
     employee: { findUnique: jest.Mock };
     $transaction: jest.Mock;
   };
-  let passwordService: { hash: jest.Mock };
+  let passwordService: { generateOneTimeCredential: jest.Mock };
   let auditLogsService: { record: jest.Mock };
+  let configService: { get: jest.Mock };
 
   const createDto: CreateEmployeeDto = {
     fullName: 'Jane Doe',
@@ -43,8 +45,9 @@ describe('EmployeesService', () => {
         callback(tx),
       ),
     };
-    passwordService = { hash: jest.fn() };
+    passwordService = { generateOneTimeCredential: jest.fn() };
     auditLogsService = { record: jest.fn() };
+    configService = { get: jest.fn().mockReturnValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -52,6 +55,7 @@ describe('EmployeesService', () => {
         { provide: PrismaService, useValue: prismaService },
         { provide: PasswordService, useValue: passwordService },
         { provide: AuditLogsService, useValue: auditLogsService },
+        { provide: ConfigService, useValue: configService },
       ],
     }).compile();
 
@@ -68,10 +72,13 @@ describe('EmployeesService', () => {
       prismaService.employee.findUnique.mockResolvedValue(null);
     });
 
-    it('auto-provisions a User with a phone-derived password and the Employee role when the phone number is free', async () => {
+    it('auto-provisions a User with a random one-time password and the Employee role when the phone number is free', async () => {
       tx.user.findUnique.mockResolvedValue(null);
       tx.role.findFirstOrThrow.mockResolvedValue({ id: 7, name: 'Employee' });
-      passwordService.hash.mockResolvedValue('hashed-phone-password');
+      passwordService.generateOneTimeCredential.mockResolvedValue({
+        password: 'RANDOM42',
+        hash: 'hashed-random-password',
+      });
       tx.user.create.mockResolvedValue({
         id: 99,
         phoneNumber: createDto.phoneNumber,
@@ -87,19 +94,20 @@ describe('EmployeesService', () => {
         employeeBranches: [],
       });
 
-      await service.create(createDto, 1);
+      const result = await service.create(createDto, 1);
 
       expect(tx.role.findFirstOrThrow).toHaveBeenCalledWith({
         where: { name: 'Employee' },
       });
-      expect(passwordService.hash).toHaveBeenCalledWith(createDto.phoneNumber);
+      expect(passwordService.generateOneTimeCredential).toHaveBeenCalled();
       expect(tx.user.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           phoneNumber: createDto.phoneNumber,
           fullName: createDto.fullName,
-          password: 'hashed-phone-password',
+          password: 'hashed-random-password',
           status: UserStatus.ACTIVE,
           mustChangePassword: true,
+          mustChangePasswordExpiresAt: expect.any(Date),
           userRoles: { create: [{ roleId: 7 }] },
         }),
       });
@@ -117,6 +125,8 @@ describe('EmployeesService', () => {
         }),
         tx,
       );
+      // The plaintext one-time credential is returned exactly once, in the create response.
+      expect(result.temporaryPassword).toBe('RANDOM42');
     });
 
     it('rejects with FieldValidationException and creates no Employee when a User with that phone number already exists', async () => {

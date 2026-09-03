@@ -74,6 +74,7 @@ describe('JwtAccessStrategy', () => {
     roles: ['Employee'],
     branches: [],
     managedBranches: [],
+    mustChangePassword: false,
     iat: Math.floor(new Date('2026-01-01').getTime() / 1000),
     exp: Math.floor(new Date('2026-01-01').getTime() / 1000) + 3600,
   };

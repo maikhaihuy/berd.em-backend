@@ -1,12 +1,4 @@
-# Authentication Specification
-
-## Purpose
-
-Define how a User authenticates to the StaffHub web dashboard: password login is the
-primary path for Admin, Manager, and Staff, with Zalo login retained as a secondary,
-optional path used by the separate Zalo Mini App.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Password login is the primary authentication path
 The system SHALL authenticate a User via `POST /api/auth/login` using a phone-number
@@ -51,52 +43,7 @@ equivalent `User`, sourced fresh from that `User`'s current database state.
   requests within the configured window
 - **THEN** the system responds `429 Too Many Requests` for the excess attempts
 
-### Requirement: Zalo login remains available as a secondary path
-The system SHALL continue to support `POST /api/auth/login/zalo` as a valid,
-independent way to authenticate an existing `User` by a verified Zalo access token
-matched to a pre-registered phone number, unaffected by whether that User also has a
-password set.
-
-#### Scenario: Existing User logs in via Zalo without a password set
-- **GIVEN** a `User` with no password set but a phone number already registered in
-  the system
-- **WHEN** that User authenticates via `POST /api/auth/login/zalo` with a valid Zalo
-  access token and matching phone number
-- **THEN** the system responds `200 OK` with an access/refresh token pair, the same as
-  today's Zalo login behavior
-
-### Requirement: Refresh and logout are unaffected by login method
-The system SHALL issue refresh tokens uniformly regardless of which login endpoint
-produced the session, and SHALL accept `POST /api/auth/refresh`, `POST /api/auth/logout`,
-`POST /api/auth/logout-device`, and `POST /api/auth/logout-all` for any active session
-without regard to whether it originated from password, Zalo, or dev login.
-
-Refresh SHALL also be unaffected by whether the session's `User` has a linked `Employee`
-record: a `User` with no `Employee` link SHALL be able to refresh their session exactly as
-freely as one with a link, with an empty branch list on the reissued access token. Refresh
-SHALL still fail if the `User`'s `employee` reference is set but the referenced `Employee`
-row cannot be found, since that indicates a genuine data-integrity problem rather than a
-legitimately employee-less account.
-
-#### Scenario: Session from password login can be refreshed and revoked
-- **GIVEN** an access/refresh token pair obtained via `POST /api/auth/login`
-- **WHEN** the caller submits `POST /api/auth/refresh` with the refresh token, then
-  later `POST /api/auth/logout`
-- **THEN** both requests succeed exactly as they would for a session obtained via
-  `POST /api/auth/login/zalo`
-
-#### Scenario: Refresh succeeds for a User with no linked Employee record
-- **GIVEN** a `User` with no linked `Employee` record who has an access/refresh token pair
-  from a successful `POST /api/auth/login`
-- **WHEN** the caller submits `POST /api/auth/refresh` with the refresh token
-- **THEN** the system responds `200 OK` with a new access/refresh token pair whose access
-  token has an empty `branches` list, rather than failing with a not-found error
-
-#### Scenario: Refresh still fails for a User whose linked Employee record is missing
-- **GIVEN** a `User` whose `employee` reference is set to an `Employee` id that no longer
-  exists (e.g. the `Employee` row was deleted out from under an active session)
-- **WHEN** the caller submits `POST /api/auth/refresh` with that session's refresh token
-- **THEN** the system responds with a not-found error, unchanged from today's behavior
+## ADDED Requirements
 
 ### Requirement: The access token carries a mustChangePassword claim
 The system SHALL include a `mustChangePassword: boolean` claim on every access token

@@ -171,30 +171,24 @@ export class AuthService {
     return this.createTokenPairForUser(user);
   }
 
+  /**
+   * `LocalStrategy.validate()` only verifies credentials and returns
+   * `{ userId, phone }` — it doesn't carry roles/branches/mustChangePassword.
+   * Re-fetch the full `User` and reuse `createTokenPairForUser()` (the same
+   * builder Zalo login uses) so the issued token is fully and correctly
+   * populated, instead of duplicating that mapping here.
+   */
   async login(user: AuthenticatedUserDto): Promise<TokenDto> {
-    const accessToken = this.jwtTokenService.generateAccessToken({
-      sub: user.userId,
-      phone: user.phone,
-      empId: user.employeeId,
-      roles: user.roles,
-      branches: user.branches,
-      managedBranches: user.managedBranches,
+    const freshUser = await this.prisma.user.findUnique({
+      where: { id: user.userId },
+      include: authUserInclude,
     });
 
-    const { token: refreshToken } =
-      await this.refreshTokenService.createRefreshToken({
-        sub: user.userId,
-        phone: user.phone,
-        empId: user.employeeId,
-        roles: user.roles,
-        branches: user.branches,
-        managedBranches: user.managedBranches,
-      });
+    if (!freshUser) {
+      throw new NotFoundException('User not found');
+    }
 
-    return {
-      accessToken,
-      refreshToken,
-    };
+    return this.createTokenPairForUser(freshUser);
   }
 
   async loginWithDev(
@@ -264,6 +258,7 @@ export class AuthService {
       branches:
         userWithBranches?.employeeBranches.map((eb) => eb.branch.id) ?? [],
       managedBranches,
+      mustChangePassword: user.mustChangePassword,
     });
 
     const { token: refreshToken } =
@@ -306,6 +301,7 @@ export class AuthService {
       roles: user.userRoles.map((ur) => ur.role.name),
       branches,
       managedBranches: user.managerBranches.map((mb) => mb.branchId),
+      mustChangePassword: user.mustChangePassword,
     };
 
     const accessToken = this.jwtTokenService.generateAccessToken(payload);
@@ -352,6 +348,7 @@ export class AuthService {
       roles: roleNames,
       branches: branchIds,
       managedBranches: managedBranchIds,
+      mustChangePassword: employee.user.mustChangePassword,
     };
 
     const accessToken = this.jwtTokenService.generateAccessToken(accessPayload);
@@ -536,7 +533,11 @@ export class AuthService {
     const hashedPassword = await this.passwordService.hash(newPassword);
     await this.prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword, mustChangePassword: false },
+      data: {
+        password: hashedPassword,
+        mustChangePassword: false,
+        mustChangePasswordExpiresAt: null,
+      },
     });
   }
 

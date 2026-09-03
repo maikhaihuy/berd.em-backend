@@ -1,12 +1,4 @@
-# Employee User Auto Provisioning Specification
-
-## Purpose
-
-Guarantee that every Employee created through the API has a matching, login-capable
-User account provisioned atomically, so Admins never have to separately create and
-link a User by hand.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Creating an Employee provisions a matching User
 The system SHALL, as part of a single atomic operation with Employee creation, ensure
@@ -43,24 +35,3 @@ from any other request.
 - **GIVEN** a User was auto-provisioned with a one-time password during Employee creation
 - **WHEN** the Employee or User is subsequently retrieved via any `GET` endpoint
 - **THEN** the response does not include the plaintext password or its hash
-
-### Requirement: Employee creation rejects a colliding phone number
-The system SHALL reject Employee creation with an error, and SHALL NOT create the
-Employee or modify any existing User, when a `User` already exists with the same phone
-number as the Employee being created.
-
-#### Scenario: Phone number already belongs to an existing User
-- **WHEN** an Admin creates an Employee whose phone number matches an already-existing
-  `User`
-- **THEN** the system responds with a validation error identifying the phone number
-  field, creates no Employee, and leaves the existing User unchanged
-
-### Requirement: Auto-provisioned User's role and identity are pinned to the Employee record
-The system SHALL populate the auto-provisioned User's full name from the Employee's
-full name, and SHALL assign it the system `Employee` role rather than any
-caller-supplied role.
-
-#### Scenario: Full name is copied from the Employee at creation time
-- **WHEN** a new User is auto-provisioned for a newly created Employee
-- **THEN** the User's full name matches the full name submitted for the Employee, and
-  the User holds exactly the `Employee` role
