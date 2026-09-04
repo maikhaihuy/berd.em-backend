@@ -10,6 +10,10 @@ import { UpdateSubShiftDto } from './dto/update-sub-shift.dto';
 import { SubShiftResponseDto } from './dto/sub-shift-response.dto';
 import { SubShiftMapper } from './sub-shift.mapper';
 import { subShiftInclude } from './sub-shift.types';
+import type { AppAbility } from '@modules/casl/casl-ability.factory';
+import { accessibleWhere } from '@modules/casl/accessible-where';
+
+const SUBJECT = 'sub-shifts';
 
 @Injectable()
 export class SubShiftsService {
@@ -44,16 +48,34 @@ export class SubShiftsService {
     return SubShiftMapper.toDto(subShift);
   }
 
-  async findAll(masterShiftId?: number): Promise<SubShiftResponseDto[]> {
+  async findAll(
+    ability: AppAbility,
+    masterShiftId?: number,
+  ): Promise<SubShiftResponseDto[]> {
     const subShifts = await this.prisma.subShift.findMany({
-      where: masterShiftId ? { masterShiftId } : undefined,
+      where: {
+        ...(masterShiftId ? { masterShiftId } : {}),
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
       include: subShiftInclude,
       orderBy: [{ startTime: 'asc' }],
     });
     return SubShiftMapper.toDtos(subShifts);
   }
 
-  async findOne(id: number): Promise<SubShiftResponseDto> {
+  async findOne(id: number, ability: AppAbility): Promise<SubShiftResponseDto> {
+    const subShift = await this.prisma.subShift.findFirst({
+      where: {
+        id,
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
+      include: subShiftInclude,
+    });
+    if (!subShift) throw new NotFoundException('Sub shift not found');
+    return SubShiftMapper.toDto(subShift);
+  }
+
+  private async findExisting(id: number): Promise<SubShiftResponseDto> {
     const subShift = await this.prisma.subShift.findUnique({
       where: { id },
       include: subShiftInclude,
@@ -67,7 +89,7 @@ export class SubShiftsService {
     dto: UpdateSubShiftDto,
     currentUserId: number,
   ): Promise<SubShiftResponseDto> {
-    const existing = await this.findOne(id);
+    const existing = await this.findExisting(id);
     await this.ensureMasterAndTemplate(
       dto.masterShiftId ?? existing.masterShiftId,
       dto.subShiftTemplateId ?? existing.subShiftTemplateId ?? undefined,
@@ -91,7 +113,7 @@ export class SubShiftsService {
   }
 
   async remove(id: number) {
-    await this.findOne(id);
+    await this.findExisting(id);
     await this.prisma.subShift.delete({ where: { id } });
     return { message: 'Sub shift deleted successfully' };
   }

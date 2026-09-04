@@ -143,4 +143,8 @@ export const MANAGED_BRANCHES_SCOPABLE_SUBJECT_FIELDS: Record<
   // relation instead, e.g. `{ employeeBranches: { some: { branchId: { in:
   // "$managedBranches" } } } }`.
   employees: ['employeeBranches.branchId'],
+  // `SubShift`/`Task` have no direct `branchId` either — reachable via their
+  // parent `MasterShift` (and, for `Task`, optionally via `SubShift` too).
+  'sub-shifts': ['masterShift.branchId'],
+  tasks: ['masterShift.branchId', 'subShift.masterShift.branchId'],
 };

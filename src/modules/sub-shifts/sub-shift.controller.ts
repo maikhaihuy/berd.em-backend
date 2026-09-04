@@ -13,6 +13,8 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { RequirePermissions } from '@common/decorators/permissions.decorator';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
+import { CaslAbility } from '@modules/auth/decorators/casl-ability.decorator';
+import type { AppAbility } from '@modules/casl/casl-ability.factory';
 import { CreateSubShiftDto } from './dto/create-sub-shift.dto';
 import { UpdateSubShiftDto } from './dto/update-sub-shift.dto';
 import { SubShiftsService } from './sub-shift.service';
@@ -34,16 +36,23 @@ export class SubShiftsController {
 
   @RequirePermissions({ action: 'read', subject: 'sub-shifts' })
   @Get()
-  findAll(@Query('masterShiftId') masterShiftId?: string) {
+  findAll(
+    @CaslAbility() ability: AppAbility,
+    @Query('masterShiftId') masterShiftId?: string,
+  ) {
     return this.service.findAll(
+      ability,
       masterShiftId ? Number(masterShiftId) : undefined,
     );
   }
 
   @RequirePermissions({ action: 'read', subject: 'sub-shifts' })
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.service.findOne(id);
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CaslAbility() ability: AppAbility,
+  ) {
+    return this.service.findOne(id, ability);
   }
 
   @RequirePermissions({ action: 'update', subject: 'sub-shifts' })
