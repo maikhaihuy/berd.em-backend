@@ -20,6 +20,10 @@ export class PayrollEntryMapper {
         typeof entry.totalPay === 'number'
           ? entry.totalPay
           : parseFloat(String(entry.totalPay)),
+      bonus:
+        typeof entry.bonus === 'number'
+          ? entry.bonus
+          : parseFloat(String(entry.bonus)),
       timeLog: entry.timeLog,
       employee: entry.employee,
       payPeriod: entry.payPeriod,

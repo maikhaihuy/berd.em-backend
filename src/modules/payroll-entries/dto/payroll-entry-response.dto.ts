@@ -28,6 +28,13 @@ export class PayrollEntryResponseDto {
   @ApiProperty({ description: 'Computed total pay', example: 240.5 })
   totalPay!: number;
 
+  @ApiProperty({
+    description:
+      'Discretionary bonus, set via PATCH /payroll-entries/:id/bonus',
+    example: 0,
+  })
+  bonus!: number;
+
   @ApiProperty({ description: 'Source time log', required: false })
   timeLog?: unknown;
 

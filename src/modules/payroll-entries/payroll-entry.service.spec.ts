@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call */
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma, PayPeriodStatus, TimeLogStatus } from '@prisma/client';
 import { PayrollEntryService } from './payroll-entry.service';
 import { PrismaService } from '@modules/prisma/prisma.service';
@@ -217,5 +217,185 @@ describe('PayrollEntryService row-scoping', () => {
         }),
       );
     });
+  });
+});
+
+describe('PayrollEntryService.updateBonus', () => {
+  let auditLogsService: { record: jest.Mock };
+  let prisma: {
+    payrollEntry: { findUnique: jest.Mock; update: jest.Mock };
+  };
+  let service: PayrollEntryService;
+
+  beforeEach(() => {
+    prisma = {
+      payrollEntry: {
+        findUnique: jest.fn(),
+        update: jest.fn(),
+      },
+    };
+    auditLogsService = { record: jest.fn() };
+    service = new PayrollEntryService(
+      prisma as unknown as PrismaService,
+      auditLogsService as any,
+    );
+  });
+
+  it('throws NotFound when the entry does not exist', async () => {
+    prisma.payrollEntry.findUnique.mockResolvedValue(null);
+
+    await expect(service.updateBonus(1, 50, 7)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(prisma.payrollEntry.update).not.toHaveBeenCalled();
+  });
+
+  it('updates bonus, leaves other fields untouched, and records an audit log entry', async () => {
+    const before = { id: 1, bonus: new Prisma.Decimal(0) };
+    const after = {
+      id: 1,
+      timeLogId: 10,
+      employeeId: 5,
+      payPeriodId: 1,
+      payDate: new Date(),
+      workDate: new Date(),
+      calculatedAt: new Date(),
+      calculatedBy: 1,
+      totalPay: new Prisma.Decimal(100),
+      bonus: new Prisma.Decimal(50),
+      timeLog: {},
+      employee: {},
+      payPeriod: {},
+      createdAt: new Date(),
+      createdBy: 1,
+      updatedAt: new Date(),
+      updatedBy: 7,
+    };
+    prisma.payrollEntry.findUnique.mockResolvedValue(before);
+    prisma.payrollEntry.update.mockResolvedValue(after);
+
+    const result = await service.updateBonus(1, 50, 7);
+
+    expect(prisma.payrollEntry.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 1 },
+        data: { bonus: 50, updatedBy: 7 },
+      }),
+    );
+    expect(result.bonus).toBe(50);
+    expect(result.totalPay).toBe(100);
+    expect(auditLogsService.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorId: 7,
+        action: 'update',
+        subject: 'payroll-entries',
+        entityId: 1,
+        before,
+        after,
+      }),
+    );
+  });
+});
+
+describe('PayrollEntryService.summary', () => {
+  let prisma: {
+    payrollEntry: { findMany: jest.Mock; aggregate: jest.Mock };
+    payPeriod: { findFirst: jest.Mock };
+  };
+  let service: PayrollEntryService;
+  const caslAbilityFactory = new CaslAbilityFactory({
+    warn: jest.fn(),
+  } as unknown as LoggerService);
+  const ability = caslAbilityFactory.createForUser({
+    permissions: [{ action: 'read', subject: 'payroll-entries' }],
+  });
+
+  beforeEach(() => {
+    prisma = {
+      payrollEntry: { findMany: jest.fn(), aggregate: jest.fn() },
+      payPeriod: { findFirst: jest.fn() },
+    };
+    prisma.payPeriod.findFirst.mockResolvedValue(null);
+    service = new PayrollEntryService(
+      prisma as unknown as PrismaService,
+      { record: jest.fn() } as any,
+    );
+  });
+
+  it('throws BadRequestException when no employeeId is available', async () => {
+    await expect(
+      service.summary({}, ability, undefined),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('splits shiftPay/approvedOt using timeLog.overtimeMinutes, not multiplier', async () => {
+    prisma.payrollEntry.findMany.mockResolvedValue([
+      {
+        totalPay: new Prisma.Decimal(100),
+        bonus: new Prisma.Decimal(0),
+        timeLog: {
+          actualStartTime: new Date('2026-09-01T08:00:00Z'),
+          actualEndTime: new Date('2026-09-01T16:00:00Z'), // 8h shift
+          overtimeMinutes: 60,
+        },
+      },
+    ]);
+
+    const result = await service.summary({ employeeId: 5 }, ability, undefined);
+
+    expect(result.approvedOt).toBeCloseTo(12.5);
+    expect(result.shiftPay).toBeCloseTo(87.5);
+    expect(result.total).toBeCloseTo(100);
+    expect(result.previousPeriod).toBeNull();
+  });
+
+  it('does not divide by zero for a zero-duration time log', async () => {
+    prisma.payrollEntry.findMany.mockResolvedValue([
+      {
+        totalPay: new Prisma.Decimal(50),
+        bonus: new Prisma.Decimal(0),
+        timeLog: {
+          actualStartTime: new Date('2026-09-01T08:00:00Z'),
+          actualEndTime: new Date('2026-09-01T08:00:00Z'),
+          overtimeMinutes: 30,
+        },
+      },
+    ]);
+
+    const result = await service.summary({ employeeId: 5 }, ability, undefined);
+
+    expect(result.shiftPay).toBe(50);
+    expect(result.approvedOt).toBe(0);
+  });
+
+  it('returns previousPeriod null when no FINALIZED period has entries', async () => {
+    prisma.payrollEntry.findMany.mockResolvedValue([]);
+
+    const result = await service.summary({ employeeId: 5 }, ability, undefined);
+
+    expect(result.previousPeriod).toBeNull();
+    expect(prisma.payrollEntry.aggregate).not.toHaveBeenCalled();
+  });
+
+  it('reports the most recent FINALIZED period and its totalPaid', async () => {
+    prisma.payrollEntry.findMany.mockResolvedValue([]);
+    prisma.payPeriod.findFirst.mockResolvedValue({
+      id: 3,
+      startDate: new Date('2026-08-01T00:00:00Z'),
+      endDate: new Date('2026-08-15T00:00:00Z'),
+      status: PayPeriodStatus.FINALIZED,
+    });
+    prisma.payrollEntry.aggregate.mockResolvedValue({
+      _sum: {
+        totalPay: new Prisma.Decimal(200),
+        bonus: new Prisma.Decimal(50),
+      },
+    });
+
+    const result = await service.summary({ employeeId: 5 }, ability, undefined);
+
+    expect(result.previousPeriod).toEqual(
+      expect.objectContaining({ payPeriodId: 3, totalPaid: 250 }),
+    );
   });
 });
