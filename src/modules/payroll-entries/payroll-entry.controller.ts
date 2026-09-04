@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
   Delete,
@@ -17,6 +18,9 @@ import {
   PayrollEntryResponseDto,
   GeneratePayrollEntriesResultDto,
 } from './dto/payroll-entry-response.dto';
+import { UpdatePayrollEntryBonusDto } from './dto/update-payroll-entry-bonus.dto';
+import { PayrollEntrySummaryQueryDto } from './dto/payroll-entry-summary-query.dto';
+import { PayrollEntrySummaryResponseDto } from './dto/payroll-entry-summary-response.dto';
 import { RequirePermissions } from '@common/decorators/permissions.decorator';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
@@ -64,6 +68,21 @@ export class PayrollEntriesController {
   }
 
   @RequirePermissions({ action: 'read', subject: 'payroll-entries' })
+  @Get('summary')
+  @ApiOperation({
+    summary:
+      "Month-to-date earnings breakdown (shift pay / approved OT / bonus) for one employee, plus their most recently finalized pay period's paid total",
+  })
+  @ApiResponse({ status: 200, type: PayrollEntrySummaryResponseDto })
+  async summary(
+    @Query() query: PayrollEntrySummaryQueryDto,
+    @CaslAbility() ability: AppAbility,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
+  ): Promise<PayrollEntrySummaryResponseDto> {
+    return this.payrollEntryService.summary(query, ability, user.employeeId);
+  }
+
+  @RequirePermissions({ action: 'read', subject: 'payroll-entries' })
   @Get(':id')
   @ApiOperation({ summary: 'Get a payroll entry by ID' })
   @ApiResponse({ status: 200, type: PayrollEntryResponseDto })
@@ -73,6 +92,20 @@ export class PayrollEntriesController {
     @CaslAbility() ability: AppAbility,
   ): Promise<PayrollEntryResponseDto> {
     return this.payrollEntryService.findOne(id, ability);
+  }
+
+  @RequirePermissions({ action: 'update', subject: 'payroll-entries' })
+  @Patch(':id/bonus')
+  @ApiOperation({ summary: "Set a payroll entry's discretionary bonus" })
+  @ApiResponse({ status: 200, type: PayrollEntryResponseDto })
+  @ApiResponse({ status: 404, description: 'Payroll entry not found' })
+  @ApiBody({ type: UpdatePayrollEntryBonusDto })
+  async updateBonus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdatePayrollEntryBonusDto,
+    @AuthenticatedUser() user: AuthenticatedUserDto,
+  ): Promise<PayrollEntryResponseDto> {
+    return this.payrollEntryService.updateBonus(id, dto.bonus, user.userId);
   }
 
   @RequirePermissions({ action: 'delete', subject: 'payroll-entries' })

@@ -182,11 +182,17 @@ async function main() {
       subject: 'pay-periods',
       description: 'Finalize a pay period (CLOSED -> FINALIZED)',
     },
-    // PayrollEntry has no hand-authored create/update: read/delete + generate.
+    // PayrollEntry has no hand-authored create: read/delete/generate, plus a
+    // narrow `update` limited in code to the `bonus` field only.
     {
       action: 'read',
       subject: 'payroll-entries',
       description: 'Read payroll-entries',
+    },
+    {
+      action: 'update',
+      subject: 'payroll-entries',
+      description: "Update a payroll entry's bonus",
     },
     {
       action: 'delete',
@@ -373,6 +379,10 @@ async function main() {
       },
     },
     { subject: 'employee-hourly-rates', actions: ['read'] },
+    // Managers may award a discretionary bonus on a payroll entry, but get no
+    // other payroll-entries/pay-periods access (unconditioned, same shape as
+    // Admin's grant — see expose-employee-facing-earnings-summary design.md).
+    { subject: 'payroll-entries', actions: ['update'] },
     // Custom actions: managers oversee the full operational lifecycle.
     {
       subject: 'assignments',

@@ -671,6 +671,7 @@ model PayrollEntry {
   calculatedAt DateTime
   calculatedBy Int
   totalPay     Decimal  @db.Decimal(12, 2)
+  bonus        Decimal  @default(0) @db.Decimal(12, 2)
 
   createdAt DateTime @default(now())
   createdBy Int

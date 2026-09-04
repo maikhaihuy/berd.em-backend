@@ -1,8 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '@modules/prisma/prisma.service';
-import { Prisma, TimeLogStatus } from '@prisma/client';
+import { Prisma, PayPeriodStatus, TimeLogStatus } from '@prisma/client';
 import { PayrollEntryResponseDto } from './dto/payroll-entry-response.dto';
 import { GeneratePayrollEntriesResultDto } from './dto/payroll-entry-response.dto';
+import { PayrollEntrySummaryResponseDto } from './dto/payroll-entry-summary-response.dto';
+import { PayrollEntrySummaryQueryDto } from './dto/payroll-entry-summary-query.dto';
 import { payrollEntryInclude } from './payroll-entry.types';
 import { PayrollEntryMapper } from './payroll-entry.mapper';
 import { AppAbility } from '@modules/casl/casl-ability.factory';
@@ -47,6 +53,36 @@ export class PayrollEntryService {
     if (!entry) {
       throw new NotFoundException(`Payroll entry with ID ${id} not found.`);
     }
+    return PayrollEntryMapper.toDto(entry);
+  }
+
+  async updateBonus(
+    id: number,
+    bonus: number,
+    currentUserId: number,
+  ): Promise<PayrollEntryResponseDto> {
+    const before = await this.prisma.payrollEntry.findUnique({
+      where: { id },
+    });
+    if (!before) {
+      throw new NotFoundException(`Payroll entry with ID ${id} not found.`);
+    }
+
+    const entry = await this.prisma.payrollEntry.update({
+      where: { id },
+      data: { bonus, updatedBy: currentUserId },
+      include: payrollEntryInclude,
+    });
+
+    await this.auditLogsService.record({
+      actorId: currentUserId,
+      action: 'update',
+      subject: SUBJECT,
+      entityId: id,
+      before,
+      after: entry,
+    });
+
     return PayrollEntryMapper.toDto(entry);
   }
 
@@ -178,5 +214,132 @@ export class PayrollEntryService {
     });
 
     return { created, skipped };
+  }
+
+  /**
+   * Month-to-date earnings breakdown for one employee, plus their most
+   * recently finalized pay period's paid total. The regular/overtime split
+   * is derived from each entry's TimeLog.overtimeMinutes on read (see
+   * expose-employee-facing-earnings-summary design.md Decision 2) rather
+   * than stored, since totalPay itself only ever stores a combined figure.
+   */
+  async summary(
+    query: PayrollEntrySummaryQueryDto,
+    ability: AppAbility,
+    callerEmployeeId: number | undefined,
+  ): Promise<PayrollEntrySummaryResponseDto> {
+    const employeeId = query.employeeId ?? callerEmployeeId;
+    if (!employeeId) {
+      throw new BadRequestException(
+        'employeeId is required (no employeeId query param and no employee linked to the caller)',
+      );
+    }
+
+    const now = new Date();
+    const from = query.from
+      ? new Date(query.from)
+      : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const to = query.to
+      ? new Date(query.to)
+      : new Date(
+          Date.UTC(
+            now.getUTCFullYear(),
+            now.getUTCMonth() + 1,
+            0,
+            23,
+            59,
+            59,
+            999,
+          ),
+        );
+
+    const entries = await this.prisma.payrollEntry.findMany({
+      where: {
+        employeeId,
+        workDate: { gte: from, lte: to },
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
+      include: { timeLog: true },
+    });
+
+    let shiftPay = 0;
+    let approvedOt = 0;
+    let bonus = 0;
+
+    for (const entry of entries) {
+      const totalPay = PayrollEntryService.toNumber(entry.totalPay);
+      bonus += PayrollEntryService.toNumber(entry.bonus);
+
+      const timeLog = entry.timeLog;
+      const overtimeMinutes = timeLog?.overtimeMinutes ?? 0;
+      const hours =
+        timeLog?.actualStartTime && timeLog?.actualEndTime
+          ? (timeLog.actualEndTime.getTime() -
+              timeLog.actualStartTime.getTime()) /
+            MS_PER_HOUR
+          : 0;
+
+      if (hours <= 0 || overtimeMinutes <= 0) {
+        shiftPay += totalPay;
+        continue;
+      }
+
+      const otPay = (totalPay / hours) * (overtimeMinutes / 60);
+      approvedOt += otPay;
+      shiftPay += totalPay - otPay;
+    }
+
+    const previousPeriod = await this.findPreviousFinalizedPeriod(employeeId);
+
+    return {
+      employeeId,
+      from,
+      to,
+      shiftPay: PayrollEntryService.round2(shiftPay),
+      approvedOt: PayrollEntryService.round2(approvedOt),
+      bonus: PayrollEntryService.round2(bonus),
+      total: PayrollEntryService.round2(shiftPay + approvedOt + bonus),
+      previousPeriod,
+    };
+  }
+
+  private async findPreviousFinalizedPeriod(
+    employeeId: number,
+  ): Promise<PayrollEntrySummaryResponseDto['previousPeriod']> {
+    const period = await this.prisma.payPeriod.findFirst({
+      where: {
+        status: PayPeriodStatus.FINALIZED,
+        payrollEntries: { some: { employeeId } },
+      },
+      orderBy: { endDate: 'desc' },
+    });
+    if (!period) {
+      return null;
+    }
+
+    const agg = await this.prisma.payrollEntry.aggregate({
+      where: { payPeriodId: period.id, employeeId },
+      _sum: { totalPay: true, bonus: true },
+    });
+
+    const totalPaid =
+      PayrollEntryService.toNumber(agg._sum.totalPay ?? 0) +
+      PayrollEntryService.toNumber(agg._sum.bonus ?? 0);
+
+    return {
+      payPeriodId: period.id,
+      startDate: period.startDate,
+      endDate: period.endDate,
+      status: period.status,
+      totalPaid: PayrollEntryService.round2(totalPaid),
+    };
+  }
+
+  private static toNumber(value: Prisma.Decimal | number): number {
+    return typeof value === 'number' ? value : parseFloat(String(value));
+  }
+
+  private static round2(value: number): number {
+    return Math.round(value * 100) / 100;
   }
 }
