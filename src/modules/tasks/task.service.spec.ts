@@ -3,6 +3,36 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { TaskStatus, TaskType } from '@prisma/client';
 import { TasksService } from './task.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { CaslAbilityFactory } from '@modules/casl/casl-ability.factory';
+import { accessibleWhere } from '@modules/casl/accessible-where';
+import { LoggerService } from '@common/logger/logger.service';
+
+const caslAbilityFactory = new CaslAbilityFactory({
+  warn: jest.fn(),
+} as unknown as LoggerService);
+const unscopedAbility = caslAbilityFactory.createForUser({
+  permissions: [{ action: 'read', subject: 'tasks' }],
+});
+const TASK_MANAGED_BRANCH_CONDITION = {
+  OR: [
+    { masterShift: { is: { branchId: { in: '$managedBranches' } } } },
+    {
+      subShift: {
+        is: { masterShift: { is: { branchId: { in: '$managedBranches' } } } },
+      },
+    },
+  ],
+};
+const managedBranchAbility = caslAbilityFactory.createForUser({
+  permissions: [
+    {
+      action: 'read',
+      subject: 'tasks',
+      condition: TASK_MANAGED_BRANCH_CONDITION,
+    },
+  ],
+  managedBranches: [1],
+});
 
 describe('TasksService', () => {
   let prisma: Partial<PrismaService>;
@@ -14,6 +44,7 @@ describe('TasksService', () => {
         create: jest.fn(),
         findMany: jest.fn(),
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
       } as any,
@@ -78,10 +109,42 @@ describe('TasksService', () => {
 
   describe('findOne', () => {
     it('throws NotFoundException when the task does not exist', async () => {
-      (prisma.task as any).findUnique.mockResolvedValue(null);
+      (prisma.task as any).findFirst.mockResolvedValue(null);
 
-      await expect(service.findOne(999)).rejects.toBeInstanceOf(
-        NotFoundException,
+      await expect(
+        service.findOne(999, unscopedAbility),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('scopes the lookup by the caller managed-branch ability', async () => {
+      (prisma.task as any).findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.findOne(10, managedBranchAbility),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect((prisma.task as any).findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: 10,
+            AND: [accessibleWhere(managedBranchAbility, 'read', 'tasks')],
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('findAll', () => {
+    it('scopes the list by the caller managed-branch ability', async () => {
+      (prisma.task as any).findMany.mockResolvedValue([]);
+
+      await service.findAll(managedBranchAbility);
+
+      expect((prisma.task as any).findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: [accessibleWhere(managedBranchAbility, 'read', 'tasks')],
+          }),
+        }),
       );
     });
   });

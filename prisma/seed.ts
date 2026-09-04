@@ -282,15 +282,34 @@ async function main() {
     'branch-schedule-configs',
   ];
   // Scheduling subjects that carry a direct `branchId` field — the ones
-  // Manager's grant below scopes to `$managedBranches` via `RolePermission.
-  // condition`. `sub-shifts` and `tasks` have no direct `branchId` (only
-  // reachable transitively through their parent `masterShift.branchId`), so
-  // they're deliberately left unconditioned here — see the
-  // `enforce-manager-branch-scoping` change's design.md (Non-Goals) for why
-  // that's not simply an oversight.
+  // Manager's grant below scopes to `$managedBranches` via a simple
+  // `{ branchId: { in: '$managedBranches' } }` `RolePermission.condition`.
+  // `sub-shifts` and `tasks` have no direct `branchId` (only reachable
+  // transitively through their parent `masterShift`/`subShift`), so they're
+  // scoped separately below with relation-based conditions instead of being
+  // folded into this generic mapping — see the
+  // `branch-scope-subshift-task-permissions` change's design.md.
   const BRANCH_SCOPED_SCHEDULING_SUBJECTS = SCHEDULING_SUBJECTS.filter(
     (subject) => subject !== 'sub-shifts' && subject !== 'tasks',
   );
+  // `SubShift.masterShiftId` is always set, so its branch is reached via one
+  // relation hop.
+  const SUB_SHIFT_MANAGED_BRANCH_CONDITION = {
+    masterShift: { is: { branchId: { in: '$managedBranches' } } },
+  };
+  // `Task.masterShiftId`/`Task.subShiftId` are mutually exclusive (shared
+  // tasks set the former, dedicated tasks set the latter), so the branch is
+  // reached via whichever parent is set.
+  const TASK_MANAGED_BRANCH_CONDITION = {
+    OR: [
+      { masterShift: { is: { branchId: { in: '$managedBranches' } } } },
+      {
+        subShift: {
+          is: { masterShift: { is: { branchId: { in: '$managedBranches' } } } },
+        },
+      },
+    ],
+  };
   const OPERATIONAL_SUBJECTS = [
     'assignments',
     'availability',
@@ -316,17 +335,28 @@ async function main() {
   // `condition: { branchId: { in: '$managedBranches' } }`, so a Manager only
   // reads/writes rows for branches they're assigned via `ManagerBranch` —
   // without this, any Manager could read and mutate every branch's data.
-  // `sub-shifts` and `tasks` stay unconditioned (no direct `branchId`).
-  // `employees` uses a relation-based condition below since `Employee` has
-  // no `branchId` field at all.
+  // `sub-shifts`/`tasks` use their own relation-based conditions above (no
+  // direct `branchId`), and `employees` uses one below for the same reason.
+  // NOTE: as with `employees` below, this condition currently only has
+  // effect on `read` (`findAll`/`findOne` apply `accessibleWhere`) —
+  // `create`/`update`/`delete` are not yet instance-checked; see design.md
+  // Non-Goals on both the original and this follow-up change.
   const managerGrants = resolveGrants([
     ...BRANCH_SCOPED_SCHEDULING_SUBJECTS.map((subject) => ({
       subject,
       actions: CRUD,
       condition: { branchId: { in: '$managedBranches' } },
     })),
-    { subject: 'sub-shifts', actions: CRUD },
-    { subject: 'tasks', actions: CRUD },
+    {
+      subject: 'sub-shifts',
+      actions: CRUD,
+      condition: SUB_SHIFT_MANAGED_BRANCH_CONDITION,
+    },
+    {
+      subject: 'tasks',
+      actions: CRUD,
+      condition: TASK_MANAGED_BRANCH_CONDITION,
+    },
     ...OPERATIONAL_SUBJECTS.map((subject) => ({ subject, actions: CRUD })),
     { subject: 'branches', actions: ['read'] },
     {

@@ -6,18 +6,21 @@ import {
   Patch,
   Param,
   Delete,
+  ForbiddenException,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
 import { EmployeesService } from './employee.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
+import { UpdateMyEmployeeProfileDto } from './dto/update-my-employee-profile.dto';
 import {
   EmployeeCreatedResponseDto,
   EmployeeResponseDto,
 } from './dto/employee-response.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { SkipPermissions } from '@common/decorators/skip-permissions.decorator';
 import { EmployeeHourlyRateResponseDto } from '@modules/employee-hourly-rates/dto/employee-hourly-rate-response.dto';
 import { UpsertEmployeeHourlyRateDto } from '@modules/employee-hourly-rates/dto/upsert-employee-hourly-rate.dto';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
@@ -81,6 +84,36 @@ export class EmployeesController {
     @CaslAbility() ability: AppAbility,
   ): Promise<EmployeeResponseDto> {
     return await this.employeesService.findOne(+id, ability);
+  }
+
+  @SkipPermissions()
+  @Patch('me')
+  @ApiOperation({
+    summary:
+      "Update the caller's own Employee record (phoneNumber/email/address only)",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "The caller's own employee record has been updated.",
+    type: EmployeeResponseDto,
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'The caller has no linked Employee record.',
+  })
+  @ApiBody({ type: UpdateMyEmployeeProfileDto })
+  async updateMe(
+    @Body() dto: UpdateMyEmployeeProfileDto,
+    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
+  ): Promise<EmployeeResponseDto> {
+    if (!currentUser.employeeId) {
+      throw new ForbiddenException('User must be associated with an employee');
+    }
+    return await this.employeesService.update(
+      currentUser.employeeId,
+      dto,
+      currentUser.userId,
+    );
   }
 
   @RequirePermissions({ action: 'update', subject: 'employees' })

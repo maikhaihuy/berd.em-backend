@@ -228,15 +228,6 @@ export class AuthService {
   async refreshToken(refreshSession: RefreshSessionDto): Promise<TokenDto> {
     const { userId: userId } = refreshSession;
 
-    // const isValid = await this.refreshTokenService.validateRefreshToken(
-    //   userId,
-    //   refreshToken,
-    // );
-
-    // if (!isValid) {
-    //   throw new ForbiddenException('Invalid refresh token');
-    // }
-
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: authUserInclude,
@@ -280,7 +271,6 @@ export class AuthService {
     };
   }
 
-  // TODO: its'not completed yet, we also need to revoke the refresh token in database
   async logout(tokenId: string): Promise<void> {
     await this.refreshTokenService.revokeRefreshToken(tokenId);
   }

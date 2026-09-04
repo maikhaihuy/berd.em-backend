@@ -342,9 +342,21 @@ describe('RBAC multi-role & managed branches (e2e)', () => {
       expect(findRule(rules, 'employees')?.conditions).toEqual({
         employeeBranches: { some: { branchId: { in: [] } } },
       });
-      // sub-shifts/tasks have no direct branchId and stay unconditioned.
-      expect(findRule(rules, 'sub-shifts')?.conditions).toBeUndefined();
-      expect(findRule(rules, 'tasks')?.conditions).toBeUndefined();
+      // sub-shifts/tasks have no direct branchId, scoped via their parent
+      // master shift (and, for tasks, optionally via their sub shift).
+      expect(findRule(rules, 'sub-shifts')?.conditions).toEqual({
+        masterShift: { is: { branchId: { in: [] } } },
+      });
+      expect(findRule(rules, 'tasks')?.conditions).toEqual({
+        OR: [
+          { masterShift: { is: { branchId: { in: [] } } } },
+          {
+            subShift: {
+              is: { masterShift: { is: { branchId: { in: [] } } } },
+            },
+          },
+        ],
+      });
     });
 
     it('scopes master-shifts and employees to the assigned branch once managed', async () => {
@@ -366,11 +378,281 @@ describe('RBAC multi-role & managed branches (e2e)', () => {
       expect(findRule(rules, 'employees')?.conditions).toEqual({
         employeeBranches: { some: { branchId: { in: [branchId] } } },
       });
+      expect(findRule(rules, 'sub-shifts')?.conditions).toEqual({
+        masterShift: { is: { branchId: { in: [branchId] } } },
+      });
+      expect(findRule(rules, 'tasks')?.conditions).toEqual({
+        OR: [
+          { masterShift: { is: { branchId: { in: [branchId] } } } },
+          {
+            subShift: {
+              is: { masterShift: { is: { branchId: { in: [branchId] } } } },
+            },
+          },
+        ],
+      });
 
       await request(app.getHttpServer())
         .delete(`/users/${managerUserId}/manager-branches/${branchId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
+    });
+  });
+
+  describe('seeded Manager role filters sub-shifts/tasks by managed branch', () => {
+    let managerRoleId: number;
+    let managerUserId: number;
+    let managerToken: string;
+    let managedBranchId: number;
+    let otherBranchId: number;
+    let managedMasterShiftId: number;
+    let otherMasterShiftId: number;
+    let managedSubShiftId: number;
+    let otherSubShiftId: number;
+    let managedSharedTaskId: number;
+    let managedDedicatedTaskId: number;
+    let otherSharedTaskId: number;
+    let otherDedicatedTaskId: number;
+
+    beforeAll(async () => {
+      const rolesRes = await request(app.getHttpServer())
+        .get('/roles')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+      const roles = rolesRes.body as { id: number; name: string }[];
+      managerRoleId = roles.find((r) => r.name === 'Manager')!.id;
+
+      const managerPassword = 'E2EManagerPass!123';
+      const managerUserRes = await request(app.getHttpServer())
+        .post('/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          phoneNumber: `09096${Date.now() % 100000}`,
+          fullName: 'E2E Sub-Shift/Task Manager',
+          status: 'ACTIVE',
+          roleIds: [managerRoleId],
+          password: managerPassword,
+        })
+        .expect(201);
+      managerUserId = managerUserRes.body.id as number;
+
+      const managerLogin = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({
+          username: managerUserRes.body.phoneNumber as string,
+          password: managerPassword,
+        })
+        .expect(200);
+      managerToken = managerLogin.body.accessToken as string;
+
+      const managedBranchRes = await request(app.getHttpServer())
+        .post('/branches')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          name: `E2E Managed Sub/Task Branch ${Date.now()}`,
+          abbreviation: `MS${Date.now() % 10000}`,
+          address: '1 Managed St',
+        })
+        .expect(201);
+      managedBranchId = managedBranchRes.body.id as number;
+
+      const otherBranchRes = await request(app.getHttpServer())
+        .post('/branches')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          name: `E2E Other Sub/Task Branch ${Date.now()}`,
+          abbreviation: `OT${Date.now() % 10000}`,
+          address: '2 Other St',
+        })
+        .expect(201);
+      otherBranchId = otherBranchRes.body.id as number;
+
+      await request(app.getHttpServer())
+        .post(`/users/${managerUserId}/manager-branches`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ branchIds: [managedBranchId] })
+        .expect(201);
+
+      const buildMasterShift = async (branch: number, title: string) => {
+        const res = await request(app.getHttpServer())
+          .post('/master-shifts')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({
+            branchId: branch,
+            workDate: '2026-09-10',
+            title,
+            startTime: '2026-09-10T08:00:00.000Z',
+            endTime: '2026-09-10T17:00:00.000Z',
+          })
+          .expect(201);
+        return res.body.id as number;
+      };
+      managedMasterShiftId = await buildMasterShift(
+        managedBranchId,
+        `Managed Master ${Date.now()}`,
+      );
+      otherMasterShiftId = await buildMasterShift(
+        otherBranchId,
+        `Other Master ${Date.now()}`,
+      );
+
+      const buildSubShift = async (masterShiftId: number) => {
+        const res = await request(app.getHttpServer())
+          .post('/sub-shifts')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({
+            masterShiftId,
+            title: 'Morning Sub',
+            type: 'MAIN',
+            startTime: '2026-09-10T08:00:00.000Z',
+            endTime: '2026-09-10T12:00:00.000Z',
+          })
+          .expect(201);
+        return res.body.id as number;
+      };
+      managedSubShiftId = await buildSubShift(managedMasterShiftId);
+      otherSubShiftId = await buildSubShift(otherMasterShiftId);
+
+      const buildTask = async (
+        parent: { masterShiftId?: number; subShiftId?: number },
+        type: 'SHARED_MANDATORY' | 'DEDICATED',
+      ) => {
+        const res = await request(app.getHttpServer())
+          .post('/tasks')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ ...parent, title: `${type} task`, type })
+          .expect(201);
+        return res.body.id as number;
+      };
+      managedSharedTaskId = await buildTask(
+        { masterShiftId: managedMasterShiftId },
+        'SHARED_MANDATORY',
+      );
+      managedDedicatedTaskId = await buildTask(
+        { subShiftId: managedSubShiftId },
+        'DEDICATED',
+      );
+      otherSharedTaskId = await buildTask(
+        { masterShiftId: otherMasterShiftId },
+        'SHARED_MANDATORY',
+      );
+      otherDedicatedTaskId = await buildTask(
+        { subShiftId: otherSubShiftId },
+        'DEDICATED',
+      );
+    }, 30000);
+
+    afterAll(async () => {
+      for (const id of [
+        managedSharedTaskId,
+        managedDedicatedTaskId,
+        otherSharedTaskId,
+        otherDedicatedTaskId,
+      ]) {
+        if (id) {
+          await request(app.getHttpServer())
+            .delete(`/tasks/${id}`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .catch(() => {});
+        }
+      }
+      for (const id of [managedSubShiftId, otherSubShiftId]) {
+        if (id) {
+          await request(app.getHttpServer())
+            .delete(`/sub-shifts/${id}`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .catch(() => {});
+        }
+      }
+      for (const id of [managedMasterShiftId, otherMasterShiftId]) {
+        if (id) {
+          await request(app.getHttpServer())
+            .delete(`/master-shifts/${id}`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .catch(() => {});
+        }
+      }
+      if (managerUserId) {
+        await request(app.getHttpServer())
+          .delete(`/users/${managerUserId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .catch(() => {});
+      }
+      for (const id of [managedBranchId, otherBranchId]) {
+        if (id) {
+          await request(app.getHttpServer())
+            .delete(`/branches/${id}`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .catch(() => {});
+        }
+      }
+    });
+
+    it('lists only the managed-branch sub-shift', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/sub-shifts')
+        .set('Authorization', `Bearer ${managerToken}`)
+        .expect(200);
+
+      const ids = (res.body as { id: number }[]).map((s) => s.id);
+      expect(ids).toContain(managedSubShiftId);
+      expect(ids).not.toContain(otherSubShiftId);
+    });
+
+    it('excludes the unmanaged-branch sub-shift by id (404)', async () => {
+      await request(app.getHttpServer())
+        .get(`/sub-shifts/${otherSubShiftId}`)
+        .set('Authorization', `Bearer ${managerToken}`)
+        .expect(404);
+    });
+
+    it('lists both managed-branch tasks (shared and dedicated) and excludes the unmanaged ones', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/tasks')
+        .set('Authorization', `Bearer ${managerToken}`)
+        .expect(200);
+
+      const ids = (res.body as { id: number }[]).map((t) => t.id);
+      expect(ids).toContain(managedSharedTaskId);
+      expect(ids).toContain(managedDedicatedTaskId);
+      expect(ids).not.toContain(otherSharedTaskId);
+      expect(ids).not.toContain(otherDedicatedTaskId);
+    });
+
+    it('excludes the unmanaged-branch tasks by id (404)', async () => {
+      await request(app.getHttpServer())
+        .get(`/tasks/${otherSharedTaskId}`)
+        .set('Authorization', `Bearer ${managerToken}`)
+        .expect(404);
+      await request(app.getHttpServer())
+        .get(`/tasks/${otherDedicatedTaskId}`)
+        .set('Authorization', `Bearer ${managerToken}`)
+        .expect(404);
+    });
+
+    it('returns an empty list (not 403) for sub-shifts and tasks once the manager has no managed branches', async () => {
+      await request(app.getHttpServer())
+        .delete(`/users/${managerUserId}/manager-branches/${managedBranchId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      const subShiftsRes = await request(app.getHttpServer())
+        .get('/sub-shifts')
+        .set('Authorization', `Bearer ${managerToken}`)
+        .expect(200);
+      expect(subShiftsRes.body).toEqual([]);
+
+      const tasksRes = await request(app.getHttpServer())
+        .get('/tasks')
+        .set('Authorization', `Bearer ${managerToken}`)
+        .expect(200);
+      expect(tasksRes.body).toEqual([]);
+
+      await request(app.getHttpServer())
+        .post(`/users/${managerUserId}/manager-branches`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ branchIds: [managedBranchId] })
+        .expect(201);
     });
   });
 });

@@ -16,6 +16,10 @@ import {
 } from './dto/task-response.dto';
 import { TaskMapper } from './task.mapper';
 import { taskCompletionInclude, taskInclude } from './task.types';
+import type { AppAbility } from '@modules/casl/casl-ability.factory';
+import { accessibleWhere } from '@modules/casl/accessible-where';
+
+const SUBJECT = 'tasks';
 
 @Injectable()
 export class TasksService {
@@ -47,6 +51,7 @@ export class TasksService {
   }
 
   async findAll(
+    ability: AppAbility,
     masterShiftId?: number,
     subShiftId?: number,
   ): Promise<TaskResponseDto[]> {
@@ -54,6 +59,7 @@ export class TasksService {
       where: {
         ...(masterShiftId ? { masterShiftId } : {}),
         ...(subShiftId ? { subShiftId } : {}),
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
       },
       include: taskInclude,
       orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
@@ -61,7 +67,19 @@ export class TasksService {
     return TaskMapper.toDtos(tasks);
   }
 
-  async findOne(id: number): Promise<TaskResponseDto> {
+  async findOne(id: number, ability: AppAbility): Promise<TaskResponseDto> {
+    const task = await this.prisma.task.findFirst({
+      where: {
+        id,
+        AND: [accessibleWhere(ability, 'read', SUBJECT)],
+      },
+      include: taskInclude,
+    });
+    if (!task) throw new NotFoundException('Task not found');
+    return TaskMapper.toDto(task);
+  }
+
+  private async findExisting(id: number): Promise<TaskResponseDto> {
     const task = await this.prisma.task.findUnique({
       where: { id },
       include: taskInclude,
@@ -75,7 +93,7 @@ export class TasksService {
     dto: UpdateTaskDto,
     currentUserId: number,
   ): Promise<TaskResponseDto> {
-    const existing = await this.findOne(id);
+    const existing = await this.findExisting(id);
     await this.validateScope({
       taskTemplateId:
         dto.taskTemplateId ?? existing.taskTemplateId ?? undefined,
@@ -102,7 +120,7 @@ export class TasksService {
     dto: CompleteTaskDto,
     currentUserId: number,
   ): Promise<TaskCompletionResponseDto> {
-    const task = await this.findOne(id);
+    const task = await this.findExisting(id);
     const employeeId =
       dto.completedByEmployeeId ??
       (await this.getEmployeeIdForUser(currentUserId));
@@ -138,7 +156,7 @@ export class TasksService {
   }
 
   async remove(id: number) {
-    await this.findOne(id);
+    await this.findExisting(id);
     await this.prisma.task.delete({ where: { id } });
     return { message: 'Task deleted successfully' };
   }
@@ -186,7 +204,7 @@ export class TasksService {
   }
 
   private async ensureEmployeeCanCompleteTask(
-    task: Awaited<ReturnType<TasksService['findOne']>>,
+    task: Awaited<ReturnType<TasksService['findExisting']>>,
     employeeId: number,
   ) {
     if (

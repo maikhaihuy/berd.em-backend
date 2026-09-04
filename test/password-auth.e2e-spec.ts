@@ -11,6 +11,18 @@ import { AppModule } from './../src/app.module';
  * reset-token issuance, and the authenticated Zalo-linking route.
  *
  * Requires DATABASE_URL to point at a reachable, seeded database.
+ *
+ * Refresh-token/session-management surface (not yet covered by tests below —
+ * noted here as a reference for future coverage, since it's exercised
+ * indirectly by every `accessToken`/`refreshToken` pair returned above):
+ * - `POST /auth/refresh` rotates the refresh token (old one revoked, new one
+ *   issued) — see `RefreshTokenService`/`AuthService.refreshToken`.
+ * - Refresh tokens are stored hashed (`RefreshToken.hashedToken`), one row
+ *   per device/session, tracked with `source`/`device`/`ipAddress`.
+ * - `POST /auth/logout-device` revokes the current session's refresh token;
+ *   `POST /auth/logout-all` revokes every refresh token for the user.
+ * - `GET /auth/active-sessions` (`@SkipPermissions()`) lists the caller's
+ *   own live sessions.
  */
 describe('Password auth (e2e)', () => {
   let app: INestApplication;

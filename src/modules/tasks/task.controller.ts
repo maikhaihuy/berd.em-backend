@@ -13,6 +13,8 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RequirePermissions } from '@common/decorators/permissions.decorator';
 import { AuthenticatedUser } from '@modules/auth/decorators/authenticated-user.decorator';
 import { AuthenticatedUserDto } from '@modules/auth/dto/authenticated-user.dto';
+import { CaslAbility } from '@modules/auth/decorators/casl-ability.decorator';
+import type { AppAbility } from '@modules/casl/casl-ability.factory';
 import { CompleteTaskDto } from './dto/complete-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -36,10 +38,12 @@ export class TasksController {
   @RequirePermissions({ action: 'read', subject: 'tasks' })
   @Get()
   findAll(
+    @CaslAbility() ability: AppAbility,
     @Query('masterShiftId') masterShiftId?: string,
     @Query('subShiftId') subShiftId?: string,
   ) {
     return this.service.findAll(
+      ability,
       masterShiftId ? Number(masterShiftId) : undefined,
       subShiftId ? Number(subShiftId) : undefined,
     );
@@ -47,8 +51,11 @@ export class TasksController {
 
   @RequirePermissions({ action: 'read', subject: 'tasks' })
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.service.findOne(id);
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CaslAbility() ability: AppAbility,
+  ) {
+    return this.service.findOne(id, ability);
   }
 
   @RequirePermissions({ action: 'update', subject: 'tasks' })
