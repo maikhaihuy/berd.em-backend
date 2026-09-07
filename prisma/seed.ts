@@ -89,7 +89,7 @@ async function main() {
     {
       action: 'read',
       subject: 'user-abilities',
-      description: 'Read a user\'s effective, resolved abilities',
+      description: "Read a user's effective, resolved abilities",
     },
 
     // Core entities
@@ -164,6 +164,16 @@ async function main() {
       subject: 'tasks',
       description: 'Mark a task as complete',
     },
+
+    // File uploads: generic, feature-agnostic — any authenticated caller may
+    // create one (e.g. to attach task-completion evidence). Only `create` is
+    // wired to a route today; `read`/`delete` are seeded for parity with
+    // other subjects in case an admin cleanup UI is built later.
+    ...['uploads'].flatMap((subject) => [
+      { action: 'create', subject, description: `Create ${subject}` },
+      { action: 'read', subject, description: `Read ${subject}` },
+      { action: 'delete', subject, description: `Delete ${subject}` },
+    ]),
 
     // Payroll domain
     ...['pay-periods'].flatMap((subject) => [
@@ -247,7 +257,10 @@ async function main() {
     actions: string[];
     condition?: Prisma.InputJsonValue;
   };
-  type ResolvedGrant = { permissionId: number; condition?: Prisma.InputJsonValue };
+  type ResolvedGrant = {
+    permissionId: number;
+    condition?: Prisma.InputJsonValue;
+  };
 
   const permIdByKey = new Map(
     allPermissions.map((p) => [`${p.action}:${p.subject}`, p.id] as const),
@@ -270,7 +283,9 @@ async function main() {
           );
         }
         seenPermissionIds.add(id);
-        resolved.push(condition ? { permissionId: id, condition } : { permissionId: id });
+        resolved.push(
+          condition ? { permissionId: id, condition } : { permissionId: id },
+        );
       }
     }
     return resolved;
@@ -393,6 +408,9 @@ async function main() {
     { subject: 'time-logs', actions: ['verify'] },
     { subject: 'master-shifts', actions: ['generate'] },
     { subject: 'tasks', actions: ['complete'] },
+    // Any caller may upload a file (e.g. task-completion evidence) —
+    // nothing to scope against yet, so unconditioned.
+    { subject: 'uploads', actions: ['create'] },
   ]);
 
   // Employee: reads the schedule and does self-service writes via dedicated
@@ -454,6 +472,9 @@ async function main() {
       actions: ['read'],
       condition: { employeeId: '$self' },
     },
+    // Any employee may upload a file (e.g. task-completion evidence) —
+    // nothing to scope against yet, so unconditioned.
+    { subject: 'uploads', actions: ['create'] },
   ]);
 
   // 3) Upsert roles and assign permissions
@@ -687,7 +708,7 @@ main()
     console.error('Seed failed:', e);
     process.exit(1);
   })
-  // eslint-disable-next-line @typescript-eslint/no-misused-promises
+
   .finally(async () => {
     await prisma.$disconnect();
   });

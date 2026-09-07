@@ -46,6 +46,34 @@ export class EnvVariables {
   @IsString()
   @IsNotEmpty()
   CORS_ALLOWED_ORIGINS: string;
+
+  @IsString()
+  @IsNotEmpty()
+  R2_ACCOUNT_ID: string;
+
+  @IsString()
+  @IsNotEmpty()
+  R2_ACCESS_KEY_ID: string;
+
+  @IsString()
+  @IsNotEmpty()
+  R2_SECRET_ACCESS_KEY: string;
+
+  @IsString()
+  @IsNotEmpty()
+  R2_BUCKET_NAME: string;
+
+  @IsString()
+  @IsNotEmpty()
+  R2_PUBLIC_URL: string;
+
+  @IsString()
+  @IsOptional()
+  UPLOAD_MAX_FILE_SIZE_BYTES?: string;
+
+  @IsString()
+  @IsOptional()
+  UPLOAD_MAX_FILES_PER_REQUEST?: string;
 }
 
 export function validate(config: Record<string, unknown>) {

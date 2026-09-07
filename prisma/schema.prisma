@@ -99,6 +99,7 @@ model User {
 
   refreshTokens RefreshToken[]
   resetTokens   PasswordResetToken[]
+  uploads       Upload[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -698,4 +699,28 @@ model AuditLog {
   @@index([subject, createdAt])
   @@index([actorId])
   @@map("audit_logs")
+}
+
+// Generic, feature-agnostic upload record — backs POST /uploads. Any feature
+// needing a file (task-completion evidence, delivery-receipt photos, ...)
+// references the returned `url` from its own DTO rather than duplicating
+// storage logic. `uploadedByUserId` is the record's owner (like
+// RefreshToken.userId), not merely an audit trail field, so it carries a
+// real relation. No soft delete, per repo convention.
+model Upload {
+  id               Int    @id @default(autoincrement())
+  key              String @unique
+  url              String
+  mimeType         String
+  sizeBytes        Int
+  uploadedByUserId Int
+  uploadedBy       User   @relation(fields: [uploadedByUserId], references: [id])
+
+  createdAt DateTime @default(now())
+  createdBy Int
+  updatedAt DateTime @updatedAt
+  updatedBy Int
+
+  @@index([uploadedByUserId])
+  @@map("uploads")
 }
