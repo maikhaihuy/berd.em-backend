@@ -28,6 +28,7 @@ import { TasksModule } from './modules/tasks/task.module';
 import { PayPeriodsModule } from './modules/pay-periods/pay-period.module';
 import { PayrollEntriesModule } from './modules/payroll-entries/payroll-entry.module';
 import { BranchScheduleConfigsModule } from './modules/branch-schedule-configs/branch-schedule-config.module';
+import { UploadsModule } from './modules/uploads/uploads.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { BranchScheduleConfigsModule } from './modules/branch-schedule-configs/b
     EmployeeHourlyRatesModule,
     BranchesModule,
     BranchScheduleConfigsModule,
+    UploadsModule,
     // Shift and task domain
     MasterShiftTemplatesModule,
     SubShiftTemplatesModule,
