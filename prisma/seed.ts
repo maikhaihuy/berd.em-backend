@@ -331,9 +331,17 @@ async function main() {
       },
     ],
   };
+  // Availability and Assignment both carry a required subShiftId (no direct
+  // branchId, and — unlike Task — no alternate masterShiftId path), so a
+  // single relation chain covers both: subShiftId -> SubShift.masterShiftId
+  // -> MasterShift.branchId.
+  const SUBSHIFT_LINKED_MANAGED_BRANCH_CONDITION = {
+    subShift: { is: { masterShift: { is: { branchId: { in: '$managedBranches' } } } } },
+  };
+  // `assignments` and `availability` are granted explicitly in managerGrants
+  // below (branch-scoped via SUBSHIFT_LINKED_MANAGED_BRANCH_CONDITION), so
+  // they're excluded from this generic, unconditioned group.
   const OPERATIONAL_SUBJECTS = [
-    'assignments',
-    'availability',
     'attendance-history',
     'leave-requests',
     'time-logs',
@@ -378,6 +386,27 @@ async function main() {
       actions: CRUD,
       condition: TASK_MANAGED_BRANCH_CONDITION,
     },
+    // Availability and assignments both reach their branch via
+    // subShiftId -> SubShift.masterShiftId -> MasterShift.branchId, so they
+    // share SUBSHIFT_LINKED_MANAGED_BRANCH_CONDITION. Manager keeps full CRUD
+    // on assignments (unchanged), but availability is read-only for Manager
+    // — Availability.status is flipped to ASSIGNED internally by
+    // AssignmentsService.create(), not through the /availability endpoints,
+    // so Manager never needs direct write access there.
+    {
+      subject: 'assignments',
+      actions: CRUD,
+      condition: SUBSHIFT_LINKED_MANAGED_BRANCH_CONDITION,
+    },
+    {
+      subject: 'availability',
+      actions: ['read'],
+      condition: SUBSHIFT_LINKED_MANAGED_BRANCH_CONDITION,
+    },
+    // attendance-history, leave-requests, time-logs stay in
+    // OPERATIONAL_SUBJECTS, unconditioned, exactly as today — out of scope
+    // for this change, see the expose-manager-availability-view proposal's
+    // Non-Goals.
     ...OPERATIONAL_SUBJECTS.map((subject) => ({ subject, actions: CRUD })),
     { subject: 'branches', actions: ['read'] },
     {

@@ -147,4 +147,9 @@ export const MANAGED_BRANCHES_SCOPABLE_SUBJECT_FIELDS: Record<
   // parent `MasterShift` (and, for `Task`, optionally via `SubShift` too).
   'sub-shifts': ['masterShift.branchId'],
   tasks: ['masterShift.branchId', 'subShift.masterShift.branchId'],
+  // `Assignment`/`Availability` both carry a required `subShiftId` (no
+  // direct `branchId`), reached the same way as `sub-shifts` but one hop
+  // deeper.
+  assignments: ['subShift.masterShift.branchId'],
+  availability: ['subShift.masterShift.branchId'],
 };

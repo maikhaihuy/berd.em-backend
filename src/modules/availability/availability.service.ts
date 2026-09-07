@@ -14,6 +14,7 @@ import { availabilityWithEmployeeInclude } from './availability.types';
 import { userWithEmployeeInclude } from '@modules/users/user.types';
 import { AppAbility } from '@modules/casl/casl-ability.factory';
 import { accessibleWhere } from '@modules/casl/accessible-where';
+import { subject } from '@casl/ability';
 import { AuditLogsService } from '@modules/audit-logs/audit-logs.service';
 
 const SUBJECT = 'availability';
@@ -109,11 +110,10 @@ export class AvailabilityService {
   async findAll(
     from: Date,
     to: Date,
-    currentUserId: number,
     ability: AppAbility,
+    branchId?: number,
+    subShiftId?: number,
   ): Promise<AvailabilityResponseDto[]> {
-    const employee = await this.getCurrentUserEmployee(currentUserId);
-
     const availabilities = await this.prisma.availability.findMany({
       where: {
         subShift: {
@@ -123,8 +123,9 @@ export class AvailabilityService {
           endTime: {
             lte: to,
           },
+          ...(branchId ? { masterShift: { branchId } } : {}),
         },
-        employeeId: employee.id,
+        ...(subShiftId ? { subShiftId } : {}),
         AND: [accessibleWhere(ability, 'read', SUBJECT)],
       },
       include: availabilityWithEmployeeInclude,
@@ -138,15 +139,11 @@ export class AvailabilityService {
 
   async findOne(
     id: number,
-    currentUserId: number,
     ability: AppAbility,
   ): Promise<AvailabilityResponseDto> {
-    const employee = await this.getCurrentUserEmployee(currentUserId);
-
     const availability = await this.prisma.availability.findFirst({
       where: {
         id,
-        employeeId: employee.id,
         AND: [accessibleWhere(ability, 'read', SUBJECT)],
       },
       include: availabilityWithEmployeeInclude,
@@ -155,18 +152,6 @@ export class AvailabilityService {
     if (!availability) {
       throw new NotFoundException('Availability not found');
     }
-
-    // Employees can only see their own availability
-    // if (userRole !== 'manager' && userRole !== 'admin') {
-    //   const user = await this.prisma.user.findUnique({
-    //     where: { id: userId },
-    //     select: { employeeId: true },
-    //   });
-
-    //   if (!user?.employeeId || user.employeeId !== availability.employeeId) {
-    //     throw new ForbiddenException('Access denied');
-    //   }
-    // }
 
     return AvailabilityMapper.toDto(availability);
   }
@@ -247,6 +232,7 @@ export class AvailabilityService {
   async remove(
     id: number,
     currentUserId: number,
+    ability: AppAbility,
   ): Promise<{ message: string }> {
     const availability = await this.prisma.availability.findUnique({
       where: { id },
@@ -256,7 +242,9 @@ export class AvailabilityService {
       throw new NotFoundException('Availability not found');
     }
 
-    await this.getCurrentUserEmployee(currentUserId);
+    if (!ability.can('delete', subject(SUBJECT, availability))) {
+      throw new NotFoundException('Availability not found');
+    }
 
     await this.prisma.availability.delete({
       where: { id },

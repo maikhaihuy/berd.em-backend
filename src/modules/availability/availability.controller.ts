@@ -53,17 +53,26 @@ export class AvailabilityController {
 
   @RequirePermissions({ action: 'read', subject: 'availability' })
   @Get()
-  @ApiOperation({ summary: 'Get all availability records' })
+  @ApiOperation({
+    summary: 'Get all availability records',
+    description:
+      'An Employee always sees only their own registrations, regardless of query params. ' +
+      'A Manager sees every registration for branches they manage when `branchId` is set to a managed branch, ' +
+      'and an empty list for a branch they do not manage.',
+  })
   @ApiResponse({
     status: 200,
     description: 'List of availability records',
     type: [AvailabilityResponseDto],
   })
   findAll(
-    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
     @CaslAbility() ability: AppAbility,
     @Query('date', new ParseDatePipe({ optional: true }))
     date?: string,
+    @Query('branchId', new ParseIntPipe({ optional: true }))
+    branchId?: number,
+    @Query('subShiftId', new ParseIntPipe({ optional: true }))
+    subShiftId?: number,
   ) {
     const passedDate = date ? new Date(date) : new Date();
 
@@ -86,8 +95,9 @@ export class AvailabilityController {
     return this.availabilityService.findAll(
       startOfWeek,
       endOfWeek,
-      currentUser.userId,
       ability,
+      branchId,
+      subShiftId,
     );
   }
 
@@ -101,10 +111,9 @@ export class AvailabilityController {
   })
   findOne(
     @Param('id', ParseIntPipe) id: number,
-    @AuthenticatedUser() currentUser: AuthenticatedUserDto,
     @CaslAbility() ability: AppAbility,
   ) {
-    return this.availabilityService.findOne(id, currentUser.userId, ability);
+    return this.availabilityService.findOne(id, ability);
   }
 
   @RequirePermissions({ action: 'update', subject: 'availability' })
@@ -129,7 +138,11 @@ export class AvailabilityController {
 
   @RequirePermissions({ action: 'delete', subject: 'availability' })
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete availability' })
+  @ApiOperation({
+    summary: 'Delete availability',
+    description:
+      "Returns 404 (not 403) when the caller isn't the owning employee or an Admin.",
+  })
   @ApiResponse({
     status: 200,
     description: 'Availability deleted successfully',
@@ -137,7 +150,8 @@ export class AvailabilityController {
   remove(
     @Param('id', ParseIntPipe) id: number,
     @AuthenticatedUser() currentUser: AuthenticatedUserDto,
+    @CaslAbility() ability: AppAbility,
   ) {
-    return this.availabilityService.remove(id, currentUser.userId);
+    return this.availabilityService.remove(id, currentUser.userId, ability);
   }
 }
